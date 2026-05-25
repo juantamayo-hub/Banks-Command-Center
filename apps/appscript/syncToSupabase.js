@@ -299,6 +299,13 @@ function mapRow_(headers, rowValues, bankId, opportunityId, rowNumber, syncedAt)
   var statusRaw = get(['Status']);
   var statusNorm = normalizeStatus_(statusRaw ? String(statusRaw) : null);
 
+  // Override: Enviar=Yes + no Timestamp Sent + no explicit status → pending_ready
+  // These are rows queued for dispatch that Apps Script hasn't processed yet.
+  var timestampSentRaw = get(['Timestamp Sent']);
+  if (sendTrigger === true && !timestampSentRaw && statusNorm === 'unknown') {
+    statusNorm = 'pending_ready';
+  }
+
   // Red flags
   var rfRaw = get(['Red Flag']);
   var rfArray = null;

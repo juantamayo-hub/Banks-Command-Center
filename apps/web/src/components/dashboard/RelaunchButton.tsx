@@ -7,7 +7,7 @@ import { requestRelaunch } from '@/app/actions/relaunch'
 const FORCE_REQUIRED = new Set(['sent', 'offer_received'])
 
 // Statuses where relaunch is meaningless / blocked
-const NOT_RELAUNCHABLE = new Set(['sending', 'relaunch_requested', 'unknown'])
+const NOT_RELAUNCHABLE = new Set(['sending', 'relaunch_requested', 'unknown', 'pending_ready'])
 
 type Phase = 'idle' | 'confirm' | 'force_confirm' | 'loading' | 'success' | 'error'
 
@@ -15,13 +15,21 @@ interface RelaunchButtonProps {
   rowId: string
   status: string | null
   clientName: string | null
+  hasDispatch?: boolean | null
+  bankSlug?: string | null
+  sheetRowNumber?: number | null
 }
 
-export default function RelaunchButton({ rowId, status, clientName }: RelaunchButtonProps) {
+export default function RelaunchButton({ rowId, status, clientName, hasDispatch, bankSlug, sheetRowNumber }: RelaunchButtonProps) {
   const [phase, setPhase] = useState<Phase>('idle')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
   const normalStatus = status ?? 'unknown'
+
+  // Banks without platform dispatch use a separate manual process
+  if (hasDispatch === false) {
+    return <span className="text-xs text-gray-400 italic">Proceso manual</span>
+  }
 
   if (NOT_RELAUNCHABLE.has(normalStatus)) {
     return (
@@ -37,7 +45,7 @@ export default function RelaunchButton({ rowId, status, clientName }: RelaunchBu
     setPhase('loading')
     setErrorMsg(null)
 
-    const result = await requestRelaunch(rowId, force)
+    const result = await requestRelaunch(rowId, force, bankSlug ?? undefined, sheetRowNumber)
 
     if (!result.ok) {
       if (result.code === 'REQUIRES_FORCE') {

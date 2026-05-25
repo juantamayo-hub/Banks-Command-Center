@@ -5,6 +5,7 @@ import { normalizeRedFlag, CLUSTER_BY_SLUG } from '@/lib/redFlagClusters'
 interface BankRef {
   name: string
   slug: string
+  has_dispatch?: boolean | null
 }
 
 interface SheetRow {
@@ -19,6 +20,7 @@ interface SheetRow {
   timestamp_entry: string | null
   synced_at: string | null
   owner: string | null
+  sheet_row_number: number | null
   banks: BankRef | BankRef[] | null
 }
 
@@ -49,6 +51,18 @@ function getBankName(banks: BankRef | BankRef[] | null): string {
   if (!banks) return '—'
   if (Array.isArray(banks)) return banks[0]?.name ?? '—'
   return banks.name ?? '—'
+}
+
+function getBankDispatch(banks: BankRef | BankRef[] | null): boolean | null {
+  if (!banks) return null
+  const b = Array.isArray(banks) ? banks[0] : banks
+  return b?.has_dispatch ?? null
+}
+
+function getBankSlug(banks: BankRef | BankRef[] | null): string | null {
+  if (!banks) return null
+  const b = Array.isArray(banks) ? banks[0] : banks
+  return b?.slug ?? null
 }
 
 function FlagPills({ flags }: { flags: string[] }) {
@@ -130,6 +144,8 @@ export default function SubmissionsTable({
           <tbody className="divide-y divide-gray-100 bg-white">
             {rows.map((row, index) => {
               const flags = row.red_flags ?? []
+              const hasDispatch = getBankDispatch(row.banks)
+              const bankSlug = getBankSlug(row.banks)
               return (
                 <tr key={row.id} className="hover:bg-gray-50 transition-colors">
                   <td className="whitespace-nowrap px-4 py-3 text-xs text-gray-400 tabular-nums">
@@ -162,6 +178,9 @@ export default function SubmissionsTable({
                       rowId={row.id}
                       status={row.status}
                       clientName={row.nombre_cliente}
+                      hasDispatch={hasDispatch}
+                      bankSlug={bankSlug}
+                      sheetRowNumber={row.sheet_row_number}
                     />
                   </td>
                 </tr>
