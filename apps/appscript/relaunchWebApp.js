@@ -9,51 +9,76 @@
  *   Quién tiene acceso: Cualquiera
  *
  * SEGURIDAD:
- *   El acceso está protegido por APPS_SCRIPT_RELAUNCH_SECRET en Script Properties.
- *   Configúralo ejecutando setRelaunchSecret() manualmente una vez.
+ *   Acceso protegido por APPS_SCRIPT_RELAUNCH_SECRET en Script Properties.
+ *   Configura ejecutando setRelaunchSecret() manualmente una vez.
  *
- * FLUJO:
- *   Dashboard → Server Action → requestRelaunch() → Supabase (DB state = relaunch_requested)
- *                                                  → Apps Script doPost (activa envío a n8n)
- *                                                  → postToN8N{BANCO}() → n8n → Banco
+ * ACCIONES:
+ *   action = 'ENVIAR'       → reintenta el flujo normal (Enviar=Yes ya está)
+ *   action = 'AUTORIZACION' → escribe 'Yes' en col H (Autorización) del Sheet
+ *                             antes de enviar → n8n bypasea red flags / docs faltantes
+ *
+ * FLUJO COMPLETO:
+ *   Dashboard → requestRelaunch() → Supabase (relaunch_requested)
+ *                                 → doPost (this) → escribe col H si AUTORIZACION
+ *                                 → postToN8N{BANCO}(mode:'manual')
+ *                                 → n8n → banco
  *
  * LIMITACIONES:
- *   - cr_extremadura: sin script de dispatch → no soportado desde plataforma
- *   - Rows con Status "Enviado ✅" en Sheet: Apps Script no las reenviará aunque force=true
- *     (requiere limpiar manualmente la columna K primero)
+ *   - cr_extremadura: sin ROW_ID script → no soportado desde plataforma
+ *   - Rows con K='Enviado ✅': postToN8N no reenviará (requiere limpiar K manualmente)
  */
 
 // ── Bancos sin dispatch desde plataforma (has_dispatch = false en Supabase) ──
 var NO_DISPATCH_SLUGS = ['santander', 'bankinter', 'sabadell', 'banca_360', 'kutxabank'];
 
-// ── Mapa slug → { sheetName, fn } ────────────────────────────────────────────
-// Todas las llamadas usan mode:'manual' para bypasear el check de Timestamp.
-// mode:'manual' sí respeta el check de "Enviado ✅" (protección anti-reenvío).
+// Columna H en todos los bancos = Autorización (número 8)
+var COL_AUTORIZACION = 8;
+
+// ── Mapa slug → { sheetName, fn(sheet, row, action) } ────────────────────────
 var DISPATCH_MAP = {
-  'unicaja':       { sheetName: 'Unicaja Test',              fn: function(s,r){ return postToN8NUNICAJA(s, r, { mode:'manual', preferredAction:'ENVIAR' }); } },
-  'laboral_kutxa': { sheetName: 'Laboral Kutxa Test',        fn: function(s,r){ return postToN8NLABORALK(s, r, { mode:'manual', preferredAction:'ENVIAR' }); } },
-  'uci':           { sheetName: 'UCI',                       fn: function(s,r){ return postToN8NUCI(s, r, { mode:'manual', preferredAction:'ENVIAR' }); } },
-  'myinvestor':    { sheetName: 'MyInvestor Test',           fn: function(s,r){ return postToN8NMYINVESTOR(s, r, { mode:'manual', preferredAction:'ENVIAR' }); } },
-  'cr_del_sur':    { sheetName: 'CR del Sur Test',           fn: function(s,r){ return postToN8NCRDELSUR(s, r, { mode:'manual', preferredAction:'ENVIAR' }); } },
-  'cr_teruel':     { sheetName: 'CR Teruel Test',            fn: function(s,r){ return postToN8NTERUEL(s, r, { mode:'manual', preferredAction:'ENVIAR' }); } },
-  'cr_granada':    { sheetName: 'CR Granada Test',           fn: function(s,r){ return postToN8NCRGRANADA(s, r, { mode:'manual', preferredAction:'ENVIAR' }); } },
-  'eurocajarural': { sheetName: 'EuroCajaRural Test',        fn: function(s,r){ return postToN8NEUROCAJARURAL(s, r, { mode:'manual', preferredAction:'ENVIAR' }); } },
-  'globalcaja':    { sheetName: 'Globalcaja Test',           fn: function(s,r){ return postToN8NGLOBALCAJA(s, r, { mode:'manual', preferredAction:'ENVIAR' }); } },
-  'ing':           { sheetName: 'ING',                       fn: function(s,r){ return postToN8NING(s, r, { mode:'manual', preferredAction:'ENVIAR' }); } },
-  'no_bank_fee':   { sheetName: 'No Bank Fee Test',          fn: function(s,r){ return postToN8NNOBANKFEE(s, r, { mode:'manual', preferredAction:'ENVIAR' }); } },
-  'cr_asturias':   { sheetName: 'CR Asturias Test',          fn: function(s,r){ return postToN8NCRASTURIAS(s, r, { mode:'manual', preferredAction:'ENVIAR' }); } },
-  'ibercaja':      { sheetName: 'Ibercaja Test',             fn: function(s,r){ return postToN8NIbercaja(s, r, { mode:'manual', preferredAction:'ENVIAR' }); } },
-  'deutsche_bank': { sheetName: 'Deutsche Bank Test',        fn: function(s,r){ return postToN8NDEUTSCHE(s, r, { mode:'manual', preferredAction:'ENVIAR' }); } },
-  'cajamar':       { sheetName: 'Cajamar Test',              fn: function(s,r){ return postToN8NCAJAMAR(s, r, { mode:'manual', preferredAction:'ENVIAR' }); } },
-  'caixa_popular': { sheetName: 'Caixa Popular Test',        fn: function(s,r){ return postToN8NCAIXAPOPULAR(s, r, { mode:'manual', preferredAction:'ENVIAR' }); } },
-  'cr_aragon':     { sheetName: 'CR Aragon Test',            fn: function(s,r){ return postToN8NCRARAGON(s, r, { mode:'manual', preferredAction:'ENVIAR' }); } },
-  'ruralnostra':   { sheetName: 'RURALNOSTRA',               fn: function(s,r){ return postToN8NRuralnostra(s, r, { mode:'manual', preferredAction:'ENVIAR' }); } }
-  // cr_extremadura: sin ROW_ID script — no soportado desde plataforma
+  'unicaja':       { sheetName: 'Unicaja Test',
+                     fn: function(s,r,a){ return postToN8NUNICAJA(s, r, { mode:'manual', preferredAction:a }); } },
+  'laboral_kutxa': { sheetName: 'Laboral Kutxa Test',
+                     fn: function(s,r,a){ return postToN8NLABORALK(s, r, { mode:'manual', preferredAction:a }); } },
+  'uci':           { sheetName: 'UCI',
+                     fn: function(s,r,a){ return postToN8NUCI(s, r, { mode:'manual', preferredAction:a }); } },
+  'myinvestor':    { sheetName: 'MyInvestor Test',
+                     fn: function(s,r,a){ return postToN8NMYINVESTOR(s, r, { mode:'manual', preferredAction:a }); } },
+  'cr_del_sur':    { sheetName: 'CR del Sur Test',
+                     fn: function(s,r,a){ return postToN8NCRDELSUR(s, r, { mode:'manual', preferredAction:a }); } },
+  'cr_teruel':     { sheetName: 'CR Teruel Test',
+                     fn: function(s,r,a){ return postToN8NTERUEL(s, r, { mode:'manual', preferredAction:a }); } },
+  'cr_granada':    { sheetName: 'CR Granada Test',
+                     fn: function(s,r,a){ return postToN8NCRGRANADA(s, r, { mode:'manual', preferredAction:a }); } },
+  'eurocajarural': { sheetName: 'EuroCajaRural Test',
+                     fn: function(s,r,a){ return postToN8NEUROCAJARURAL(s, r, { mode:'manual', preferredAction:a }); } },
+  'globalcaja':    { sheetName: 'Globalcaja Test',
+                     fn: function(s,r,a){ return postToN8NGLOBALCAJA(s, r, { mode:'manual', preferredAction:a }); } },
+  'ing':           { sheetName: 'ING',
+                     fn: function(s,r,a){ return postToN8NING(s, r, { mode:'manual', preferredAction:a }); } },
+  'no_bank_fee':   { sheetName: 'No Bank Fee Test',
+                     fn: function(s,r,a){ return postToN8NNOBANKFEE(s, r, { mode:'manual', preferredAction:a }); } },
+  'cr_asturias':   { sheetName: 'CR Asturias Test',
+                     fn: function(s,r,a){ return postToN8NCRASTURIAS(s, r, { mode:'manual', preferredAction:a }); } },
+  'ibercaja':      { sheetName: 'Ibercaja Test',
+                     fn: function(s,r,a){ return postToN8NIbercaja(s, r, { mode:'manual', preferredAction:a }); } },
+  'deutsche_bank': { sheetName: 'Deutsche Bank Test',
+                     fn: function(s,r,a){ return postToN8NDEUTSCHE(s, r, { mode:'manual', preferredAction:a }); } },
+  'cajamar':       { sheetName: 'Cajamar Test',
+                     fn: function(s,r,a){ return postToN8NCAJAMAR(s, r, { mode:'manual', preferredAction:a }); } },
+  'caixa_popular': { sheetName: 'Caixa Popular Test',
+                     fn: function(s,r,a){ return postToN8NCAIXAPOPULAR(s, r, { mode:'manual', preferredAction:a }); } },
+  'cr_aragon':     { sheetName: 'CR Aragon Test',
+                     fn: function(s,r,a){ return postToN8NCRARAGON(s, r, { mode:'manual', preferredAction:a }); } },
+  'ruralnostra':   { sheetName: 'RURALNOSTRA',
+                     fn: function(s,r,a){ return postToN8NRuralnostra(s, r, { mode:'manual', preferredAction:a }); } }
+  // cr_extremadura: sin ROW_ID script — no soportado
 };
 
 // ── doPost ────────────────────────────────────────────────────────────────────
 /**
- * Recibe: POST JSON { secret, bank_slug, row_number }
+ * Recibe: POST JSON { secret, bank_slug, row_number, action }
+ *   action: 'ENVIAR' | 'AUTORIZACION'
  * Devuelve: JSON { ok: true } | { ok: false, error: '...' }
  */
 function doPost(e) {
@@ -72,11 +97,17 @@ function doPost(e) {
     }
 
     // ── Validar parámetros ──────────────────────────────────────────────────
-    var bankSlug   = String(body.bank_slug || '').trim();
-    var rowNumber  = parseInt(body.row_number, 10);
+    var bankSlug  = String(body.bank_slug || '').trim();
+    var rowNumber = parseInt(body.row_number, 10);
+    var action    = String(body.action || 'ENVIAR').toUpperCase().trim();
 
     if (!bankSlug || isNaN(rowNumber) || rowNumber < 2) {
       output.setContent(JSON.stringify({ ok: false, error: 'Parámetros inválidos' }));
+      return output;
+    }
+
+    if (action !== 'ENVIAR' && action !== 'AUTORIZACION') {
+      output.setContent(JSON.stringify({ ok: false, error: 'Acción inválida: ' + action }));
       return output;
     }
 
@@ -86,7 +117,7 @@ function doPost(e) {
       return output;
     }
 
-    // ── Buscar configuración ────────────────────────────────────────────────
+    // ── Buscar configuración del banco ──────────────────────────────────────
     var config = DISPATCH_MAP[bankSlug];
     if (!config) {
       output.setContent(JSON.stringify({ ok: false, error: 'Banco no soportado: ' + bankSlug }));
@@ -100,10 +131,18 @@ function doPost(e) {
       return output;
     }
 
-    // ── Disparar postToN8N del banco ────────────────────────────────────────
-    var result = config.fn(sheet, rowNumber);
+    // ── Si AUTORIZACION: escribir 'Yes' en columna H antes de enviar ────────
+    // Esto es lo que le dice a n8n que bypasee los checks de red flags / docs.
+    if (action === 'AUTORIZACION') {
+      sheet.getRange(rowNumber, COL_AUTORIZACION).setValue('Yes');
+      SpreadsheetApp.flush();
+      Logger.log('[relaunchWebApp] Set Autorización=Yes bank=' + bankSlug + ' row=' + rowNumber);
+    }
 
-    Logger.log('[relaunchWebApp] bank=' + bankSlug + ' row=' + rowNumber + ' ok=' + result);
+    // ── Disparar postToN8N del banco ────────────────────────────────────────
+    var result = config.fn(sheet, rowNumber, action);
+
+    Logger.log('[relaunchWebApp] bank=' + bankSlug + ' row=' + rowNumber + ' action=' + action + ' ok=' + result);
     output.setContent(JSON.stringify({ ok: result === true }));
     return output;
 
@@ -114,10 +153,11 @@ function doPost(e) {
   }
 }
 
-// ── Configurar secret ────────────────────────────────────────────────────────
+// ── Utilidades de configuración ───────────────────────────────────────────────
+
 /**
- * Ejecuta esta función UNA VEZ para guardar el secret en Script Properties.
- * Pon el mismo valor en APPS_SCRIPT_RELAUNCH_SECRET en tu .env.local de Next.js.
+ * Ejecuta UNA VEZ para guardar el secret en Script Properties.
+ * Pon el mismo valor en APPS_SCRIPT_RELAUNCH_SECRET en .env.local / Vercel.
  */
 function setRelaunchSecret() {
   var secret = 'CAMBIA_ESTO_POR_UN_SECRET_ALEATORIO_LARGO';
@@ -125,18 +165,26 @@ function setRelaunchSecret() {
   Logger.log('Secret guardado: ' + secret);
 }
 
-// ── Test manual ───────────────────────────────────────────────────────────────
 /**
- * Para probar desde el editor: testRelaunchRow('unicaja', 5)
+ * Test manual desde el editor:
+ *   testRelaunchRow('myinvestor', 12, 'ENVIAR')
+ *   testRelaunchRow('myinvestor', 12, 'AUTORIZACION')
  */
-function testRelaunchRow(bankSlug, rowNumber) {
+function testRelaunchRow(bankSlug, rowNumber, action) {
+  action = action || 'ENVIAR';
   var config = DISPATCH_MAP[bankSlug];
   if (!config) { Logger.log('Banco no encontrado: ' + bankSlug); return; }
 
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(config.sheetName);
   if (!sheet) { Logger.log('Hoja no encontrada: ' + config.sheetName); return; }
 
-  Logger.log('Relanzando ' + bankSlug + ' fila ' + rowNumber);
-  var result = config.fn(sheet, rowNumber);
+  if (action === 'AUTORIZACION') {
+    sheet.getRange(rowNumber, COL_AUTORIZACION).setValue('Yes');
+    SpreadsheetApp.flush();
+    Logger.log('Set Autorización=Yes en fila ' + rowNumber);
+  }
+
+  Logger.log('Relanzando ' + bankSlug + ' fila ' + rowNumber + ' action=' + action);
+  var result = config.fn(sheet, rowNumber, action);
   Logger.log('Resultado: ' + result);
 }

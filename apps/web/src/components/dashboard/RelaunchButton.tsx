@@ -3,13 +3,14 @@
 import { useState } from 'react'
 import { requestRelaunch } from '@/app/actions/relaunch'
 
-// Statuses where the row was already dispatched — require force confirmation
+// Already dispatched — Sí allowed but only with force=true
 const FORCE_REQUIRED = new Set(['sent', 'offer_received'])
 
-// Statuses where relaunch is meaningless / blocked
+// Statuses where no action makes sense
 const NOT_RELAUNCHABLE = new Set(['sending', 'relaunch_requested', 'unknown', 'pending_ready'])
 
-type Phase = 'idle' | 'confirm' | 'force_confirm' | 'loading' | 'success' | 'error'
+type Phase = 'idle' | 'confirm' | 'loading' | 'success' | 'error'
+type DispatchAction = 'ENVIAR' | 'AUTORIZACION'
 
 interface RelaunchButtonProps {
   rowId: string
@@ -20,17 +21,26 @@ interface RelaunchButtonProps {
   sheetRowNumber?: number | null
 }
 
-export default function RelaunchButton({ rowId, status, clientName, hasDispatch, bankSlug, sheetRowNumber }: RelaunchButtonProps) {
+export default function RelaunchButton({
+  rowId,
+  status,
+  clientName,
+  hasDispatch,
+  bankSlug,
+  sheetRowNumber,
+}: RelaunchButtonProps) {
   const [phase, setPhase] = useState<Phase>('idle')
+  const [pendingAction, setPendingAction] = useState<DispatchAction>('ENVIAR')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
   const normalStatus = status ?? 'unknown'
 
-  // Banks without platform dispatch use a separate manual process
+  // Banks that use a separate manual process — no button shown
   if (hasDispatch === false) {
     return <span className="text-xs text-gray-400 italic">Proceso manual</span>
   }
 
+  // Statuses that cannot be relaunched from the platform
   if (NOT_RELAUNCHABLE.has(normalStatus)) {
     return (
       <span className="text-xs text-gray-300">
@@ -41,15 +51,27 @@ export default function RelaunchButton({ rowId, status, clientName, hasDispatch,
 
   const needsForce = FORCE_REQUIRED.has(normalStatus)
 
-  async function doRelaunch(force: boolean) {
+  function handleAction(action: DispatchAction) {
+    setPendingAction(action)
+    setPhase('confirm')
+  }
+
+  async function doRelaunch() {
     setPhase('loading')
     setErrorMsg(null)
 
-    const result = await requestRelaunch(rowId, force, bankSlug ?? undefined, sheetRowNumber)
+    const result = await requestRelaunch(
+      rowId,
+      needsForce,
+      bankSlug ?? undefined,
+      sheetRowNumber,
+      pendingAction
+    )
 
     if (!result.ok) {
       if (result.code === 'REQUIRES_FORCE') {
-        setPhase('force_confirm')
+        // DB said force needed — go back to confirm with force context
+        setPhase('confirm')
         return
       }
       setErrorMsg(result.error)
@@ -60,12 +82,12 @@ export default function RelaunchButton({ rowId, status, clientName, hasDispatch,
     setPhase('success')
   }
 
-  // ── Success ──────────────────────────────────────────────────────────────
+  // ── Success ────────────────────────────────────────────────────────────────
   if (phase === 'success') {
     return <span className="text-xs font-medium text-purple-600">✓ Solicitado</span>
   }
 
-  // ── Error ────────────────────────────────────────────────────────────────
+  // ── Error ──────────────────────────────────────────────────────────────────
   if (phase === 'error') {
     return (
       <span className="flex items-center gap-1.5">
@@ -80,42 +102,35 @@ export default function RelaunchButton({ rowId, status, clientName, hasDispatch,
     )
   }
 
-  // ── Loading ───────────────────────────────────────────────────────────────
+  // ── Loading ────────────────────────────────────────────────────────────────
   if (phase === 'loading') {
     return <span className="text-xs text-gray-400">Enviando…</span>
   }
 
-  // ── Force confirmation (row was already sent) ─────────────────────────────
-  if (phase === 'force_confirm') {
-    return (
-      <span className="flex items-center gap-1.5">
-        <span className="text-xs font-medium text-amber-700">
-          ⚠ Ya enviado{clientName ? ` (${clientName.split(' ')[0]})` : ''}. ¿Forzar?
-        </span>
-        <button
-          onClick={() => doRelaunch(true)}
-          className="rounded bg-amber-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-amber-700"
-        >
-          Sí, forzar
-        </button>
-        <button
-          onClick={() => setPhase('idle')}
-          className="text-xs text-gray-400 hover:text-gray-600"
-        >
-          Cancelar
-        </button>
-      </span>
-    )
-  }
-
-  // ── Standard confirmation ─────────────────────────────────────────────────
+  // ── Confirm ────────────────────────────────────────────────────────────────
   if (phase === 'confirm') {
+    const isAutorizacion = pendingAction === 'AUTORIZACION'
+    const label = isAutorizacion ? 'Autorizar' : 'Verificar'
+    const firstName = clientName ? clientName.split(' ')[0] : null
+
+    // Warning text
+    let warning: string | null = null
+    if (needsForce) {
+      warning = `⚠ Ya enviado${firstName ? ` (${firstName})` : ''}. ¿${label} de todos modos?`
+    } else if (isAutorizacion) {
+      warning = `⚠ Enviará pese a bloqueos. ¿Confirmar?`
+    }
+
+    const btnColor = isAutorizacion || needsForce
+      ? 'bg-amber-600 hover:bg-amber-700'
+      : 'bg-indigo-600 hover:bg-indigo-700'
+
     return (
-      <span className="flex items-center gap-1.5">
-        <span className="text-xs text-gray-600">¿Confirmar?</span>
+      <span className="flex flex-wrap items-center gap-1.5">
+        <span className="text-xs text-gray-600">{warning ?? `¿${label}?`}</span>
         <button
-          onClick={() => doRelaunch(needsForce)}
-          className="rounded bg-indigo-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-indigo-700"
+          onClick={doRelaunch}
+          className={`rounded px-2 py-0.5 text-xs font-medium text-white transition-colors ${btnColor}`}
         >
           Sí
         </button>
@@ -129,17 +144,23 @@ export default function RelaunchButton({ rowId, status, clientName, hasDispatch,
     )
   }
 
-  // ── Idle ─────────────────────────────────────────────────────────────────
+  // ── Idle — two action buttons ──────────────────────────────────────────────
   return (
-    <button
-      onClick={() => setPhase(needsForce ? 'force_confirm' : 'confirm')}
-      className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${
-        needsForce
-          ? 'bg-amber-100 text-amber-700 hover:bg-amber-200'
-          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-      }`}
-    >
-      Relanzar
-    </button>
+    <span className="flex items-center gap-1">
+      <button
+        onClick={() => handleAction('ENVIAR')}
+        title="Reintenta el envío normal (Enviar=Yes)"
+        className="rounded px-2 py-0.5 text-xs font-medium bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors"
+      >
+        {needsForce ? '↺ Verificar' : 'Verificar'}
+      </button>
+      <button
+        onClick={() => handleAction('AUTORIZACION')}
+        title="Autoriza el envío a pesar de red flags o docs faltantes (Autorización=Yes)"
+        className="rounded px-2 py-0.5 text-xs font-medium bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors"
+      >
+        {needsForce ? '↺ Autorizar' : 'Autorizar'}
+      </button>
+    </span>
   )
 }
