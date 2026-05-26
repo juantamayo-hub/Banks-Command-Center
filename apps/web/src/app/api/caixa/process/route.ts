@@ -223,60 +223,77 @@ export async function POST(req: NextRequest) {
       continue
     }
 
-    // Process this row
+    // Process this row — two separate try/catch blocks:
+    // - Note failure → real error, do NOT insert into DB (allow retry next upload)
+    // - Mark-lost failure → warning only, note was already added, still record as processed
     let noteId: string | null = null
     let markedLost = false
     let lostReasonId: number | undefined
-    let errorMessage: string | undefined
+    let noteError: string | undefined
+    let lostWarning: string | undefined
     const isClosed = (row.col_D ?? '').trim() === '5 - CERRADA'
 
+    // Step 1: Add note (fatal if it fails — don't record in DB so user can retry)
     try {
-      // Step 1: Add note to Pipedrive deal
       const noteContent = buildNoteContent(row, fechaProcesado)
       noteId = await pipedriveAddNote(dealId, noteContent)
+    } catch (err) {
+      noteError = err instanceof Error ? err.message : String(err)
+      console.error(`[caixa/process] Note error on ${numeroPeticion}:`, noteError)
+    }
 
-      // Step 2: Mark lost if closed
-      if (isClosed) {
+    if (noteError) {
+      // Don't insert into caixa_processed — let the user retry
+      results.push({ numero_peticion: numeroPeticion, deal_id: dealId, status: 'error', detail: noteError })
+      errors++
+      continue
+    }
+
+    // Step 2: Mark lost (non-fatal — 403 usually means deal already lost/won in Pipedrive)
+    if (isClosed) {
+      try {
         const resolutionText = (row.col_F ?? '').trim()
         lostReasonId = await matchLostReason(resolutionText)
         await pipedriveMarkLost(dealId, lostReasonId)
         markedLost = true
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        // 403 = deal already lost/won or no edit permission — treat as warning, not error
+        lostWarning = msg.includes('403')
+          ? `Mark-lost omitido (deal ya cerrado en Pipedrive): ${msg.slice(0, 120)}`
+          : msg
+        if (!msg.includes('403')) {
+          console.error(`[caixa/process] Mark-lost error on ${numeroPeticion}:`, msg)
+        }
       }
-    } catch (err) {
-      errorMessage = err instanceof Error ? err.message : String(err)
-      console.error(`[caixa/process] Error on ${numeroPeticion}:`, errorMessage)
     }
 
-    // Step 3: Record in caixa_processed regardless of partial errors
+    // Step 3: Record in caixa_processed (note was added successfully)
     const { error: insertError } = await supabase.from('caixa_processed').insert({
       numero_peticion: numeroPeticion,
       deal_id: dealId,
-      note_added: noteId != null,
+      note_added: true,
       pipedrive_note_id: noteId,
       marked_lost: markedLost,
       lost_reason_id: lostReasonId ?? null,
       resolution_text: (row.col_F ?? '').trim() || null,
       estado_del_lead: (row.col_D ?? '').trim() || null,
-      error_message: errorMessage ?? null,
+      error_message: lostWarning ?? null,
     })
 
     if (insertError) {
       console.error('[caixa/process] Supabase insert error:', insertError.message)
     }
 
-    if (errorMessage) {
-      results.push({ numero_peticion: numeroPeticion, deal_id: dealId, status: 'error', detail: errorMessage })
-      errors++
-    } else {
-      results.push({
-        numero_peticion: numeroPeticion,
-        deal_id: dealId,
-        status: 'processed',
-        pipedrive_note_id: noteId ?? undefined,
-        lost_reason_id: lostReasonId,
-      })
-      processed++
-    }
+    results.push({
+      numero_peticion: numeroPeticion,
+      deal_id: dealId,
+      status: 'processed',
+      pipedrive_note_id: noteId ?? undefined,
+      lost_reason_id: lostReasonId,
+      detail: lostWarning,
+    })
+    processed++
   }
 
   return NextResponse.json({
