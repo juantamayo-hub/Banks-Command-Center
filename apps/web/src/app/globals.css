@@ -1,26 +1,52 @@
 @import "tailwindcss";
 
+/* ── Bayteca brand tokens ─────────────────────────────────────────────────── */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bayteca-green:       #1B4332;
+  --bayteca-green-dark:  #122d22;
+  --bayteca-green-mid:   #2D6A4F;
+  --bayteca-green-light: #52976e;
+  --bayteca-green-muted: #7dab92;
+  --bayteca-cream:       #F0EBD8;
+  --bayteca-cream-dark:  #e4ddc8;
+  --background:          var(--bayteca-cream);
+  --foreground:          var(--bayteca-green);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-background:       var(--background);
+  --color-foreground:       var(--foreground);
+  --color-bayteca-green:    var(--bayteca-green);
+  --color-bayteca-cream:    var(--bayteca-cream);
+  --font-sans:              var(--font-inter);
+  --font-serif:             var(--font-fraunces);
+  --font-mono:              var(--font-geist-mono);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bayteca-cream);
+  color: var(--bayteca-green);
+  font-family: var(--font-inter), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Sidebar nav link — reusable class ───────────────────────────────────── */
+.sidebar-link {
+  display: block;
+  border-radius: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: var(--bayteca-green-muted);
+  transition: background 150ms, color 150ms;
+  text-decoration: none;
+}
+.sidebar-link:hover {
+  background: var(--bayteca-green-dark);
+  color: #ffffff;
+}
+.sidebar-link-sm {
+  padding-top: 0.375rem;
+  padding-bottom: 0.375rem;
 }
