@@ -43,8 +43,7 @@ function cellStr(row: unknown[], idx: number): string {
   return String(val).trim()
 }
 
-function parseFile(buffer: ArrayBuffer): ParsedRequestRow[] {
-  const wb = XLSX.read(buffer, { type: 'array', cellDates: true })
+function parseWorkbook(wb: import('xlsx').WorkBook): ParsedRequestRow[] {
   const ws = wb.Sheets[wb.SheetNames[0]]
   const raw = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' })
 
@@ -80,17 +79,25 @@ export default function CaixaRequestsRespuestasPage() {
 
   const handleFile = useCallback((file: File) => {
     setFileName(file.name)
+    const isCSV = file.name.toLowerCase().endsWith('.csv')
     const reader = new FileReader()
     reader.onload = (e) => {
       try {
-        const rows = parseFile(e.target!.result as ArrayBuffer)
+        const wb = isCSV
+          ? XLSX.read(e.target!.result as string, { type: 'string', cellDates: true })
+          : XLSX.read(e.target!.result as ArrayBuffer, { type: 'array', cellDates: true })
+        const rows = parseWorkbook(wb)
         setParsedRows(rows)
         setStage('previewing')
       } catch (err) {
         alert(`Error al leer el archivo: ${err instanceof Error ? err.message : String(err)}`)
       }
     }
-    reader.readAsArrayBuffer(file)
+    if (isCSV) {
+      reader.readAsText(file, 'utf-8')
+    } else {
+      reader.readAsArrayBuffer(file)
+    }
   }, [])
 
   const onDrop = useCallback((e: React.DragEvent) => {
