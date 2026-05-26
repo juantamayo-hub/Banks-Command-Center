@@ -24,7 +24,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: 'Banks Command Center · Bayteca',
   description: 'Plataforma interna de control de envíos bancarios y ofertas recibidas.',
-  icons: { icon: '/favicon.ico' },
+  icons: { icon: '/icon.png' },
 }
 
 export default function RootLayout({
