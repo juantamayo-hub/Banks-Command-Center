@@ -142,7 +142,7 @@ async function pipedriveAddNote(dealId: string, content: string): Promise<string
     `https://api.pipedrive.com/v1/notes?api_token=${token}`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
       body: JSON.stringify({ deal_id: parseInt(dealId, 10), content }),
     }
   )
@@ -164,7 +164,7 @@ async function pipedriveMarkLost(dealId: string, lostReasonId: number): Promise<
     `https://api.pipedrive.com/v1/deals/${dealId}?api_token=${token}`,
     {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
       body: JSON.stringify({
         status: 'lost',
         [PIPEDRIVE_LOST_REASON_FIELD]: lostReasonId,
