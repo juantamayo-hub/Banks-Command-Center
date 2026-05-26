@@ -7,7 +7,7 @@ import { requestRelaunch } from '@/app/actions/relaunch'
 const FORCE_REQUIRED = new Set(['sent', 'offer_received'])
 
 // Statuses where no action makes sense
-const NOT_RELAUNCHABLE = new Set(['sending', 'relaunch_requested', 'unknown', 'pending_ready'])
+const NOT_RELAUNCHABLE = new Set(['sending', 'relaunch_requested', 'unknown'])
 
 type Phase = 'idle' | 'confirm' | 'loading' | 'success' | 'error'
 type DispatchAction = 'ENVIAR' | 'AUTORIZACION'
@@ -144,7 +144,20 @@ export default function RelaunchButton({
     )
   }
 
-  // ── Idle — two action buttons ──────────────────────────────────────────────
+  // ── Idle — action buttons ─────────────────────────────────────────────────
+  // pending_ready = first send → single "Enviar" button, no Autorizar needed
+  if (normalStatus === 'pending_ready') {
+    return (
+      <button
+        onClick={() => handleAction('ENVIAR')}
+        title="Enviar dossier al banco (primer envío)"
+        className="rounded px-2 py-0.5 text-xs font-medium bg-green-50 text-green-700 hover:bg-green-100 transition-colors"
+      >
+        Enviar
+      </button>
+    )
+  }
+
   return (
     <span className="flex items-center gap-1">
       <button

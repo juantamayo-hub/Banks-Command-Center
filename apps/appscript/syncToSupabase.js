@@ -299,10 +299,15 @@ function mapRow_(headers, rowValues, bankId, opportunityId, rowNumber, syncedAt)
   var statusRaw = get(['Status']);
   var statusNorm = normalizeStatus_(statusRaw ? String(statusRaw) : null);
 
-  // Override: Enviar=Yes + no Timestamp Sent + no explicit status → pending_ready
-  // These are rows queued for dispatch that Apps Script hasn't processed yet.
+  // Override: Enviar=Yes + no Timestamp Sent + no estado de destino explícito → pending_ready
+  // Antes solo capturaba statusNorm==='unknown' (status vacío). Ahora también captura
+  // filas con texto no reconocido (statusNorm todavía 'unknown') Y filas con status
+  // que aún no indican envío/bloqueo/oferta. Esto resuelve el pendientes=0 crónico.
   var timestampSentRaw = get(['Timestamp Sent']);
-  if (sendTrigger === true && !timestampSentRaw && statusNorm === 'unknown') {
+  var FINAL_STATUSES = ['sent', 'sending', 'blocked_red_flag', 'blocked_missing_docs',
+                        'blocked_validation', 'offer_received', 'rejected', 'relaunch_requested'];
+  if (sendTrigger === true && !timestampSentRaw &&
+      FINAL_STATUSES.indexOf(statusNorm) === -1) {
     statusNorm = 'pending_ready';
   }
 

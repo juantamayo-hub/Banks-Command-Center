@@ -11,6 +11,7 @@ interface BankRef {
 interface SheetRow {
   id: string
   opportunity_id: number | null
+  bank_deal_id?: number | null
   nombre_cliente: string | null
   importe: number | null
   status: string | null
@@ -154,8 +155,12 @@ export default function SubmissionsTable({
                   <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">
                     {getBankName(row.banks)}
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-700 max-w-[180px] truncate">
-                    {row.nombre_cliente ?? '—'}
+                  <td className="px-4 py-3 max-w-[200px]">
+                    <p className="text-sm text-gray-700 truncate">{row.nombre_cliente ?? '—'}</p>
+                    <p className="text-xs text-gray-400 tabular-nums">
+                      {row.opportunity_id ?? '—'}
+                      {row.bank_deal_id ? ` · B:${row.bank_deal_id}` : ''}
+                    </p>
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-sm text-right tabular-nums text-gray-900">
                     {formatImporte(row.importe)}
