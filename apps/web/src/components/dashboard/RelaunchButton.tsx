@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { requestRelaunch } from '@/app/actions/relaunch'
 
 // Already dispatched — Sí allowed but only with force=true
@@ -29,9 +30,11 @@ export default function RelaunchButton({
   bankSlug,
   sheetRowNumber,
 }: RelaunchButtonProps) {
+  const router = useRouter()
   const [phase, setPhase] = useState<Phase>('idle')
   const [pendingAction, setPendingAction] = useState<DispatchAction>('ENVIAR')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [countdown, setCountdown] = useState<number | null>(null)
 
   const normalStatus = status ?? 'unknown'
 
@@ -80,11 +83,33 @@ export default function RelaunchButton({
     }
 
     setPhase('success')
+    setCountdown(60)
   }
+
+  // Auto-refresh countdown after success
+  useEffect(() => {
+    if (countdown === null) return
+    if (countdown <= 0) { router.refresh(); return }
+    const t = setTimeout(() => setCountdown((c) => (c ?? 1) - 1), 1000)
+    return () => clearTimeout(t)
+  }, [countdown, router])
 
   // ── Success ────────────────────────────────────────────────────────────────
   if (phase === 'success') {
-    return <span className="text-xs font-medium text-purple-600">✓ Solicitado</span>
+    return (
+      <span className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs font-medium text-purple-600">✓ Solicitado</span>
+        <button
+          onClick={() => { setCountdown(null); router.refresh() }}
+          className="text-xs text-gray-400 hover:text-gray-700 underline tabular-nums"
+          title="Actualizar estado desde Supabase"
+        >
+          {countdown !== null && countdown > 0
+            ? `Actualizar en ${countdown}s`
+            : 'Actualizar'}
+        </button>
+      </span>
+    )
   }
 
   // ── Error ──────────────────────────────────────────────────────────────────

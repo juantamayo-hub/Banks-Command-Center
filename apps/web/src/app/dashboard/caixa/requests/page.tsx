@@ -1,12 +1,45 @@
+import Link from 'next/link'
+
 export default function CaixaRequestsPage() {
   return (
     <div className="p-8">
-      <div className="mb-6">
+      <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">Caixa — Requests</h1>
+        <p className="mt-1 text-sm text-gray-500">
+          Gestión de consultas y solicitudes con CaixaBank.
+        </p>
       </div>
-      <div className="flex items-center gap-3 rounded-xl border border-dashed border-gray-300 bg-gray-50 p-8">
-        <span className="text-2xl">🚧</span>
-        <p className="text-gray-500">Módulo de Requests en construcción.</p>
+
+      <div className="grid gap-6 sm:grid-cols-2 max-w-2xl">
+        {/* Procesar respuestas */}
+        <Link
+          href="/dashboard/caixa/requests/respuestas"
+          className="group block rounded-xl border border-gray-200 bg-white p-6 shadow-sm hover:border-blue-400 hover:shadow-md transition-all"
+        >
+          <div className="mb-3 text-3xl">📨</div>
+          <h2 className="text-lg font-semibold text-gray-900 group-hover:text-blue-700">
+            Procesar respuestas
+          </h2>
+          <p className="mt-2 text-sm text-gray-500">
+            Sube el CSV/Excel de consultas con las respuestas de CaixaBank para
+            añadirlas como notas en los deals de Pipedrive.
+          </p>
+          <span className="mt-4 inline-block text-sm font-medium text-blue-600 group-hover:underline">
+            Subir archivo →
+          </span>
+        </Link>
+
+        {/* Rellenar formulario — placeholder */}
+        <div className="relative block rounded-xl border border-dashed border-gray-300 bg-gray-50 p-6">
+          <div className="mb-3 text-3xl opacity-40">📝</div>
+          <h2 className="text-lg font-semibold text-gray-400">Rellenar formulario</h2>
+          <p className="mt-2 text-sm text-gray-400">
+            Crea nuevas consultas para enviar a CaixaBank desde la plataforma.
+          </p>
+          <span className="mt-4 inline-block rounded-full bg-gray-200 px-3 py-0.5 text-xs font-medium text-gray-500">
+            Próximamente
+          </span>
+        </div>
       </div>
     </div>
   )
