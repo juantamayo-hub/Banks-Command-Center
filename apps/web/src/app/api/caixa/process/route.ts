@@ -116,6 +116,24 @@ async function matchLostReason(resolutionText: string): Promise<number> {
   }
 }
 
+/** Returns the deal status ('open','won','lost','deleted') or null if not found. */
+async function pipedriveDealStatus(dealId: string): Promise<string | null> {
+  const token = process.env.PIPEDRIVE_API_TOKEN
+  if (!token) throw new Error('PIPEDRIVE_API_TOKEN no configurado')
+
+  const res = await fetch(
+    `https://api.pipedrive.com/v1/deals/${dealId}?api_token=${token}`,
+    { method: 'GET' }
+  )
+  if (res.status === 404) return null
+  if (!res.ok) {
+    const body = await res.text()
+    throw new Error(`Pipedrive GET deal ${res.status}: ${body.slice(0, 200)}`)
+  }
+  const json = await res.json()
+  return json?.data?.status ?? null
+}
+
 async function pipedriveAddNote(dealId: string, content: string): Promise<string | null> {
   const token = process.env.PIPEDRIVE_API_TOKEN
   if (!token) throw new Error('PIPEDRIVE_API_TOKEN no configurado')
@@ -232,6 +250,23 @@ export async function POST(req: NextRequest) {
     let noteError: string | undefined
     let lostWarning: string | undefined
     const isClosed = (row.col_D ?? '').trim() === '5 - CERRADA'
+
+    // Guard: never touch won deals
+    let dealStatus: string | null = null
+    try {
+      dealStatus = await pipedriveDealStatus(dealId)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      results.push({ numero_peticion: numeroPeticion, deal_id: dealId, status: 'error', detail: `No se pudo verificar estado del deal: ${msg}` })
+      errors++
+      continue
+    }
+
+    if (dealStatus === 'won') {
+      results.push({ numero_peticion: numeroPeticion, deal_id: dealId, status: 'skipped', detail: 'Deal ganado (won) — no se toca' })
+      skipped++
+      continue
+    }
 
     // Step 1: Add note (fatal if it fails — don't record in DB so user can retry)
     try {
