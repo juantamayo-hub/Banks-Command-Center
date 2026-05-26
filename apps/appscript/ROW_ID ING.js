@@ -617,6 +617,7 @@ function postToN8NING(sheet, row, options) {
     });
 
     payload["_ing_action"] = validation.action;
+    payload["_source"] = options.source || "sheets";
     payload["_ing_row"] = row;
     payload["_ing_item_id"] = sheet.getRange(row, ING_COL_ITEM_ID).getValue();
     payload["_ing_attempt_at"] = now.toISOString();

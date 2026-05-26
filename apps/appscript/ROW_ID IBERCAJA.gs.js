@@ -614,6 +614,7 @@ function postToN8NIbercaja(sheet, row, options) {
     payload["_ibercaja_opportunity_id"] = opportunityId;
 
     payload["_ibercaja_action"] = validation.action;
+    payload["_source"] = options.source || "sheets";
     payload["_ibercaja_row"] = row;
     payload["_ibercaja_item_id"] = sheet.getRange(row, IBERCAJA_COL_ITEM_ID).getValue();
     payload["_ibercaja_attempt_at"] = now.toISOString();

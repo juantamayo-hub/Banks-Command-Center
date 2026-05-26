@@ -614,6 +614,7 @@ function postToN8NCRGRANADA(sheet, row, options) {
     payload["_crgranada_opportunity_id"] = opportunityId;
 
     payload["_crgranada_action"] = validation.action;
+    payload["_source"] = options.source || "sheets";
     payload["_crgranada_row"] = row;
     payload["_crgranada_item_id"] = sheet.getRange(row, CRGRANADA_COL_ITEM_ID).getValue();
     payload["_crgranada_attempt_at"] = now.toISOString();

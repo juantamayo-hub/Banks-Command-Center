@@ -613,6 +613,7 @@ function postToN8NRuralnostra(sheet, row, options) {
     payload["_ruralnostra_opportunity_id"] = opportunityId;
 
     payload["_ruralnostra_action"] = validation.action;
+    payload["_source"] = options.source || "sheets";
     payload["_ruralnostra_row"] = row;
     payload["_ruralnostra_item_id"] = sheet.getRange(row, RURALNOSTRA_COL_ITEM_ID).getValue();
     payload["_ruralnostra_attempt_at"] = now.toISOString();

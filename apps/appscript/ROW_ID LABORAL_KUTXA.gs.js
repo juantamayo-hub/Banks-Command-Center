@@ -527,6 +527,7 @@ function postToN8NLABORALK(sheet, row, options) {
     });
 
     payload["_laboralk_action"] = validation.action;
+    payload["_source"] = options.source || "sheets";
     payload["_laboralk_row"] = row;
     payload["_laboralk_item_id"] = sheet.getRange(row, COL_ITEM_ID).getValue();
     payload["_laboralk_attempt_at"] = now.toISOString();

@@ -613,6 +613,7 @@ function postToN8NNOBANKFEE(sheet, row, options) {
     payload["_nobankfee_opportunity_id"] = opportunityId;
 
     payload["_nobankfee_action"] = validation.action;
+    payload["_source"] = options.source || "sheets";
     payload["_nobankfee_row"] = row;
     payload["_nobankfee_item_id"] = sheet.getRange(row, NOBANKFEE_COL_ITEM_ID).getValue();
     payload["_nobankfee_attempt_at"] = now.toISOString();

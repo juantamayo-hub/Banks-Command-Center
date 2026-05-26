@@ -614,6 +614,7 @@ function postToN8NCAJAMAR(sheet, row, options) {
     payload["_cajamar_opportunity_id"] = opportunityId;
 
     payload["_cajamar_action"] = validation.action;
+    payload["_source"] = options.source || "sheets";
     payload["_cajamar_row"] = row;
     payload["_cajamar_item_id"] = sheet.getRange(row, CAJAMAR_COL_ITEM_ID).getValue();
     payload["_cajamar_attempt_at"] = now.toISOString();

@@ -614,6 +614,7 @@ function postToN8NGLOBALCAJA(sheet, row, options) {
     payload["_globalcaja_opportunity_id"] = opportunityId;
 
     payload["_globalcaja_action"] = validation.action;
+    payload["_source"] = options.source || "sheets";
     payload["_globalcaja_row"] = row;
     payload["_globalcaja_item_id"] = sheet.getRange(row, GLOBALCAJA_COL_ITEM_ID).getValue();
     payload["_globalcaja_attempt_at"] = now.toISOString();

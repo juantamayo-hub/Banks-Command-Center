@@ -618,6 +618,7 @@ function postToN8NMYINVESTOR(sheet, row, options) {
     });
 
     payload["_MYINVESTOR_action"] = validation.action;
+    payload["_source"] = options.source || "sheets";
     payload["_MYINVESTOR_row"] = row;
     payload["_MYINVESTOR_item_id"] = sheet.getRange(row, MYINVESTOR_COL_ITEM_ID).getValue();
     payload["_MYINVESTOR_attempt_at"] = now.toISOString();

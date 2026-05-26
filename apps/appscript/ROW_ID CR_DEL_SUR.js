@@ -614,6 +614,7 @@ function postToN8NCRDELSUR(sheet, row, options) {
     payload["_crdelsur_opportunity_id"] = opportunityId;
 
     payload["_crdelsur_action"] = validation.action;
+    payload["_source"] = options.source || "sheets";
     payload["_crdelsur_row"] = row;
     payload["_crdelsur_item_id"] = sheet.getRange(row, CRDELSUR_COL_ITEM_ID).getValue();
     payload["_crdelsur_attempt_at"] = now.toISOString();

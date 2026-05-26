@@ -612,6 +612,7 @@ function postToN8NDEUTSCHE(sheet, row, options) {
     });
 
     payload["_deutsche_action"] = validation.action;
+    payload["_source"] = options.source || "sheets";
     payload["_deutsche_row"] = row;
     payload["_deutsche_item_id"] = sheet.getRange(row, DEUTSCHE_COL_ITEM_ID).getValue();
     payload["_deutsche_attempt_at"] = now.toISOString();

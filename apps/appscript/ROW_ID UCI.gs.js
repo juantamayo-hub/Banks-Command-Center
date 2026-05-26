@@ -613,6 +613,7 @@ function postToN8NUCI(sheet, row, options) {
     payload["_uci_opportunity_id"] = opportunityId;
 
     payload["_uci_action"] = validation.action;
+    payload["_source"] = options.source || "sheets";
     payload["_uci_row"] = row;
     payload["_uci_item_id"] = sheet.getRange(row, UCI_COL_ITEM_ID).getValue();
     payload["_uci_attempt_at"] = now.toISOString();

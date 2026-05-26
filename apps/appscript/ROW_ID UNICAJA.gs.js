@@ -611,6 +611,7 @@ function postToN8NUNICAJA(sheet, row, options) {
     });
 
     payload["_UNICAJA_action"] = validation.action;
+    payload["_source"] = options.source || "sheets";
     payload["_UNICAJA_row"] = row;
     payload["_UNICAJA_item_id"] = sheet.getRange(row, UNICAJA_COL_ITEM_ID).getValue();
     payload["_UNICAJA_attempt_at"] = now.toISOString();

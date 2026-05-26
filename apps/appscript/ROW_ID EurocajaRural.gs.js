@@ -613,6 +613,7 @@ function postToN8NEUROCAJARURAL(sheet, row, options) {
     payload["_eurocajarural_opportunity_id"] = opportunityId;
 
     payload["_eurocajarural_action"] = validation.action;
+    payload["_source"] = options.source || "sheets";
     payload["_eurocajarural_row"] = row;
     payload["_eurocajarural_item_id"] = sheet.getRange(row, EUROCAJARURAL_COL_ITEM_ID).getValue();
     payload["_eurocajarural_attempt_at"] = now.toISOString();

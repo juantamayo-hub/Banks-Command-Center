@@ -614,6 +614,7 @@ function postToN8NCRASTURIAS(sheet, row, options) {
     payload["_crasturias_opportunity_id"] = opportunityId;
 
     payload["_crasturias_action"] = validation.action;
+    payload["_source"] = options.source || "sheets";
     payload["_crasturias_row"] = row;
     payload["_crasturias_item_id"] = sheet.getRange(row, CRASTURIAS_COL_ITEM_ID).getValue();
     payload["_crasturias_attempt_at"] = now.toISOString();

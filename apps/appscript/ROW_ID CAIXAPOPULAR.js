@@ -613,6 +613,7 @@ function postToN8NCAIXAPOPULAR(sheet, row, options) {
     payload["_caixapopular_opportunity_id"] = opportunityId;
 
     payload["_caixapopular_action"] = validation.action;
+    payload["_source"] = options.source || "sheets";
     payload["_caixapopular_row"] = row;
     payload["_caixapopular_item_id"] = sheet.getRange(row, CAIXAPOPULAR_COL_ITEM_ID).getValue();
     payload["_caixapopular_attempt_at"] = now.toISOString();

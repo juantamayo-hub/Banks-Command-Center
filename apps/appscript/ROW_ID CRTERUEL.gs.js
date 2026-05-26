@@ -613,6 +613,7 @@ function postToN8NTERUEL(sheet, row, options) {
     });
 
     payload["_teruel_action"] = validation.action;
+    payload["_source"] = options.source || "sheets";
     payload["_teruel_row"] = row;
     payload["_teruel_item_id"] = sheet.getRange(row, TERUEL_COL_ITEM_ID).getValue();
     payload["_teruel_attempt_at"] = now.toISOString();

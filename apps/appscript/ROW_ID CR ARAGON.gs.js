@@ -613,6 +613,7 @@ function postToN8NCRARAGON(sheet, row, options) {
     payload["_craragon_opportunity_id"] = opportunityId;
 
     payload["_craragon_action"] = validation.action;
+    payload["_source"] = options.source || "sheets";
     payload["_craragon_row"] = row;
     payload["_craragon_item_id"] = sheet.getRange(row, CRARAGON_COL_ITEM_ID).getValue();
     payload["_craragon_attempt_at"] = now.toISOString();
