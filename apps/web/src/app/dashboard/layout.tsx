@@ -44,6 +44,27 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             ))}
           </div>
 
+            {/* Caixa section */}
+          <div className="mt-6">
+            <p className="mb-1 px-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
+              Caixa
+            </p>
+            <div className="flex flex-col gap-0.5">
+              <Link
+                href="/dashboard/caixa/respuestas"
+                className="rounded-md px-3 py-1.5 text-sm text-gray-400 hover:bg-gray-800 hover:text-white transition-colors"
+              >
+                📥 Respuestas
+              </Link>
+              <Link
+                href="/dashboard/caixa/requests"
+                className="rounded-md px-3 py-1.5 text-sm text-gray-400 hover:bg-gray-800 hover:text-white transition-colors"
+              >
+                📤 Requests
+              </Link>
+            </div>
+          </div>
+
           {/* Bancos section */}
           <div className="mt-6">
             <p className="mb-1 px-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
