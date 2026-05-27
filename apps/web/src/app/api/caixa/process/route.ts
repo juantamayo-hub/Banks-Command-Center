@@ -37,6 +37,7 @@ interface ProcessResult {
   detail?: string
   pipedrive_note_id?: string
   lost_reason_id?: number
+  marked_lost?: boolean
 }
 
 // ── Pipedrive lost-reason options (field key: 5af7c8a4d8341bfe53526b6a7b4e2fc793503a90) ──
@@ -326,6 +327,7 @@ export async function POST(req: NextRequest) {
       status: 'processed',
       pipedrive_note_id: noteId ?? undefined,
       lost_reason_id: lostReasonId,
+      marked_lost: markedLost,
       detail: lostWarning,
     })
     processed++

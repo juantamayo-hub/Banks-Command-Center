@@ -30,6 +30,7 @@ interface ProcessResponse {
     detail?: string
     pipedrive_note_id?: string
     lost_reason_id?: number
+    marked_lost?: boolean
   }>
 }
 
@@ -323,10 +324,13 @@ export default function CaixaRespuestasPage() {
                         <StatusBadge status={r.status} />
                       </td>
                       <td className="px-4 py-3 text-xs text-gray-500">
-                        {r.status === 'processed' && r.lost_reason_id && (
+                        {r.status === 'processed' && r.marked_lost && (
                           <span>Nota añadida · Marcado como perdido (ID: {r.lost_reason_id})</span>
                         )}
-                        {r.status === 'processed' && !r.lost_reason_id && (
+                        {r.status === 'processed' && !r.marked_lost && r.detail && (
+                          <span className="text-amber-600">Nota añadida · Error al marcar perdido: {r.detail}</span>
+                        )}
+                        {r.status === 'processed' && !r.marked_lost && !r.detail && (
                           <span>Nota añadida en Pipedrive</span>
                         )}
                         {r.status === 'error' && (
