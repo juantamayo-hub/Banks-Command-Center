@@ -30,7 +30,12 @@ interface ProcessResponse {
     detail?: string
     pipedrive_note_id?: string
     lost_reason_id?: number
+    lost_reason_label?: string
     marked_lost?: boolean
+    stage_id?: number
+    stage_name?: string
+    stage_updated?: boolean
+    marked_won?: boolean
   }>
 }
 
@@ -324,15 +329,17 @@ export default function CaixaRespuestasPage() {
                         <StatusBadge status={r.status} />
                       </td>
                       <td className="px-4 py-3 text-xs text-gray-500">
-                        {r.status === 'processed' && r.marked_lost && (
-                          <span>Nota añadida · Marcado como perdido (ID: {r.lost_reason_id})</span>
-                        )}
-                        {r.status === 'processed' && !r.marked_lost && r.detail && (
-                          <span className="text-amber-600">Nota añadida · Error al marcar perdido: {r.detail}</span>
-                        )}
-                        {r.status === 'processed' && !r.marked_lost && !r.detail && (
-                          <span>Nota añadida en Pipedrive</span>
-                        )}
+                        {r.status === 'processed' && (() => {
+                          const parts: string[] = ['Nota añadida']
+                          if (r.marked_lost) parts.push(`Perdido: ${r.lost_reason_label ?? r.lost_reason_id}`)
+                          if (r.stage_updated) parts.push(`Stage → ${r.stage_name}${r.marked_won ? ' · Ganado' : ''}`)
+                          return (
+                            <span className={r.detail ? 'text-amber-600' : ''}>
+                              {parts.join(' · ')}
+                              {r.detail && <span> · ⚠️ {r.detail}</span>}
+                            </span>
+                          )
+                        })()}
                         {r.status === 'error' && (
                           <span className="text-red-600">{r.detail}</span>
                         )}

@@ -37,7 +37,12 @@ interface ProcessResult {
   detail?: string
   pipedrive_note_id?: string
   lost_reason_id?: number
+  lost_reason_label?: string
   marked_lost?: boolean
+  stage_id?: number
+  stage_name?: string
+  stage_updated?: boolean
+  marked_won?: boolean
 }
 
 // ── Pipedrive lost-reason options (field key: 5af7c8a4d8341bfe53526b6a7b4e2fc793503a90) ──
@@ -64,6 +69,48 @@ const VALID_REASON_IDS = new Set(Object.keys(LOST_REASON_OPTIONS).map(Number))
 const FALLBACK_REASON_ID = 3584 // "OTROS"
 
 const PIPEDRIVE_LOST_REASON_FIELD = '5af7c8a4d8341bfe53526b6a7b4e2fc793503a90'
+
+// ── Stage mapping (col_D + col_E → Pipedrive stage_id) ────────────────────────
+
+const STAGE_NAMES: Record<number, string> = {
+  77: 'Pre Bank Submission',
+  70: 'Bank Submission',
+  71: 'Bank offers received',
+  79: 'Pre - Valuation',
+  72: 'Valuation',
+  73: 'FEIN',
+  74: 'Notary - Formalization',
+  75: 'Notary - Signature',
+}
+
+const STAGE_MAP: Record<string, Record<string, number>> = {
+  '2 - SIA EN CURSO': {
+    'Aprobada pendiente FEIN': 73,
+    'Aprobada pendiente tasación': 72,
+    'Pendiente CIRBE': 79,
+    'Pendiente documentación': 79,
+    'Pendiente informe': 79,
+    'Pendiente nota simple': 79,
+    'Pendiente provisión de fondos': 73,
+    'Tasación en curso': 72,
+    'Traslado aprobación CARP': 72,
+    'Traslado aprobación tarifa': 72,
+    'Validación tasación homologada': 72,
+  },
+  '3 - EN FIRMA': {
+    'Aprobada pendiente escritura': 74,
+    'Aprobada pendiente fecha': 74,
+    'Pendiente acta notarial': 74,
+  },
+}
+
+function getTargetStage(estadoLead: string, motivoPendiente: string): { stageId: number; markWon: boolean } | null {
+  const estado = estadoLead.trim()
+  const motivo = motivoPendiente.trim()
+  if (estado === '4 - FORMALIZADA') return { stageId: 75, markWon: true }
+  const stageId = STAGE_MAP[estado]?.[motivo]
+  return stageId ? { stageId, markWon: false } : null
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -179,6 +226,28 @@ async function pipedriveMarkLost(dealId: string, lostReasonId: number): Promise<
   }
 }
 
+async function pipedriveUpdateStage(dealId: string, stageId: number, markWon: boolean): Promise<void> {
+  const token = process.env.PIPEDRIVE_API_TOKEN
+  if (!token) throw new Error('PIPEDRIVE_API_TOKEN no configurado')
+
+  const payload: Record<string, unknown> = { stage_id: stageId }
+  if (markWon) payload.status = 'won'
+
+  const res = await fetch(
+    `https://api.pipedrive.com/v1/deals/${dealId}?api_token=${token}`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+      body: JSON.stringify(payload),
+    }
+  )
+
+  if (!res.ok) {
+    const body = await res.text()
+    throw new Error(`Pipedrive deals API ${res.status}: ${body.slice(0, 200)}`)
+  }
+}
+
 // ── Route handler ─────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
@@ -285,7 +354,7 @@ export async function POST(req: NextRequest) {
       continue
     }
 
-    // Step 2: Mark lost (non-fatal — 403 usually means deal already lost/won in Pipedrive)
+    // Step 2: Mark lost (non-fatal — 403 = permission issue)
     if (isClosed) {
       try {
         const resolutionText = (row.col_F ?? '').trim()
@@ -294,7 +363,6 @@ export async function POST(req: NextRequest) {
         markedLost = true
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        // 403 = deal already lost/won or no edit permission — treat as warning, not error
         lostWarning = msg.includes('403')
           ? `Sin permiso para editar este deal (403 — usa un API token de admin): ${msg.slice(0, 120)}`
           : msg
@@ -304,7 +372,34 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Step 2b: Update Pipedrive stage (non-fatal)
+    let stageUpdated = false
+    let stageId: number | undefined
+    let stageName: string | undefined
+    let markedWon = false
+    let stageWarning: string | undefined
+
+    if (!isClosed) {
+      const target = getTargetStage(row.col_D ?? '', row.col_E ?? '')
+      if (target) {
+        stageId = target.stageId
+        stageName = STAGE_NAMES[target.stageId]
+        markedWon = target.markWon
+        try {
+          await pipedriveUpdateStage(dealId, target.stageId, target.markWon)
+          stageUpdated = true
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err)
+          stageWarning = msg.includes('403')
+            ? `Sin permiso para mover stage (403 — usa un API token de admin): ${msg.slice(0, 120)}`
+            : msg
+          console.error(`[caixa/process] Stage update error on ${numeroPeticion}:`, msg)
+        }
+      }
+    }
+
     // Step 3: Record in caixa_processed (note was added successfully)
+    const combinedWarning = [lostWarning, stageWarning].filter(Boolean).join(' | ') || null
     const { error: insertError } = await supabase.from('caixa_processed').insert({
       numero_peticion: numeroPeticion,
       deal_id: dealId,
@@ -314,7 +409,7 @@ export async function POST(req: NextRequest) {
       lost_reason_id: lostReasonId ?? null,
       resolution_text: (row.col_F ?? '').trim() || null,
       estado_del_lead: (row.col_D ?? '').trim() || null,
-      error_message: lostWarning ?? null,
+      error_message: combinedWarning,
     })
 
     if (insertError) {
@@ -327,8 +422,13 @@ export async function POST(req: NextRequest) {
       status: 'processed',
       pipedrive_note_id: noteId ?? undefined,
       lost_reason_id: lostReasonId,
+      lost_reason_label: lostReasonId ? LOST_REASON_OPTIONS[lostReasonId] : undefined,
       marked_lost: markedLost,
-      detail: lostWarning,
+      stage_id: stageId,
+      stage_name: stageName,
+      stage_updated: stageUpdated,
+      marked_won: markedWon,
+      detail: combinedWarning ?? undefined,
     })
     processed++
   }
