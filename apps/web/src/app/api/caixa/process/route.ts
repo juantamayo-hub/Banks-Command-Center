@@ -296,7 +296,7 @@ export async function POST(req: NextRequest) {
         const msg = err instanceof Error ? err.message : String(err)
         // 403 = deal already lost/won or no edit permission — treat as warning, not error
         lostWarning = msg.includes('403')
-          ? `Mark-lost omitido (deal ya cerrado en Pipedrive): ${msg.slice(0, 120)}`
+          ? `Sin permiso para editar este deal (403 — usa un API token de admin): ${msg.slice(0, 120)}`
           : msg
         if (!msg.includes('403')) {
           console.error(`[caixa/process] Mark-lost error on ${numeroPeticion}:`, msg)
