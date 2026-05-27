@@ -43,6 +43,8 @@ interface ProcessResult {
   stage_name?: string
   stage_updated?: boolean
   marked_won?: boolean
+  hub_comment_added?: boolean
+  hub_ticket_id?: string
 }
 
 // ── Pipedrive lost-reason options (field key: 5af7c8a4d8341bfe53526b6a7b4e2fc793503a90) ──
@@ -226,6 +228,48 @@ async function pipedriveMarkLost(dealId: string, lostReasonId: number): Promise<
   }
 }
 
+// ── Request Hub Bancos ────────────────────────────────────────────────────────
+
+/** Returns the first open ticket ID for a deal, or null if none. */
+async function requestHubGetTicket(dealId: string): Promise<string | null> {
+  const base = process.env.REQUEST_HUB_BASE_URL
+  const secret = process.env.REQUEST_HUB_EXTERNAL_API_SECRET
+  if (!base || !secret) return null // feature disabled if not configured
+
+  const res = await fetch(`${base}/api/external/tickets/deal/${dealId}`, {
+    headers: { Authorization: `Bearer ${secret}` },
+  })
+  if (res.status === 404) return null
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Request Hub GET ticket ${res.status}: ${text.slice(0, 200)}`)
+  }
+  const json = await res.json()
+  const tickets: Array<{ id: string }> = json?.tickets ?? []
+  return tickets[0]?.id ?? null
+}
+
+/** Adds a comment to a Request Hub ticket. */
+async function requestHubAddComment(ticketId: string, body: string): Promise<void> {
+  const base = process.env.REQUEST_HUB_BASE_URL
+  const secret = process.env.REQUEST_HUB_EXTERNAL_API_SECRET
+  const authorEmail = process.env.REQUEST_HUB_AUTHOR_EMAIL
+  if (!base || !secret) return
+
+  const res = await fetch(`${base}/api/external/tickets/${ticketId}/comment`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${secret}`,
+    },
+    body: JSON.stringify({ body, visibility: 'internal', author_email: authorEmail }),
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Request Hub POST comment ${res.status}: ${text.slice(0, 200)}`)
+  }
+}
+
 async function pipedriveUpdateStage(dealId: string, stageId: number, markWon: boolean): Promise<void> {
   const token = process.env.PIPEDRIVE_API_TOKEN
   if (!token) throw new Error('PIPEDRIVE_API_TOKEN no configurado')
@@ -339,8 +383,8 @@ export async function POST(req: NextRequest) {
     }
 
     // Step 1: Add note (fatal if it fails — don't record in DB so user can retry)
+    const noteContent = buildNoteContent(row, fechaProcesado)
     try {
-      const noteContent = buildNoteContent(row, fechaProcesado)
       noteId = await pipedriveAddNote(dealId, noteContent)
     } catch (err) {
       noteError = err instanceof Error ? err.message : String(err)
@@ -352,6 +396,24 @@ export async function POST(req: NextRequest) {
       results.push({ numero_peticion: numeroPeticion, deal_id: dealId, status: 'error', detail: noteError })
       errors++
       continue
+    }
+
+    // Step 1b: Request Hub Bancos comment (non-fatal, skipped if env vars not set)
+    let hubCommentAdded = false
+    let hubTicketId: string | undefined
+    let hubWarning: string | undefined
+
+    try {
+      const ticketId = await requestHubGetTicket(dealId)
+      if (ticketId) {
+        hubTicketId = ticketId
+        await requestHubAddComment(ticketId, noteContent)
+        hubCommentAdded = true
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      hubWarning = `Request Hub: ${msg.slice(0, 150)}`
+      console.error(`[caixa/process] Request Hub error on ${numeroPeticion}:`, msg)
     }
 
     // Step 2: Mark lost (non-fatal — 403 = permission issue)
@@ -399,7 +461,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Step 3: Record in caixa_processed (note was added successfully)
-    const combinedWarning = [lostWarning, stageWarning].filter(Boolean).join(' | ') || null
+    const combinedWarning = [lostWarning, stageWarning, hubWarning].filter(Boolean).join(' | ') || null
     const { error: insertError } = await supabase.from('caixa_processed').insert({
       numero_peticion: numeroPeticion,
       deal_id: dealId,
@@ -428,6 +490,8 @@ export async function POST(req: NextRequest) {
       stage_name: stageName,
       stage_updated: stageUpdated,
       marked_won: markedWon,
+      hub_comment_added: hubCommentAdded,
+      hub_ticket_id: hubTicketId,
       detail: combinedWarning ?? undefined,
     })
     processed++

@@ -36,6 +36,8 @@ interface ProcessResponse {
     stage_name?: string
     stage_updated?: boolean
     marked_won?: boolean
+    hub_comment_added?: boolean
+    hub_ticket_id?: string
   }>
 }
 
@@ -333,6 +335,7 @@ export default function CaixaRespuestasPage() {
                           const parts: string[] = ['Nota añadida']
                           if (r.marked_lost) parts.push(`Perdido: ${r.lost_reason_label ?? r.lost_reason_id}`)
                           if (r.stage_updated) parts.push(`Stage → ${r.stage_name}${r.marked_won ? ' · Ganado' : ''}`)
+                          if (r.hub_comment_added) parts.push(`Hub ✓`)
                           return (
                             <span className={r.detail ? 'text-amber-600' : ''}>
                               {parts.join(' · ')}
