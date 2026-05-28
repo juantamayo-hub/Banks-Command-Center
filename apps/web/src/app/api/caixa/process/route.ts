@@ -239,7 +239,7 @@ async function requestHubGetTicket(dealId: string): Promise<string | null> {
   const res = await fetch(`${base}/api/external/tickets/deal/${dealId}`, {
     headers: { Authorization: `Bearer ${secret}` },
   })
-  if (res.status === 404) return null
+  if (res.status === 404 || res.status === 401 || res.status === 403) return null
   if (!res.ok) {
     const text = await res.text()
     throw new Error(`Request Hub GET ticket ${res.status}: ${text.slice(0, 200)}`)
