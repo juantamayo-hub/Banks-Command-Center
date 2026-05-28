@@ -30,6 +30,8 @@ interface ProcessResponse {
     status: 'processed' | 'skipped' | 'error'
     detail?: string
     pipedrive_note_id?: string
+    hub_comment_added?: boolean
+    hub_ticket_id?: string
   }>
 }
 
@@ -290,7 +292,17 @@ export default function CaixaRequestsRespuestasPage() {
                       <td className="px-4 py-3 text-gray-600">{r.id_bayteca}</td>
                       <td className="px-4 py-3"><StatusBadge status={r.status} /></td>
                       <td className="px-4 py-3 text-xs text-gray-500">
-                        {r.status === 'processed' && 'Nota añadida en Pipedrive'}
+                        {r.status === 'processed' && (
+                          <span className="flex flex-wrap gap-1.5 items-center">
+                            <span>Nota añadida en Pipedrive</span>
+                            {r.hub_comment_added && (
+                              <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">Hub ✓</span>
+                            )}
+                            {r.detail && (
+                              <span className="text-amber-600">{r.detail}</span>
+                            )}
+                          </span>
+                        )}
                         {r.status === 'error' && <span className="text-red-600">{r.detail}</span>}
                         {r.status === 'skipped' && r.detail}
                       </td>
