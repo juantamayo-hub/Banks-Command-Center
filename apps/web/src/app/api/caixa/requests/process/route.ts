@@ -31,6 +31,8 @@ interface RequestResult {
   status: 'processed' | 'skipped' | 'error'
   detail?: string
   pipedrive_note_id?: string
+  hub_comment_added?: boolean
+  hub_ticket_id?: string
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -72,6 +74,46 @@ async function pipedriveAddNote(dealId: string, content: string): Promise<string
   }
   const json = await res.json()
   return json?.data?.id?.toString() ?? null
+}
+
+// ── Request Hub Bancos ────────────────────────────────────────────────────────
+
+async function requestHubGetTicket(dealId: string): Promise<string | null> {
+  const base = process.env.REQUEST_HUB_BASE_URL
+  const secret = process.env.REQUEST_HUB_EXTERNAL_API_SECRET
+  if (!base || !secret) return null
+
+  const res = await fetch(`${base}/api/external/tickets/deal/${dealId}`, {
+    headers: { Authorization: `Bearer ${secret}` },
+  })
+  if (res.status === 404 || res.status === 401 || res.status === 403) return null
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Request Hub GET ticket ${res.status}: ${text.slice(0, 200)}`)
+  }
+  const json = await res.json()
+  const tickets: Array<{ id: string }> = json?.tickets ?? []
+  return tickets[0]?.id ?? null
+}
+
+async function requestHubAddComment(ticketId: string, body: string): Promise<void> {
+  const base = process.env.REQUEST_HUB_BASE_URL
+  const secret = process.env.REQUEST_HUB_EXTERNAL_API_SECRET
+  const authorEmail = process.env.REQUEST_HUB_AUTHOR_EMAIL
+  if (!base || !secret) return
+
+  const res = await fetch(`${base}/api/external/tickets/${ticketId}/comment`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${secret}`,
+    },
+    body: JSON.stringify({ body, visibility: 'internal', author_email: authorEmail }),
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Request Hub POST comment ${res.status}: ${text.slice(0, 200)}`)
+  }
 }
 
 // ── Route handler ─────────────────────────────────────────────────────────────
@@ -156,6 +198,21 @@ export async function POST(req: NextRequest) {
       continue
     }
 
+    // Request Hub comment
+    let hubTicketId: string | null = null
+    let hubCommentAdded = false
+    let hubWarning: string | undefined
+    try {
+      hubTicketId = await requestHubGetTicket(idBayteca)
+      if (hubTicketId && noteId) {
+        const noteContent = buildNoteContent(row, fecha)
+        await requestHubAddComment(hubTicketId, noteContent)
+        hubCommentAdded = true
+      }
+    } catch (err) {
+      hubWarning = err instanceof Error ? err.message : String(err)
+    }
+
     // Record in DB (note was added successfully)
     const { error: insertError } = await supabase.from('caixa_requests_responses').insert({
       oportunidad_caixa: oportunidad || null,
@@ -167,7 +224,15 @@ export async function POST(req: NextRequest) {
       console.error('[caixa/requests/process] Supabase insert error:', insertError.message)
     }
 
-    results.push({ oportunidad_caixa: oportunidad, id_bayteca: idBayteca, status: 'processed', pipedrive_note_id: noteId ?? undefined })
+    results.push({
+      oportunidad_caixa: oportunidad,
+      id_bayteca: idBayteca,
+      status: 'processed',
+      pipedrive_note_id: noteId ?? undefined,
+      hub_comment_added: hubCommentAdded,
+      hub_ticket_id: hubTicketId ?? undefined,
+      detail: hubWarning ? `Hub warning: ${hubWarning}` : undefined,
+    })
     processed++
   }
 
