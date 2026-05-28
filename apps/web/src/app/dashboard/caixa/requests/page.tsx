@@ -29,17 +29,23 @@ export default function CaixaRequestsPage() {
           </span>
         </Link>
 
-        {/* Rellenar formulario — placeholder */}
-        <div className="relative block rounded-xl border border-dashed border-gray-300 bg-gray-50 p-6">
-          <div className="mb-3 text-3xl opacity-40">📝</div>
-          <h2 className="text-lg font-semibold text-gray-400">Rellenar formulario</h2>
-          <p className="mt-2 text-sm text-gray-400">
-            Crea nuevas consultas para enviar a CaixaBank desde la plataforma.
+        {/* Rellenar formulario */}
+        <Link
+          href="/dashboard/caixa/requests/fill"
+          className="group block rounded-xl border border-gray-200 bg-white p-6 shadow-sm hover:border-blue-400 hover:shadow-md transition-all"
+        >
+          <div className="mb-3 text-3xl">📝</div>
+          <h2 className="text-lg font-semibold text-gray-900 group-hover:text-blue-700">
+            Rellenar formulario
+          </h2>
+          <p className="mt-2 text-sm text-gray-500">
+            Genera el Excel de consultas para CaixaBank con los tickets abiertos
+            del día y sus External IDs de Pipedrive.
           </p>
-          <span className="mt-4 inline-block rounded-full bg-gray-200 px-3 py-0.5 text-xs font-medium text-gray-500">
-            Próximamente
+          <span className="mt-4 inline-block text-sm font-medium text-blue-600 group-hover:underline">
+            Generar Excel →
           </span>
-        </div>
+        </Link>
       </div>
     </div>
   )

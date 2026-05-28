@@ -71,6 +71,7 @@ const VALID_REASON_IDS = new Set(Object.keys(LOST_REASON_OPTIONS).map(Number))
 const FALLBACK_REASON_ID = 3584 // "OTROS"
 
 const PIPEDRIVE_LOST_REASON_FIELD = '5af7c8a4d8341bfe53526b6a7b4e2fc793503a90'
+const PIPEDRIVE_EXTERNAL_ID_FIELD = '4673f6bf937722b6dee1afa5537f22136a396b69'
 
 // ── Stage mapping (col_D + col_E → Pipedrive stage_id) ────────────────────────
 
@@ -104,6 +105,29 @@ const STAGE_MAP: Record<string, Record<string, number>> = {
     'Aprobada pendiente fecha': 74,
     'Pendiente acta notarial': 74,
   },
+}
+
+/**
+ * For each deal (first 6 digits of numero_peticion), keep only the row
+ * with the numerically highest numero_peticion (latest consecutive).
+ * Example: 324199001, 324199002, 324199003 → keeps 324199003.
+ */
+function dedupByDeal(rows: ParsedCaixaRow[]): ParsedCaixaRow[] {
+  const dealMap = new Map<string, ParsedCaixaRow>()
+  for (const row of rows) {
+    const digits = (row.numero_peticion ?? '').replace(/\D/g, '')
+    const dealId = digits.substring(0, 6)
+    if (!dealId) continue
+    const existing = dealMap.get(dealId)
+    if (!existing) {
+      dealMap.set(dealId, row)
+    } else {
+      const existingNum = parseInt((existing.numero_peticion ?? '').replace(/\D/g, '') || '0', 10)
+      const currentNum = parseInt(digits || '0', 10)
+      if (currentNum > existingNum) dealMap.set(dealId, row)
+    }
+  }
+  return Array.from(dealMap.values())
 }
 
 function getTargetStage(estadoLead: string, motivoPendiente: string): { stageId: number; markWon: boolean } | null {
@@ -228,6 +252,26 @@ async function pipedriveMarkLost(dealId: string, lostReasonId: number): Promise<
   }
 }
 
+/** Writes the external ID (col C value) to the Pipedrive deal custom field. */
+async function pipedriveSetExternalId(dealId: string, externalId: string): Promise<void> {
+  const token = process.env.PIPEDRIVE_API_TOKEN
+  if (!token) throw new Error('PIPEDRIVE_API_TOKEN no configurado')
+
+  const res = await fetch(
+    `https://api.pipedrive.com/v1/deals/${dealId}?api_token=${token}`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+      body: JSON.stringify({ [PIPEDRIVE_EXTERNAL_ID_FIELD]: externalId }),
+    }
+  )
+
+  if (!res.ok) {
+    const body = await res.text()
+    throw new Error(`Pipedrive deals API ${res.status}: ${body.slice(0, 200)}`)
+  }
+}
+
 // ── Request Hub Bancos ────────────────────────────────────────────────────────
 
 /** Returns the first open ticket ID for a deal, or null if none. */
@@ -309,7 +353,7 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const rows = body.rows as ParsedCaixaRow[]
+  const rows = dedupByDeal(body.rows as ParsedCaixaRow[])
   const dateFrom = new Date(body.date_from)
   if (isNaN(dateFrom.getTime())) {
     return NextResponse.json({ error: '`date_from` no es una fecha válida' }, { status: 400 })
@@ -398,7 +442,19 @@ export async function POST(req: NextRequest) {
       continue
     }
 
-    // Step 1b: Request Hub Bancos comment (non-fatal, skipped if env vars not set)
+    // Step 1b: Set external ID in Pipedrive from col C (non-fatal)
+    let externalIdWarning: string | undefined
+    if (row.col_C) {
+      try {
+        await pipedriveSetExternalId(dealId, row.col_C)
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        externalIdWarning = `External ID: ${msg.slice(0, 150)}`
+        console.error(`[caixa/process] External ID error on ${numeroPeticion}:`, msg)
+      }
+    }
+
+    // Step 1c: Request Hub Bancos comment (non-fatal, skipped if env vars not set)
     let hubCommentAdded = false
     let hubTicketId: string | undefined
     let hubWarning: string | undefined
@@ -461,7 +517,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Step 3: Record in caixa_processed (note was added successfully)
-    const combinedWarning = [lostWarning, stageWarning, hubWarning].filter(Boolean).join(' | ') || null
+    const combinedWarning = [lostWarning, stageWarning, externalIdWarning, hubWarning].filter(Boolean).join(' | ') || null
     const { error: insertError } = await supabase.from('caixa_processed').insert({
       numero_peticion: numeroPeticion,
       deal_id: dealId,
