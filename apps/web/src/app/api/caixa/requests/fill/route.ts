@@ -73,7 +73,6 @@ export async function POST(req: NextRequest) {
   }
 
   const supabase = await createAdminClient()
-
   const { data: tickets, error } = await supabase
     .from('tickets')
     .select('id, pipedrive_deal_id, subject, description')
@@ -96,44 +95,22 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  // Filter out tickets already included in a previous generated Excel
-  const allTicketIds = allTickets.map((t) => t.id).filter(Boolean)
-  const { data: alreadySent } = await supabase
-    .from('caixa_requests_fills')
-    .select('ticket_id')
-    .in('ticket_id', allTicketIds)
-  const sentSet = new Set((alreadySent ?? []).map((r) => r.ticket_id as string))
-  const newTickets = allTickets.filter((t) => !sentSet.has(t.id))
-
-  if (newTickets.length === 0) {
-    return NextResponse.json(
-      { error: `Todos los tickets de CaixaBank del ${date} ya fueron incluidos en un Excel anterior` },
-      { status: 404 }
-    )
-  }
-
   // Group notes by deal_id
-  const dealMap = new Map<string, { notes: string[]; ticketIds: string[] }>()
-  for (const ticket of newTickets) {
+  const dealMap = new Map<string, string[]>()
+  for (const ticket of allTickets) {
     const dealId = ticket.pipedrive_deal_id?.toString() ?? ''
     if (!dealId) continue
-    if (!dealMap.has(dealId)) dealMap.set(dealId, { notes: [], ticketIds: [] })
+    if (!dealMap.has(dealId)) dealMap.set(dealId, [])
     const note = [ticket.subject, ticket.description].filter(Boolean).join(': ')
-    if (note) dealMap.get(dealId)!.notes.push(note)
-    dealMap.get(dealId)!.ticketIds.push(ticket.id as string)
+    if (note) dealMap.get(dealId)!.push(note)
   }
 
   // Build data rows (fetch external IDs sequentially to avoid rate limits)
   const dataRows: unknown[][] = []
-  const fillInserts: Array<{ ticket_id: string; pipedrive_deal_id: string; for_date: string; external_id_caixa: string }> = []
-
-  for (const [dealId, { notes, ticketIds }] of dealMap.entries()) {
+  for (const [dealId, notes] of dealMap.entries()) {
     const externalId = await pipedriveFetchExternalId(dealId)
     const notesText = notes.join('\n---\n')
     dataRows.push([externalId, '', notesText, '', '', '', dealId])
-    for (const ticketId of ticketIds) {
-      fillInserts.push({ ticket_id: ticketId, pipedrive_deal_id: dealId, for_date: date, external_id_caixa: externalId })
-    }
   }
 
   // Build Excel workbook
@@ -165,16 +142,6 @@ export async function POST(req: NextRequest) {
 
   const rawBuffer = XLSX.write(wb, { type: 'array', bookType: 'xlsx' }) as number[]
   const arrayBuffer = new Uint8Array(rawBuffer).buffer
-
-  // Record included tickets so they are excluded from future generations
-  if (fillInserts.length > 0) {
-    const { error: insertError } = await supabase
-      .from('caixa_requests_fills')
-      .insert(fillInserts)
-    if (insertError) {
-      console.error('[caixa/requests/fill] Supabase insert error:', insertError.message)
-    }
-  }
 
   return new NextResponse(arrayBuffer, {
     headers: {
