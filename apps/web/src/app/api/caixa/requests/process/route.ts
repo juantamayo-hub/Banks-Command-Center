@@ -15,6 +15,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { createAdminClient } from '@/lib/supabase/server'
 
 export interface ParsedRequestRow {
   oportunidad_caixa: string   // col 0
@@ -89,6 +90,7 @@ export async function POST(req: NextRequest) {
 
   const rows = body.rows as ParsedRequestRow[]
   const fecha = new Date().toLocaleDateString('es-ES')
+  const supabase = await createAdminClient()
   const results: RequestResult[] = []
   let processed = 0, skipped = 0, errors = 0
 
@@ -99,6 +101,20 @@ export async function POST(req: NextRequest) {
     if (!idBayteca) {
       skipped++
       continue // no deal ID — skip silently
+    }
+
+    // Dedup: skip if already processed
+    if (oportunidad) {
+      const { data: existing } = await supabase
+        .from('caixa_requests_responses')
+        .select('id')
+        .eq('oportunidad_caixa', oportunidad)
+        .maybeSingle()
+      if (existing) {
+        results.push({ oportunidad_caixa: oportunidad, id_bayteca: idBayteca, status: 'skipped', detail: 'Ya procesado' })
+        skipped++
+        continue
+      }
     }
 
     // Guard: never touch won deals
@@ -125,16 +141,34 @@ export async function POST(req: NextRequest) {
     }
 
     // Add note
+    let noteId: string | null = null
+    let noteError: string | undefined
     try {
       const content = buildNoteContent(row, fecha)
-      const noteId = await pipedriveAddNote(idBayteca, content)
-      results.push({ oportunidad_caixa: oportunidad, id_bayteca: idBayteca, status: 'processed', pipedrive_note_id: noteId ?? undefined })
-      processed++
+      noteId = await pipedriveAddNote(idBayteca, content)
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      results.push({ oportunidad_caixa: oportunidad, id_bayteca: idBayteca, status: 'error', detail: msg })
-      errors++
+      noteError = err instanceof Error ? err.message : String(err)
     }
+
+    if (noteError) {
+      results.push({ oportunidad_caixa: oportunidad, id_bayteca: idBayteca, status: 'error', detail: noteError })
+      errors++
+      continue
+    }
+
+    // Record in DB (note was added successfully)
+    const { error: insertError } = await supabase.from('caixa_requests_responses').insert({
+      oportunidad_caixa: oportunidad || null,
+      id_bayteca: idBayteca,
+      note_added: true,
+      pipedrive_note_id: noteId,
+    })
+    if (insertError) {
+      console.error('[caixa/requests/process] Supabase insert error:', insertError.message)
+    }
+
+    results.push({ oportunidad_caixa: oportunidad, id_bayteca: idBayteca, status: 'processed', pipedrive_note_id: noteId ?? undefined })
+    processed++
   }
 
   return NextResponse.json({ total: rows.length, processed, skipped, errors, results })
