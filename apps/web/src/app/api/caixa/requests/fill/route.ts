@@ -24,7 +24,15 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import * as XLSX from 'xlsx'
-import { createAdminClient } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
+
+/** Supabase client pointing to Request Hub's database (read-only for tickets). */
+function createRequestHubClient() {
+  const url = process.env.REQUEST_HUB_SUPABASE_URL
+  const key = process.env.REQUEST_HUB_SUPABASE_SERVICE_KEY
+  if (!url || !key) throw new Error('REQUEST_HUB_SUPABASE_URL / REQUEST_HUB_SUPABASE_SERVICE_KEY no configurados')
+  return createClient(url, key, { auth: { persistSession: false } })
+}
 
 const EXTERNAL_ID_FIELD = '4673f6bf937722b6dee1afa5537f22136a396b69'
 
@@ -72,7 +80,14 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const supabase = await createAdminClient()
+  let supabase: ReturnType<typeof createRequestHubClient>
+  try {
+    supabase = createRequestHubClient()
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    return NextResponse.json({ error: msg }, { status: 500 })
+  }
+
   const { data: tickets, error } = await supabase
     .from('tickets')
     .select('id, pipedrive_deal_id, subject, description')
