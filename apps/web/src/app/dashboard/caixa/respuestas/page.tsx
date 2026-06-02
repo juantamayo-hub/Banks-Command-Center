@@ -45,6 +45,19 @@ type Stage = 'idle' | 'previewing' | 'processing' | 'done'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+/**
+ * Parses a date string that may be in "d/m/yyyy" format (Caixa's Fecha de creación)
+ * where the month has no leading zero (e.g. "21/6/2026").
+ */
+function parseFechaCreacion(raw: string): Date | null {
+  if (!raw) return null
+  const d = new Date(raw)
+  if (!isNaN(d.getTime())) return d
+  const m = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+  if (m) return new Date(parseInt(m[3], 10), parseInt(m[2], 10) - 1, parseInt(m[1], 10))
+  return null
+}
+
 function cellStr(row: unknown[], idx: number): string {
   const val = (row as unknown[])[idx]
   if (val == null) return ''
@@ -92,6 +105,7 @@ function StatusBadge({ status }: { status: 'processed' | 'skipped' | 'error' }) 
 export default function CaixaRespuestasPage() {
   const [stage, setStage] = useState<Stage>('idle')
   const [dateFrom, setDateFrom] = useState('2026-04-01')
+  const [dateTo, setDateTo] = useState('')
   const [fileName, setFileName] = useState<string | null>(null)
   const [parsedRows, setParsedRows] = useState<ParsedCaixaRow[]>([])
   const [response, setResponse] = useState<ProcessResponse | null>(null)
@@ -139,7 +153,7 @@ export default function CaixaRespuestasPage() {
       const res = await fetch('/api/caixa/process', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rows: parsedRows, date_from: dateFrom }),
+        body: JSON.stringify({ rows: parsedRows, date_from: dateFrom, ...(dateTo ? { date_to: dateTo } : {}) }),
       })
       const data: ProcessResponse = await res.json()
       setResponse(data)
@@ -148,7 +162,7 @@ export default function CaixaRespuestasPage() {
       alert(`Error al procesar: ${err instanceof Error ? err.message : String(err)}`)
       setStage('previewing')
     }
-  }, [parsedRows, dateFrom])
+  }, [parsedRows, dateFrom, dateTo])
 
   const reset = useCallback(() => {
     setStage('idle')
@@ -158,11 +172,14 @@ export default function CaixaRespuestasPage() {
     if (fileInputRef.current) fileInputRef.current.value = ''
   }, [])
 
-  // Filter rows by date for preview count
+  // Filter rows by date range for preview count
   const filteredCount = parsedRows.filter((r) => {
     if (!r.col_I) return true
-    const d = new Date(r.col_I)
-    return isNaN(d.getTime()) || d >= new Date(dateFrom)
+    const d = parseFechaCreacion(r.col_I)
+    if (!d) return true
+    if (d < new Date(dateFrom)) return false
+    if (dateTo && d > new Date(dateTo)) return false
+    return true
   }).length
 
   return (
@@ -176,19 +193,44 @@ export default function CaixaRespuestasPage() {
         </p>
       </div>
 
-      {/* Date filter */}
-      <div className="mb-6 flex items-center gap-3">
-        <label className="text-sm font-medium text-gray-700" htmlFor="date-from">
-          Filtrar desde fecha:
-        </label>
-        <input
-          id="date-from"
-          type="date"
-          value={dateFrom}
-          onChange={(e) => setDateFrom(e.target.value)}
-          disabled={stage === 'processing'}
-          className="rounded-md border border-gray-300 px-3 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
-        />
+      {/* Date range filter */}
+      <div className="mb-6 flex flex-wrap items-center gap-4">
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium text-gray-700" htmlFor="date-from">
+            Desde:
+          </label>
+          <input
+            id="date-from"
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            disabled={stage === 'processing'}
+            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium text-gray-700" htmlFor="date-to">
+            Hasta:
+          </label>
+          <input
+            id="date-to"
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            disabled={stage === 'processing'}
+            placeholder="Sin límite"
+            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+          />
+        </div>
+        {dateTo && (
+          <button
+            onClick={() => setDateTo('')}
+            disabled={stage === 'processing'}
+            className="text-xs text-gray-400 hover:text-gray-600 disabled:opacity-50"
+          >
+            Quitar límite
+          </button>
+        )}
       </div>
 
       {/* Drop zone — only when idle */}

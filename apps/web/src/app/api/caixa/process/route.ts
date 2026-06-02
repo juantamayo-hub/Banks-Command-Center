@@ -108,26 +108,48 @@ const STAGE_MAP: Record<string, Record<string, number>> = {
 }
 
 /**
- * For each deal (first 6 digits of numero_peticion), keep only the row
- * with the numerically highest numero_peticion (latest consecutive).
- * Example: 324199001, 324199002, 324199003 → keeps 324199003.
+ * Parses a date string that may be in "d/m/yyyy" format (Caixa's Fecha de creación)
+ * where the month has no leading zero (e.g. "21/6/2026").
+ * Falls back to standard Date parsing for ISO strings.
+ */
+function parseFechaCreacion(raw: string): Date | null {
+  if (!raw) return null
+  const d = new Date(raw)
+  if (!isNaN(d.getTime())) return d
+  // d/m/yyyy or dd/mm/yyyy without leading zeroes
+  const m = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+  if (m) return new Date(parseInt(m[3], 10), parseInt(m[2], 10) - 1, parseInt(m[1], 10))
+  return null
+}
+
+/**
+ * In-batch deduplication:
+ * - 9-digit petition numbers: group by first 6 digits (deal ID), keep the row
+ *   with the highest 3-digit suffix (most recent dispatch from Caixa).
+ * - All other lengths: pass through as-is (no in-batch dedup).
  */
 function dedupByDeal(rows: ParsedCaixaRow[]): ParsedCaixaRow[] {
-  const dealMap = new Map<string, ParsedCaixaRow>()
+  const nineDigitMap = new Map<string, ParsedCaixaRow>() // key = first 6 digits
+  const others: ParsedCaixaRow[] = []
+
   for (const row of rows) {
     const digits = (row.numero_peticion ?? '').replace(/\D/g, '')
+    if (digits.length !== 9) {
+      others.push(row)
+      continue
+    }
     const dealId = digits.substring(0, 6)
-    if (!dealId) continue
-    const existing = dealMap.get(dealId)
+    const existing = nineDigitMap.get(dealId)
     if (!existing) {
-      dealMap.set(dealId, row)
+      nineDigitMap.set(dealId, row)
     } else {
-      const existingNum = parseInt((existing.numero_peticion ?? '').replace(/\D/g, '') || '0', 10)
-      const currentNum = parseInt(digits || '0', 10)
-      if (currentNum > existingNum) dealMap.set(dealId, row)
+      const existingSuffix = parseInt((existing.numero_peticion ?? '').replace(/\D/g, '').substring(6), 10)
+      const currentSuffix = parseInt(digits.substring(6), 10)
+      if (currentSuffix > existingSuffix) nineDigitMap.set(dealId, row)
     }
   }
-  return Array.from(dealMap.values())
+
+  return [...others, ...Array.from(nineDigitMap.values())]
 }
 
 function getTargetStage(estadoLead: string, motivoPendiente: string): { stageId: number; markWon: boolean } | null {
@@ -339,7 +361,7 @@ async function pipedriveUpdateStage(dealId: string, stageId: number, markWon: bo
 // ── Route handler ─────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
-  let body: { rows?: unknown; date_from?: unknown }
+  let body: { rows?: unknown; date_from?: unknown; date_to?: unknown }
   try {
     body = await req.json()
   } catch {
@@ -358,6 +380,7 @@ export async function POST(req: NextRequest) {
   if (isNaN(dateFrom.getTime())) {
     return NextResponse.json({ error: '`date_from` no es una fecha válida' }, { status: 400 })
   }
+  const dateTo = body.date_to && typeof body.date_to === 'string' ? new Date(body.date_to) : null
 
   const supabase = await createAdminClient()
   const fechaProcesado = new Date().toLocaleDateString('es-ES')
@@ -377,20 +400,27 @@ export async function POST(req: NextRequest) {
       continue
     }
 
-    // Filter by fecha_creacion
+    // Filter by fecha_creacion (col I) — handles "d/m/yyyy" format from Caixa
     if (row.col_I) {
-      const creacion = new Date(row.col_I)
-      if (!isNaN(creacion.getTime()) && creacion < dateFrom) {
-        // silently skip — filtered by date
-        continue
+      const creacion = parseFechaCreacion(row.col_I)
+      if (creacion) {
+        if (creacion < dateFrom) continue
+        if (dateTo && creacion > dateTo) continue
       }
     }
 
-    // Dedup check
+    const estadoNorm = (row.col_D ?? '').trim()
+    const motivoNorm = (row.col_E ?? '').trim()
+    const resolucionNorm = (row.col_F ?? '').trim()
+
+    // Dedup check: composite key (numero_peticion + estado + motivo + resolución)
     const { data: existing } = await supabase
       .from('caixa_processed')
       .select('id')
       .eq('numero_peticion', numeroPeticion)
+      .eq('estado_del_lead', estadoNorm)
+      .eq('motivo_pendiente', motivoNorm)
+      .eq('resolucion', resolucionNorm)
       .maybeSingle()
 
     if (existing) {
@@ -407,7 +437,7 @@ export async function POST(req: NextRequest) {
     let lostReasonId: number | undefined
     let noteError: string | undefined
     let lostWarning: string | undefined
-    const isClosed = (row.col_D ?? '').trim() === '5 - CERRADA'
+    const isClosed = estadoNorm === '5 - CERRADA'
 
     // Guard: never touch won deals
     let dealStatus: string | null = null
@@ -498,7 +528,7 @@ export async function POST(req: NextRequest) {
     let stageWarning: string | undefined
 
     if (!isClosed) {
-      const target = getTargetStage(row.col_D ?? '', row.col_E ?? '')
+      const target = getTargetStage(estadoNorm, motivoNorm)
       if (target) {
         stageId = target.stageId
         stageName = STAGE_NAMES[target.stageId]
@@ -525,8 +555,11 @@ export async function POST(req: NextRequest) {
       pipedrive_note_id: noteId,
       marked_lost: markedLost,
       lost_reason_id: lostReasonId ?? null,
-      resolution_text: (row.col_F ?? '').trim() || null,
-      estado_del_lead: (row.col_D ?? '').trim() || null,
+      estado_del_lead: estadoNorm,
+      motivo_pendiente: motivoNorm,
+      resolucion: resolucionNorm,
+      // resolution_text: derived reason — resolución si cerrado, motivo pendiente si no
+      resolution_text: isClosed ? resolucionNorm : motivoNorm,
       error_message: combinedWarning,
     })
 
