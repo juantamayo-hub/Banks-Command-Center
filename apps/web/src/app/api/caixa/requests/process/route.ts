@@ -108,7 +108,7 @@ async function requestHubAddComment(ticketId: string, body: string): Promise<voi
       'Content-Type': 'application/json',
       Authorization: `Bearer ${secret}`,
     },
-    body: JSON.stringify({ body, visibility: 'internal', author_email: authorEmail }),
+    body: JSON.stringify({ body, visibility: 'public', author_email: authorEmail }),
   })
   if (!res.ok) {
     const text = await res.text()
