@@ -1,11 +1,12 @@
 import Link from 'next/link'
+import Image from 'next/image'
 
 export default function CaixaPage() {
   return (
     <div className="p-8">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Caixa</h1>
-        <p className="mt-1 text-sm text-gray-500">
+      <div className="mb-8 flex items-center gap-4">
+        <Image src="/caixabank.png" alt="CaixaBank" width={160} height={48} className="object-contain" />
+        <p className="text-sm text-gray-500">
           Módulos específicos para la gestión de operaciones Caixa.
         </p>
       </div>
