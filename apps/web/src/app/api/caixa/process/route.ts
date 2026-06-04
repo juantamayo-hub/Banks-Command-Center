@@ -45,6 +45,7 @@ interface ProcessResult {
   marked_won?: boolean
   hub_comment_added?: boolean
   hub_ticket_id?: string
+  reopened?: boolean
 }
 
 // ── Pipedrive lost-reason options (field key: 5af7c8a4d8341bfe53526b6a7b4e2fc793503a90) ──
@@ -201,6 +202,8 @@ function parseFechaCreacion(raw: string): Date | null {
  * In-batch deduplication:
  * - 9-digit petition numbers: group by first 6 digits (deal ID), keep the row
  *   with the highest 3-digit suffix (most recent dispatch from Caixa).
+ * - 6-digit petition numbers: pass through UNLESS a 9-digit petition exists for
+ *   the same deal (in which case the 9-digit one takes priority).
  * - All other lengths: pass through as-is (no in-batch dedup).
  */
 function dedupByDeal(rows: ParsedCaixaRow[]): ParsedCaixaRow[] {
@@ -224,7 +227,13 @@ function dedupByDeal(rows: ParsedCaixaRow[]): ParsedCaixaRow[] {
     }
   }
 
-  return [...others, ...Array.from(nineDigitMap.values())]
+  // Drop 6-digit petitions when a 9-digit petition already covers the same deal
+  const filteredOthers = others.filter((row) => {
+    const digits = (row.numero_peticion ?? '').replace(/\D/g, '')
+    return !(digits.length === 6 && nineDigitMap.has(digits))
+  })
+
+  return [...filteredOthers, ...Array.from(nineDigitMap.values())]
 }
 
 function getTargetStage(estadoLead: string, motivoPendiente: string): { stageId: number; markWon: boolean } | null {
@@ -359,6 +368,26 @@ async function pipedriveMarkLost(dealId: string, lostReasonId: number): Promise<
   if (!res.ok) {
     const body = await res.text()
     throw new Error(`Pipedrive deals API ${res.status}: ${body.slice(0, 200)}`)
+  }
+}
+
+/** Reopens a lost deal (sets status back to 'open'). */
+async function pipedriveReopenDeal(dealId: string): Promise<void> {
+  const token = process.env.PIPEDRIVE_API_TOKEN
+  if (!token) throw new Error('PIPEDRIVE_API_TOKEN no configurado')
+
+  const res = await fetch(
+    `https://api.pipedrive.com/v1/deals/${dealId}?api_token=${token}`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+      body: JSON.stringify({ status: 'open' }),
+    }
+  )
+
+  if (!res.ok) {
+    const body = await res.text()
+    throw new Error(`Pipedrive reopen deal ${res.status}: ${body.slice(0, 200)}`)
   }
 }
 
@@ -544,6 +573,20 @@ export async function POST(req: NextRequest) {
       continue
     }
 
+    // Reopen lost deal when Caixa status is not closed (non-fatal)
+    let reopened = false
+    let reopenWarning: string | undefined
+    if (dealStatus === 'lost' && !isClosed) {
+      try {
+        await pipedriveReopenDeal(dealId)
+        reopened = true
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        reopenWarning = `Reopen: ${msg.slice(0, 150)}`
+        console.error(`[caixa/process] Reopen error on ${numeroPeticion}:`, msg)
+      }
+    }
+
     // Step 1: Add note (fatal if it fails — don't record in DB so user can retry)
     const noteContent = buildNoteContent(row, fechaProcesado)
     try {
@@ -635,7 +678,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Step 3: Record in caixa_processed (note was added successfully)
-    const combinedWarning = [lostWarning, stageWarning, externalIdWarning, hubWarning].filter(Boolean).join(' | ') || null
+    const combinedWarning = [reopenWarning, lostWarning, stageWarning, externalIdWarning, hubWarning].filter(Boolean).join(' | ') || null
     const { error: insertError } = await supabase.from('caixa_processed').insert({
       numero_peticion: numeroPeticion,
       deal_id: dealId,
@@ -669,6 +712,7 @@ export async function POST(req: NextRequest) {
       marked_won: markedWon,
       hub_comment_added: hubCommentAdded,
       hub_ticket_id: hubTicketId,
+      reopened,
       detail: combinedWarning ?? undefined,
     })
     processed++
