@@ -66,9 +66,12 @@ function cellStr(row: unknown[], idx: number): string {
   return String(val).trim()
 }
 
-function parseWorkbook(wb: import('xlsx').WorkBook): ParsedCaixaRow[] {
+function parseWorkbook(wb: import('xlsx').WorkBook, rawStrings = false): ParsedCaixaRow[] {
   const ws = wb.Sheets[wb.SheetNames[0]]
-  const raw = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' })
+  // raw:false when rawStrings=true (CSV) → sheet_to_json returns cell text instead of raw values,
+  // needed because XLSX.read with raw:true preserves string types but sheet_to_json still needs
+  // raw:false to return the string value rather than the underlying number
+  const raw = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '', raw: !rawStrings })
 
   // Skip header row
   return raw.slice(1).flatMap((row) => {
@@ -119,9 +122,9 @@ export default function CaixaRespuestasPage() {
     reader.onload = (e) => {
       try {
         const wb = isCSV
-          ? XLSX.read(e.target!.result as string, { type: 'string', cellDates: true })
+          ? XLSX.read(e.target!.result as string, { type: 'string', raw: true })  // raw:true preserves "03/06/2026" as string; without it xlsx converts to serial using m/d/yyyy (American) losing Spanish d/m/yyyy
           : XLSX.read(e.target!.result as ArrayBuffer, { type: 'array', cellDates: true })
-        const rows = parseWorkbook(wb)
+        const rows = parseWorkbook(wb, isCSV)
         setParsedRows(rows)
         setStage('previewing')
       } catch (err) {
