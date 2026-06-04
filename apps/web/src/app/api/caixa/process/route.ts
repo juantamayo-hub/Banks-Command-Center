@@ -49,26 +49,101 @@ interface ProcessResult {
 
 // ── Pipedrive lost-reason options (field key: 5af7c8a4d8341bfe53526b6a7b4e2fc793503a90) ──
 const LOST_REASON_OPTIONS: Record<number, string> = {
-  3135: '201- CANCELA - NO PROCEDE OPERACION',
-  3136: '202- CANCELA - DESISTE CLIENTE',
-  3137: '203- CANCELA - OTRA ENTIDAD',
-  3138: '204- CANCELA - PROBLEMA DOCUMENTACION',
-  3139: '205- CANCELA - DENEGADO',
-  3140: '206- CANCELA - NO FINANCIABLE',
-  3141: '207- CANCELA - INMUEBLE',
-  3142: '208- CANCELA - FALLECIMIENTO CLIENTE',
-  3143: '209- CANCELA - PRECIO',
-  3144: '210- CANCELA - SCORE/RIESGO',
-  3145: '211- CANCELA - TASA DE ESFUERZO',
-  3146: '212- CANCELA - ENDEUDAMIENTO',
-  3147: '213- CANCELA - DEUDA FISCAL',
-  3148: '214- CANCELA - SIN AHORROS',
-  3149: '215- CANCELA - SITUACION LABORAL',
-  3584: '216- CANCELA - OTROS',
+  3135: '201- CANCELA - POR DOCUMENTACIÓN (FASE DOCUMENTACIÓN)',
+  3136: '301- CLIENTE NO INTERESADO/ DEJA DE RESPONDER (FASE BANCARIA)',
+  3137: '302- DENEGADO - LTV (FASE BANCARIA)',
+  3138: '303- DENEGADO - ENDEUDAMIENTO (FASE BANCARIA)',
+  3139: '304- DENEGADO - PERFIL DEL CLIENTE (FASE BANCARIA)',
+  3140: '305- DENEGADO - ASNEF (FASE BANCARIA)',
+  3141: '306- INACTIVIDAD BANCARIA (FASE BANCARIA)',
+  3142: '307- CANCELA - SE QUEDA CON SU BANCO (FASE BANCARIA)',
+  3143: '308- CANCELA - MEJOR PROPUESTA EN BAYTECA (FASE BANCARIA)',
+  3144: '401- DUPLICADO CON OTRO BROKER',
+  3145: '402- CLIENTE POTENCIAL',
+  3146: '403- PERDIO LA VIVIENDA',
+  3361: 'Bayteca Opportunity',
+  3579: 'Bank deal closed due to inactivity',
 }
 
 const VALID_REASON_IDS = new Set(Object.keys(LOST_REASON_OPTIONS).map(Number))
-const FALLBACK_REASON_ID = 3584 // "OTROS"
+const FALLBACK_REASON_ID = 3139 // "304- DENEGADO - PERFIL DEL CLIENTE" — generic denial fallback
+
+// ── Deterministic lookup: Resolución text (normalized) → Pipedrive option ID ──
+// Derived from "Caixa estados - Dossier diario - Lost.csv" provided by operations team.
+// Try this first before calling Claude — saves latency and cost for known resolutions.
+const RESOLUCION_LOOKUP: Record<string, number> = (() => {
+  const entries: [string, number][] = [
+    ['relación entre la edad del titular de la hipoteca y el plazo solicitado', 3139],
+    ['registrado por otra plataforma', 3144],
+    ['dti excedido', 3138],
+    ['primer contacto sin vivienda', 3146],
+    ['primer deudor hipotecario tiene una simulacion / solicitud sia en proceso', 3144],
+    ['primer deudor hipotecario tiene una simulacion sia en proceso', 3144],
+    ['primer contacto gestión en oficinas', 3144],
+    ['primer contacto cliente no localizado', 3136],
+    ['phd ? envío no cumple criterios', 3139],
+    ['rechazado por duplicado', 3144],
+    ['relación entre el importe de compra y el importe de la hipoteca', 3137],
+    ['plazo fuera de límites', 3139],
+    ['primer contacto dti excesivo', 3138],
+    ['el uso puede ser unicamente residencia principal o residencia secundaria/temporal', 3139],
+    ['primer contacto   sin ahorros', 3138],
+    ['primer contacto sin ahorros', 3138],
+    ['competencia', 3142],
+    ['primer contacto finalidad no admitida', 3139],
+    ['primer contacto perfil de riesgo', 3139],
+    ['primer contacto  ltv excesivo', 3137],
+    ['primer contacto ltv excesivo', 3137],
+    ['phd - perfil de riesgo', 3139],
+    ['pruebas tecnicas', 3361],
+    ['gestión ltv excesivo', 3137],
+    ['la operacion no puede ser un autopromotor', 3139],
+    ['gestión cliente no localizado', 3136],
+    ['primer contacto traspaso phd', 3139],
+    ['gestión  sin ahorros', 3138],
+    ['gestión sin ahorros', 3138],
+    ['gestión sin vivienda', 3146],
+    ['phd - faltan documentos obligatorios', 3136],
+    ['gestión- gestión en oficina', 3144],
+    ['gestión gestión en oficina', 3144],
+    ['lead erróneo', 3139],
+    ['duplicada', 3144],
+    ['nivel de ingresos insuficiente', 3138],
+    ['primer contacto cliente no cumple política holabank', 3139],
+    ['phd - duplicada misma plataforma', 3144],
+    ['gestión finalidad no admitida', 3139],
+    ['gestión dti excesivo', 3138],
+    ['gestión perfil de riesgo', 3139],
+    ['gestión garantía no hipotecable', 3139],
+    ['phd - ltv excesivo', 3137],
+    ['gestion cliente no cumple política holabank', 3139],
+    ['phd - duplicada otra plataforma', 3144],
+    ['phd - dti/endeudamiento excesivo', 3138],
+    ['primer contacto garantía no hipotecable', 3139],
+    ['phd - ya en trámite en oficina', 3144],
+    ['admisión cliente no localizado', 3136],
+    ['admisión finalidad no admitida', 3139],
+    ['admisión sin vivienda', 3146],
+    ['admisión perfil de riesgo', 3139],
+    ['admisión ltv excesivo', 3137],
+    ['finalidad no admitida', 3139],
+    ['gestión sin interés real', 3136],
+    ['admisión dti excesivo', 3138],
+    ['admisión gestión en oficinas', 3144],
+    ['admisión garantía no hipotecable', 3139],
+    ['admision contacto  sin ahorros', 3138],
+    ['admision contacto sin ahorros', 3138],
+    ['perfil de riesgo', 3139],
+    ['sia desistido por cliente', 3142],
+    ['sin vivienda', 3146],
+    ['admisión sin interés real', 3136],
+    ['cliente no localizado', 3136],
+    ['admisión  sin ahorros', 3138],
+    ['admisión sin ahorros', 3138],
+    ['admision alertas impagados', 3138],
+  ]
+  return Object.fromEntries(entries)
+})()
 
 const PIPEDRIVE_LOST_REASON_FIELD = '5af7c8a4d8341bfe53526b6a7b4e2fc793503a90'
 const PIPEDRIVE_EXTERNAL_ID_FIELD = '4673f6bf937722b6dee1afa5537f22136a396b69'
@@ -179,17 +254,30 @@ function buildNoteContent(row: ParsedCaixaRow, fechaProcesado: string): string {
 }
 
 async function matchLostReason(resolutionText: string): Promise<number> {
+  // 1. Deterministic lookup (normalized) — no AI call needed for known resolutions
+  const normalized = resolutionText.trim().toLowerCase()
+  if (normalized && RESOLUCION_LOOKUP[normalized] !== undefined) {
+    return RESOLUCION_LOOKUP[normalized]
+  }
+
+  // 2. Claude fallback for unknown resolutions
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
   const optionsList = Object.entries(LOST_REASON_OPTIONS)
     .map(([id, label]) => `${id} - ${label}`)
     .join('\n')
 
+  // Build few-shot examples from the lookup table to guide Claude
+  const examples = Object.entries(RESOLUCION_LOOKUP)
+    .slice(0, 10)
+    .map(([res, id]) => `"${res}" → ${id}`)
+    .join('\n')
+
   try {
     const message = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 16,
-      system: 'Eres un clasificador. Dada la Resolución de Caixa, devuelve SOLO el ID numérico (ej: 3137) de la opción más cercana de la lista. No añadas explicación ni texto adicional.',
+      system: `Eres un clasificador de motivos de cierre bancario. Dada la Resolución de Caixa, devuelve SOLO el ID numérico de la opción más cercana de la lista. No añadas explicación ni texto adicional.\n\nEjemplos de clasificaciones correctas:\n${examples}`,
       messages: [
         {
           role: 'user',
