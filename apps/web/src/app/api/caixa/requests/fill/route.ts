@@ -97,8 +97,10 @@ export async function POST(req: NextRequest) {
     .select('id, pipedrive_deal_id, subject, description')
     .eq('bank_name', 'CaixaBank')
     .neq('status', 'closed')
-    .gte('created_at', `${dateFrom}T00:00:00.000Z`)
-    .lte('created_at', `${dateTo}T23:59:59.999Z`)
+    .or(
+      `and(created_at.gte.${dateFrom}T00:00:00.000Z,created_at.lte.${dateTo}T23:59:59.999Z),` +
+      `and(updated_at.gte.${dateFrom}T00:00:00.000Z,updated_at.lte.${dateTo}T23:59:59.999Z)`
+    )
     .order('created_at', { ascending: true })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
