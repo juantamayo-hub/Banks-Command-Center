@@ -114,11 +114,11 @@ const STAGE_MAP: Record<string, Record<string, number>> = {
  */
 function parseFechaCreacion(raw: string): Date | null {
   if (!raw) return null
-  const d = new Date(raw)
-  if (!isNaN(d.getTime())) return d
-  // d/m/yyyy or dd/mm/yyyy without leading zeroes
+  // Check d/m/yyyy FIRST — JS parses "02/06/2026" as Feb 6 (m/d/yyyy American), not Jun 2
   const m = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
   if (m) return new Date(parseInt(m[3], 10), parseInt(m[2], 10) - 1, parseInt(m[1], 10))
+  const d = new Date(raw)
+  if (!isNaN(d.getTime())) return d
   return null
 }
 

@@ -55,16 +55,21 @@ async function pipedriveFetchExternalId(dealId: string): Promise<string> {
 // ── Route handler ─────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
-  let body: { date?: unknown }
+  let body: { date_from?: unknown; date_to?: unknown }
   try {
     body = await req.json()
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
 
-  const date = (body.date as string ?? '').trim()
-  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    return NextResponse.json({ error: '`date` es requerido en formato YYYY-MM-DD' }, { status: 400 })
+  const dateFrom = (body.date_from as string ?? '').trim()
+  const dateTo = (body.date_to as string ?? '').trim()
+  const dateRe = /^\d{4}-\d{2}-\d{2}$/
+  if (!dateFrom || !dateRe.test(dateFrom) || !dateTo || !dateRe.test(dateTo)) {
+    return NextResponse.json(
+      { error: '`date_from` y `date_to` son requeridos en formato YYYY-MM-DD' },
+      { status: 400 }
+    )
   }
 
   // ── Load template ───────────────────────────────────────────────────────────
@@ -92,8 +97,8 @@ export async function POST(req: NextRequest) {
     .select('id, pipedrive_deal_id, subject, description')
     .eq('bank_name', 'CaixaBank')
     .neq('status', 'closed')
-    .gte('created_at', `${date}T00:00:00.000Z`)
-    .lte('created_at', `${date}T23:59:59.999Z`)
+    .gte('created_at', `${dateFrom}T00:00:00.000Z`)
+    .lte('created_at', `${dateTo}T23:59:59.999Z`)
     .order('created_at', { ascending: true })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -101,7 +106,7 @@ export async function POST(req: NextRequest) {
   const allTickets = tickets ?? []
   if (allTickets.length === 0) {
     return NextResponse.json(
-      { error: `No se encontraron tickets de CaixaBank abiertos el ${date}` },
+      { error: `No se encontraron tickets de CaixaBank abiertos entre ${dateFrom} y ${dateTo}` },
       { status: 404 }
     )
   }
@@ -117,7 +122,7 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Update date in F1 ───────────────────────────────────────────────────────
-  ws.getCell('F1').value = new Date(date + 'T12:00:00Z')
+  ws.getCell('F1').value = new Date(dateFrom + 'T12:00:00Z')
 
   // ── Clear example row (row 4) ───────────────────────────────────────────────
   const exampleRow = ws.getRow(DATA_START_ROW)
@@ -145,7 +150,7 @@ export async function POST(req: NextRequest) {
   return new NextResponse(buffer as ArrayBuffer, {
     headers: {
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'Content-Disposition': `attachment; filename="Caixa_Requests_${date}.xlsx"`,
+      'Content-Disposition': `attachment; filename="Caixa_Requests_${dateFrom}_${dateTo}.xlsx"`,
     },
   })
 }
