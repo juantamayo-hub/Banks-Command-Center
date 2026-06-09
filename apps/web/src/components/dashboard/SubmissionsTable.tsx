@@ -1,6 +1,7 @@
 import StatusBadge from '@/components/ui/StatusBadge'
 import RelaunchButton from '@/components/dashboard/RelaunchButton'
 import NoteBox from '@/components/dashboard/NoteBox'
+import NotePreview from '@/components/dashboard/NotePreview'
 import { normalizeRedFlag, CLUSTER_BY_SLUG } from '@/lib/redFlagClusters'
 
 interface BankRef {
@@ -100,7 +101,7 @@ function FlagPills({ flags }: { flags: string[] }) {
 function PipedriveLink({ id, label }: { id: number; label?: string }) {
   return (
     <a
-      href={`https://app.pipedrive.com/deals/${id}`}
+      href={`https://mdsl.pipedrive.com/deal/${id}`}
       target="_blank"
       rel="noopener noreferrer"
       className="hover:text-indigo-600 underline decoration-dotted"
@@ -142,8 +143,8 @@ export default function SubmissionsTable({
                 <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">Importe</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Estado</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Red Flags</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Notas</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Acción</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 w-64">Notas</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 w-52">Acción</th>
               </tr>
             ) : (
               <tr>
@@ -219,11 +220,9 @@ export default function SubmissionsTable({
                       )}
                     </td>
                     {/* Notas del Sheet */}
-                    <td className="px-4 py-3 max-w-[200px] align-top">
+                    <td className="px-4 py-3 w-64 align-top">
                       {row.notas ? (
-                        <span className="text-xs text-gray-600 line-clamp-3 whitespace-pre-wrap">
-                          {row.notas}
-                        </span>
+                        <NotePreview text={row.notas} />
                       ) : (
                         <span className="text-xs text-gray-300">—</span>
                       )}
