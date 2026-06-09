@@ -75,7 +75,7 @@ export default async function BankPage({ params, searchParams }: BankPageProps) 
   let query = supabase
     .from('sheet_rows')
     .select(
-      'id, opportunity_id, nombre_cliente, importe, status, status_raw, red_flags, timestamp_sent, timestamp_entry, synced_at, owner, sheet_row_number, banks(name, slug, has_dispatch)',
+      'id, opportunity_id, bank_deal_id, nombre_cliente, importe, status, status_raw, red_flags, notas, timestamp_sent, timestamp_entry, synced_at, owner, sheet_row_number, banks(name, slug, has_dispatch)',
       { count: 'exact' }
     )
     .eq('bank_id', bank.id)

@@ -89,7 +89,7 @@ export default function RelaunchButton({
   // Auto-refresh countdown after success
   useEffect(() => {
     if (countdown === null) return
-    if (countdown <= 0) { router.refresh(); return }
+    if (countdown <= 0) { router.refresh(); setPhase('idle'); setCountdown(null); return }
     const t = setTimeout(() => setCountdown((c) => (c ?? 1) - 1), 1000)
     return () => clearTimeout(t)
   }, [countdown, router])
@@ -100,7 +100,7 @@ export default function RelaunchButton({
       <span className="flex items-center gap-2 flex-wrap">
         <span className="text-xs font-medium text-purple-600">✓ Solicitado</span>
         <button
-          onClick={() => { setCountdown(null); router.refresh() }}
+          onClick={() => { setCountdown(null); setPhase('idle'); router.refresh() }}
           className="text-xs text-gray-400 hover:text-gray-700 underline tabular-nums"
           title="Actualizar estado desde Supabase"
         >

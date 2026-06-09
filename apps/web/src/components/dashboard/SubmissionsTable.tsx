@@ -1,5 +1,6 @@
 import StatusBadge from '@/components/ui/StatusBadge'
 import RelaunchButton from '@/components/dashboard/RelaunchButton'
+import NoteBox from '@/components/dashboard/NoteBox'
 import { normalizeRedFlag, CLUSTER_BY_SLUG } from '@/lib/redFlagClusters'
 
 interface BankRef {
@@ -17,6 +18,7 @@ interface SheetRow {
   status: string | null
   status_raw: string | null
   red_flags: string[] | null
+  notas?: string | null
   timestamp_sent: string | null
   timestamp_entry: string | null
   synced_at: string | null
@@ -30,6 +32,7 @@ interface SubmissionsTableProps {
   totalCount: number
   currentPage: number
   pageSize: number
+  mode?: 'pendientes' | 'enviados'
 }
 
 function formatImporte(value: number | null): string {
@@ -67,7 +70,6 @@ function getBankSlug(banks: BankRef | BankRef[] | null): string | null {
 }
 
 function FlagPills({ flags }: { flags: string[] }) {
-  // Deduplicate by normalized category, preserving first raw text for tooltip
   const seen = new Map<string, string>()
   for (const flag of flags) {
     const cat = normalizeRedFlag(flag)
@@ -94,16 +96,33 @@ function FlagPills({ flags }: { flags: string[] }) {
   )
 }
 
+/** Pipedrive deal deep-link */
+function PipedriveLink({ id, label }: { id: number; label?: string }) {
+  return (
+    <a
+      href={`https://app.pipedrive.com/deals/${id}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="hover:text-indigo-600 underline decoration-dotted"
+    >
+      {label ?? id}
+    </a>
+  )
+}
+
 export default function SubmissionsTable({
   rows,
-  totalCount,
+  totalCount: _totalCount,
   currentPage,
   pageSize,
+  mode = 'pendientes',
 }: SubmissionsTableProps) {
+  void _totalCount
+
   if (rows.length === 0) {
     return (
       <div className="rounded-lg border border-gray-200 bg-white p-12 text-center text-gray-500">
-        No hay envios para mostrar con los filtros actuales.
+        No hay envíos para mostrar con los filtros actuales.
       </div>
     )
   }
@@ -115,78 +134,126 @@ export default function SubmissionsTable({
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
-            <tr>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                #
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Banco
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Cliente
-              </th>
-              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Importe
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Estado
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Enviado
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Red Flags
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Acción
-              </th>
-            </tr>
+            {mode === 'pendientes' ? (
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">#</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Banco</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Cliente</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">Importe</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Estado</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Red Flags</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Notas</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Acción</th>
+              </tr>
+            ) : (
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">#</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Banco</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Cliente</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">Importe</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Estado</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Enviado</th>
+              </tr>
+            )}
           </thead>
           <tbody className="divide-y divide-gray-100 bg-white">
             {rows.map((row, index) => {
               const flags = row.red_flags ?? []
               const hasDispatch = getBankDispatch(row.banks)
               const bankSlug = getBankSlug(row.banks)
+
+              // Shared cells
+              const indexCell = (
+                <td className="whitespace-nowrap px-4 py-3 text-xs text-gray-400 tabular-nums">
+                  {rowOffset + index + 1}
+                </td>
+              )
+              const bankCell = (
+                <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">
+                  {getBankName(row.banks)}
+                </td>
+              )
+              const clientCell = (
+                <td className="px-4 py-3 max-w-[200px]">
+                  <p className="text-sm text-gray-700 truncate">{row.nombre_cliente ?? '—'}</p>
+                  <p className="text-xs text-gray-400 tabular-nums flex flex-wrap gap-x-1">
+                    {row.opportunity_id ? (
+                      <PipedriveLink id={row.opportunity_id} />
+                    ) : (
+                      <span>—</span>
+                    )}
+                    {row.bank_deal_id ? (
+                      <>
+                        <span>·</span>
+                        <PipedriveLink id={row.bank_deal_id} label={`B:${row.bank_deal_id}`} />
+                      </>
+                    ) : null}
+                  </p>
+                </td>
+              )
+              const importeCell = (
+                <td className="whitespace-nowrap px-4 py-3 text-sm text-right tabular-nums text-gray-900">
+                  {formatImporte(row.importe)}
+                </td>
+              )
+              const estadoCell = (
+                <td className="whitespace-nowrap px-4 py-3">
+                  <StatusBadge status={row.status ?? 'unknown'} />
+                </td>
+              )
+
+              if (mode === 'pendientes') {
+                return (
+                  <tr key={row.id} className="hover:bg-gray-50 transition-colors">
+                    {indexCell}
+                    {bankCell}
+                    {clientCell}
+                    {importeCell}
+                    {estadoCell}
+                    {/* Red Flags */}
+                    <td className="px-4 py-3 max-w-[220px]">
+                      {flags.length > 0 ? (
+                        <FlagPills flags={flags} />
+                      ) : (
+                        <span className="text-xs text-gray-300">—</span>
+                      )}
+                    </td>
+                    {/* Notas del Sheet */}
+                    <td className="px-4 py-3 max-w-[200px] align-top">
+                      {row.notas ? (
+                        <span className="text-xs text-gray-600 line-clamp-3 whitespace-pre-wrap">
+                          {row.notas}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-300">—</span>
+                      )}
+                    </td>
+                    {/* Acción: relaunch + NoteBox */}
+                    <td className="px-4 py-3 align-top min-w-[180px]">
+                      <RelaunchButton
+                        rowId={row.id}
+                        status={row.status}
+                        clientName={row.nombre_cliente}
+                        hasDispatch={hasDispatch}
+                        bankSlug={bankSlug}
+                        sheetRowNumber={row.sheet_row_number}
+                      />
+                      <NoteBox dealId={row.opportunity_id} />
+                    </td>
+                  </tr>
+                )
+              }
+
+              // Enviados mode
               return (
                 <tr key={row.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="whitespace-nowrap px-4 py-3 text-xs text-gray-400 tabular-nums">
-                    {rowOffset + index + 1}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">
-                    {getBankName(row.banks)}
-                  </td>
-                  <td className="px-4 py-3 max-w-[200px]">
-                    <p className="text-sm text-gray-700 truncate">{row.nombre_cliente ?? '—'}</p>
-                    <p className="text-xs text-gray-400 tabular-nums">
-                      {row.opportunity_id ?? '—'}
-                      {row.bank_deal_id ? ` · B:${row.bank_deal_id}` : ''}
-                    </p>
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-sm text-right tabular-nums text-gray-900">
-                    {formatImporte(row.importe)}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3">
-                    <StatusBadge status={row.status ?? 'unknown'} />
-                  </td>
+                  {indexCell}
+                  {bankCell}
+                  {clientCell}
+                  {importeCell}
+                  {estadoCell}
                   <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-500">
                     {formatDate(row.timestamp_sent)}
-                  </td>
-                  <td className="px-4 py-3 max-w-[260px]">
-                    {flags.length > 0 ? (
-                      <FlagPills flags={flags} />
-                    ) : (
-                      <span className="text-xs text-gray-300">—</span>
-                    )}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3">
-                    <RelaunchButton
-                      rowId={row.id}
-                      status={row.status}
-                      clientName={row.nombre_cliente}
-                      hasDispatch={hasDispatch}
-                      bankSlug={bankSlug}
-                      sheetRowNumber={row.sheet_row_number}
-                    />
                   </td>
                 </tr>
               )
