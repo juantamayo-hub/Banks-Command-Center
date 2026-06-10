@@ -9,11 +9,9 @@ interface NavItem {
 
 const TOP_NAV: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard' },
-  { label: 'Pendientes', href: '/dashboard?status=pending_ready' },
-  { label: 'Enviados', href: '/dashboard?status=sent' },
-  { label: 'Bloqueados', href: '/dashboard?status=blocked_red_flag,blocked_missing_docs,blocked_validation' },
-  { label: 'Fallidos', href: '/dashboard?status=failed' },
-  { label: 'Ofertas recibidas', href: '/dashboard?status=offer_received' },
+  { label: 'Pendientes', href: '/dashboard?tab=pendientes' },
+  { label: 'Enviados', href: '/dashboard?tab=enviados' },
+  { label: 'Envíos por plataforma', href: '/dashboard/envios-plataforma' },
   { label: 'Métricas', href: '/dashboard/metricas' },
 ]
 
@@ -49,17 +47,17 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             ))}
           </div>
 
-          {/* Caixa section */}
+          {/* CaixaBank section */}
           <div className="mt-6">
             <p
               className="mb-1 px-3 text-xs font-semibold uppercase tracking-wider"
               style={{ color: 'var(--bayteca-green-light)' }}
             >
-              Caixa
+              CaixaBank
             </p>
             <div className="flex flex-col gap-0.5">
               <Link href="/dashboard/caixa/respuestas" className="sidebar-link sidebar-link-sm">
-                📥 Respuestas
+                📥 Dossier
               </Link>
               <Link href="/dashboard/caixa/requests" className="sidebar-link sidebar-link-sm">
                 📤 Requests

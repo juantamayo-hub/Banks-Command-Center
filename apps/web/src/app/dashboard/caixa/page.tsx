@@ -19,10 +19,10 @@ export default function CaixaPage() {
         >
           <div className="mb-3 text-3xl">📥</div>
           <h2 className="text-lg font-semibold text-gray-900 group-hover:text-blue-700">
-            Respuestas de Caixa
+            Dossier CaixaBank
           </h2>
           <p className="mt-2 text-sm text-gray-500">
-            Sube el Excel diario de Caixa para añadir notas en Pipedrive y
+            Sube el Excel diario de CaixaBank para añadir notas en Pipedrive y
             marcar deals cerrados con el motivo correcto.
           </p>
           <span className="mt-4 inline-block text-sm font-medium text-blue-600 group-hover:underline">
