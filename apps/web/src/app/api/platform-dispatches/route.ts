@@ -75,8 +75,9 @@ export async function GET() {
   for (const deal of allDeals) {
     const seenBanks = new Set<PlatformBankName>()
     for (const fieldId of BANK_FIELD_IDS) {
-      const val = deal[fieldId]
-      if (typeof val === 'number' && OPTION_ID_TO_BANK[val]) {
+      const raw = deal[fieldId]
+      const val = raw !== null && raw !== undefined ? parseInt(String(raw), 10) : NaN
+      if (!isNaN(val) && OPTION_ID_TO_BANK[val]) {
         seenBanks.add(OPTION_ID_TO_BANK[val])
       }
     }
