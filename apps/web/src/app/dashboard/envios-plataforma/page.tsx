@@ -31,6 +31,8 @@ export default function EnviosPlataformaPage() {
 
   useEffect(() => {
     fetchDeals()
+    const interval = setInterval(fetchDeals, 2 * 60 * 1000) // auto-refresh every 2 minutes
+    return () => clearInterval(interval)
   }, [fetchDeals])
 
   function removeDeal(dealId: number) {
