@@ -34,6 +34,35 @@ var NO_DISPATCH_SLUGS = ['santander', 'bankinter', 'sabadell', 'banca_360', 'kut
 // Columna H en todos los bancos = Autorización (número 8)
 var COL_AUTORIZACION = 8;
 
+// ── Mapa slug → sheetName para APPEND_ROW (todos los bancos) ─────────────────
+var APPEND_SHEET_NAMES = {
+  'unicaja':        'Unicaja Test',
+  'santander':      'Santander',
+  'laboral_kutxa':  'Laboral Kutxa Test',
+  'kutxabank':      'Kutxabank',
+  'uci':            'UCI',
+  'myinvestor':     'MyInvestor Test',
+  'cr_del_sur':     'CR del Sur Test',
+  'cr_teruel':      'CR Teruel Test',
+  'cr_granada':     'CR Granada Test',
+  'eurocajarural':  'EuroCajaRural Test',
+  'globalcaja':     'Globalcaja Test',
+  'cr_extremadura': 'CR Extremadura',
+  'sabadell':       'Sabadell no residentes',
+  'banca_360':      'MSF 360 - Sabadell Residentes',
+  'ing':            'ING',
+  'bankinter':      'Bankinter',
+  'no_bank_fee':    'No Bank Fee Test',
+  'cr_asturias':    'CR Asturias Test',
+  'ibercaja':       'Ibercaja Test',
+  'deutsche_bank':  'Deutsche Bank Test',
+  'cajamar':        'Cajamar Test',
+  'caixa_popular':  'Caixa Popular Test',
+  'cr_aragon':      'CR Aragon Test',
+  'ruralnostra':    'RURALNOSTRA',
+  'abanca':         'Abanca'
+};
+
 // ── Mapa slug → { sheetName, fn(sheet, row, action) } ────────────────────────
 var DISPATCH_MAP = {
   'unicaja':       { sheetName: 'Unicaja Test',
@@ -98,11 +127,42 @@ function doPost(e) {
 
     // ── Validar parámetros ──────────────────────────────────────────────────
     var bankSlug  = String(body.bank_slug || '').trim();
-    var rowNumber = parseInt(body.row_number, 10);
     var action    = String(body.action || 'ENVIAR').toUpperCase().trim();
 
-    if (!bankSlug || isNaN(rowNumber) || rowNumber < 2) {
-      output.setContent(JSON.stringify({ ok: false, error: 'Parámetros inválidos' }));
+    if (!bankSlug) {
+      output.setContent(JSON.stringify({ ok: false, error: 'bank_slug requerido' }));
+      return output;
+    }
+
+    // ── APPEND_ROW: escribe una nueva fila en la hoja del banco ────────────
+    if (action === 'APPEND_ROW') {
+      var sheetName = APPEND_SHEET_NAMES[bankSlug];
+      if (!sheetName) {
+        output.setContent(JSON.stringify({ ok: false, error: 'Banco no soportado para APPEND_ROW: ' + bankSlug }));
+        return output;
+      }
+      var appendSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+      if (!appendSheet) {
+        output.setContent(JSON.stringify({ ok: false, error: 'Hoja no encontrada: ' + sheetName }));
+        return output;
+      }
+      var rowData = body.row_data || {};
+      var newRow  = appendSheet.getLastRow() + 1;
+      appendSheet.getRange(newRow, 1).setValue(rowData.opportunity_id   || '');  // A: Opportunity ID
+      appendSheet.getRange(newRow, 2).setValue(rowData.nombre_cliente    || '');  // B: Nombre Cliente
+      appendSheet.getRange(newRow, 3).setValue(rowData.importe           || '');  // C: Importe
+      appendSheet.getRange(newRow, 6).setValue(rowData.bank_deal_id      || '');  // F: Bank Deal ID
+      SpreadsheetApp.flush();
+      Logger.log('[relaunchWebApp] APPEND_ROW bank=' + bankSlug + ' sheet=' + sheetName + ' row=' + newRow);
+      output.setContent(JSON.stringify({ ok: true, row: newRow }));
+      return output;
+    }
+
+    // ── ENVIAR / AUTORIZACION: dispatch via postToN8N ──────────────────────
+    var rowNumber = parseInt(body.row_number, 10);
+
+    if (isNaN(rowNumber) || rowNumber < 2) {
+      output.setContent(JSON.stringify({ ok: false, error: 'row_number inválido' }));
       return output;
     }
 
@@ -132,7 +192,6 @@ function doPost(e) {
     }
 
     // ── Si AUTORIZACION: escribir 'Yes' en columna H antes de enviar ────────
-    // Esto es lo que le dice a n8n que bypasee los checks de red flags / docs.
     if (action === 'AUTORIZACION') {
       sheet.getRange(rowNumber, COL_AUTORIZACION).setValue('Yes');
       SpreadsheetApp.flush();

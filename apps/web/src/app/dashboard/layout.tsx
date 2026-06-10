@@ -12,6 +12,7 @@ const TOP_NAV: NavItem[] = [
   { label: 'Pendientes', href: '/dashboard?tab=pendientes' },
   { label: 'Enviados', href: '/dashboard?tab=enviados' },
   { label: 'Envíos por plataforma', href: '/dashboard/envios-plataforma' },
+  { label: 'Nuevo envío', href: '/dashboard/nuevo-envio' },
   { label: 'Métricas', href: '/dashboard/metricas' },
 ]
 
