@@ -1,9 +1,5 @@
 'use server'
 
-// Extend Vercel function timeout beyond the 10s default so the
-// Apps Script fetch (up to 20s) can complete before the function is killed.
-export const maxDuration = 30
-
 /**
  * Server Action: requestRelaunch
  *
