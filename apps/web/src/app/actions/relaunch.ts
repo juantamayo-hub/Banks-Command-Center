@@ -20,6 +20,7 @@ export const maxDuration = 30
  */
 
 import { createAdminClient } from '@/lib/supabase/server'
+import { waitUntil } from '@vercel/functions'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -66,8 +67,11 @@ export async function requestRelaunch(
     const secret    = process.env.APPS_SCRIPT_RELAUNCH_SECRET
 
     if (webAppUrl && secret) {
-      try {
-        const res = await fetch(webAppUrl, {
+      // Fire-and-forget: DB is already updated. Return to client immediately
+      // and let Apps Script run in background via waitUntil (Vercel keeps the
+      // function alive after the response is sent).
+      waitUntil(
+        fetch(webAppUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -76,20 +80,18 @@ export async function requestRelaunch(
             row_number: sheet_row_number,
             action: dispatch_action,
           }),
-          signal: AbortSignal.timeout(20_000),
         })
-
-        if (!res.ok) {
-          console.error('[relaunch] Apps Script HTTP error:', res.status)
-        } else {
-          const body = await res.json()
-          if (!body.ok) {
-            console.error('[relaunch] Apps Script dispatch failed:', body.error)
-          }
-        }
-      } catch (err) {
-        console.error('[relaunch] Apps Script dispatch error:', err)
-      }
+          .then(async (res) => {
+            if (!res.ok) {
+              console.error('[relaunch] Apps Script HTTP error:', res.status)
+            } else {
+              const body = await res.json()
+              if (!body.ok) console.error('[relaunch] Apps Script dispatch failed:', body.error)
+              else console.log('[relaunch] Apps Script dispatch ok bank=' + bank_slug)
+            }
+          })
+          .catch((err) => console.error('[relaunch] Apps Script dispatch error:', err))
+      )
     } else {
       console.warn('[relaunch] APPS_SCRIPT_WEB_APP_URL o APPS_SCRIPT_RELAUNCH_SECRET no configurados')
     }
