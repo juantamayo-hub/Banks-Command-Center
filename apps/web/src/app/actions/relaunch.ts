@@ -1,5 +1,9 @@
 'use server'
 
+// Extend Vercel function timeout beyond the 10s default so the
+// Apps Script fetch (up to 20s) can complete before the function is killed.
+export const maxDuration = 30
+
 /**
  * Server Action: requestRelaunch
  *
@@ -72,7 +76,7 @@ export async function requestRelaunch(
             row_number: sheet_row_number,
             action: dispatch_action,
           }),
-          signal: AbortSignal.timeout(25_000),
+          signal: AbortSignal.timeout(20_000),
         })
 
         if (!res.ok) {

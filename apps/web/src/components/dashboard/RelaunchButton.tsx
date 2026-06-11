@@ -63,17 +63,23 @@ export default function RelaunchButton({
     setPhase('loading')
     setErrorMsg(null)
 
-    const result = await requestRelaunch(
-      rowId,
-      needsForce,
-      bankSlug ?? undefined,
-      sheetRowNumber,
-      pendingAction
-    )
+    let result: Awaited<ReturnType<typeof requestRelaunch>>
+    try {
+      result = await requestRelaunch(
+        rowId,
+        needsForce,
+        bankSlug ?? undefined,
+        sheetRowNumber,
+        pendingAction
+      )
+    } catch {
+      setErrorMsg('Error de conexión. Inténtalo de nuevo.')
+      setPhase('error')
+      return
+    }
 
     if (!result.ok) {
       if (result.code === 'REQUIRES_FORCE') {
-        // DB said force needed — go back to confirm with force context
         setPhase('confirm')
         return
       }
