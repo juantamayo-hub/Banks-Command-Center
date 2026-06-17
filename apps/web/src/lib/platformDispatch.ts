@@ -11,13 +11,24 @@
 export const PLATFORM_BANKS = ['CaixaBank', 'Abanca', 'Bankinter', 'Santander'] as const
 export type PlatformBankName = (typeof PLATFORM_BANKS)[number]
 
-// Pipedrive custom field hash IDs for Bank 1–5
+// Pipedrive custom field hash IDs for Bank 1–5 (which bank option)
 export const BANK_FIELD_IDS = [
   'af536dbfe7d00fd441ae9bd4b144c25bc1d4c725', // Bank 1
   '8e4b44a3f3973d1f524f8cd0ec6f6babe9e96965', // Bank 2
   'ed0a30972778ac2c3d29cab53e27a89f5b52a1b2', // Bank 3
   '9049591570e78d3274a72cfb7a28076789ce0676', // Bank 4
   '36ff3525fb8a73637e069099967b2afe164e408a', // Bank 5
+] as const
+
+// Pipedrive custom field hash IDs for Bank 1–5 ID (banking deal ID in pipeline 7)
+// These are "double" fields on the general deal storing the ID of the banking deal.
+// Must be indexed in sync with BANK_FIELD_IDS (slot 1 = index 0, etc.)
+export const BANK_ID_FIELD_IDS = [
+  '04d666f12e4d27a3867daa5d7d6b777d76d24eb9', // Bank 1 ID
+  '75d8963d89d47daf37349722c531677263173484', // Bank 2 ID
+  '874add027adde7fa7690874e3bac581489387651', // Bank 3 ID
+  '467feaa56488620159ef39890e6d8f96489bdbac', // Bank 4 ID
+  'b3dfef96dce320a1cfa4605056757f7e79731676', // Bank 5 ID
 ] as const
 
 // Map: Pipedrive enum option ID → platform bank name

@@ -237,7 +237,7 @@ export default function SubmissionsTable({
                         bankSlug={bankSlug}
                         sheetRowNumber={row.sheet_row_number}
                       />
-                      <NoteBox dealId={row.opportunity_id} />
+                      <NoteBox dealId={row.bank_deal_id ?? null} />
                     </td>
                   </tr>
                 )

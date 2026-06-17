@@ -12,6 +12,7 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import {
   BANK_FIELD_IDS,
+  BANK_ID_FIELD_IDS,
   OPTION_ID_TO_BANK,
   DOC_COMPLETED_STAGE_ID,
   type PlatformBankName,
@@ -70,23 +71,32 @@ export async function GET() {
     bank_name: PlatformBankName
     deal_title: string
     person_name: string | null
+    bank_deal_id: number | null
   }[] = []
 
   for (const deal of allDeals) {
-    const seenBanks = new Set<PlatformBankName>()
-    for (const fieldId of BANK_FIELD_IDS) {
-      const raw = deal[fieldId]
+    // Map bank name → banking deal ID (from Bank N ID field on the same slot)
+    const bankMap = new Map<PlatformBankName, number | null>()
+    for (let i = 0; i < BANK_FIELD_IDS.length; i++) {
+      const raw = deal[BANK_FIELD_IDS[i]]
       const val = raw !== null && raw !== undefined ? parseInt(String(raw), 10) : NaN
       if (!isNaN(val) && OPTION_ID_TO_BANK[val]) {
-        seenBanks.add(OPTION_ID_TO_BANK[val])
+        const bankName = OPTION_ID_TO_BANK[val]
+        if (!bankMap.has(bankName)) {
+          // Read the banking deal ID from the corresponding Bank N ID field
+          const idRaw = deal[BANK_ID_FIELD_IDS[i]]
+          const bankDealId = idRaw !== null && idRaw !== undefined ? parseInt(String(idRaw), 10) : NaN
+          bankMap.set(bankName, !isNaN(bankDealId) && bankDealId > 0 ? bankDealId : null)
+        }
       }
     }
-    for (const bankName of seenBanks) {
+    for (const [bankName, bankDealId] of bankMap.entries()) {
       discovered.push({
         deal_id: deal.id,
         bank_name: bankName,
         deal_title: deal.title ?? `Deal ${deal.id}`,
         person_name: deal.person_name ?? null,
+        bank_deal_id: bankDealId,
       })
     }
   }
@@ -103,8 +113,9 @@ export async function GET() {
           bank_name: d.bank_name,
           deal_title: d.deal_title,
           person_name: d.person_name,
+          bank_deal_id: d.bank_deal_id,
         })),
-        { onConflict: 'deal_id,bank_name', ignoreDuplicates: true }
+        { onConflict: 'deal_id,bank_name', ignoreDuplicates: false }
       )
 
     if (upsertError) {
