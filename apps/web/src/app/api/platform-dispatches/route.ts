@@ -32,9 +32,13 @@ export interface PlatformDealItem {
   banks: { name: PlatformBankName; sent: boolean; bank_deal_id: number | null }[]
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   const token = process.env.PIPEDRIVE_API_TOKEN
   if (!token) return NextResponse.json({ error: 'PIPEDRIVE_API_TOKEN no configurado' }, { status: 500 })
+
+  const { searchParams } = new URL(req.url)
+  const dateFrom = searchParams.get('date_from') // ISO date string, e.g. "2026-06-01"
+  const dateTo = searchParams.get('date_to')     // ISO date string, inclusive
 
   // ── 1. Fetch deals from Pipedrive stage 62 ────────────────────────────────
   const allDeals: PipedriveDeal[] = []
@@ -125,11 +129,21 @@ export async function GET() {
   }
 
   // ── 4. Fetch all pending dispatches from Supabase ─────────────────────────
-  const { data: pending, error: fetchError } = await supabase
+  let pendingQuery = supabase
     .from('platform_dispatches')
-    .select('deal_id, bank_name, deal_title, person_name, sent_at, bank_deal_id')
+    .select('deal_id, bank_name, deal_title, person_name, sent_at, bank_deal_id, created_at')
     .is('sent_at', null)
     .order('created_at', { ascending: true })
+
+  if (dateFrom) pendingQuery = pendingQuery.gte('created_at', dateFrom)
+  if (dateTo) {
+    // Make dateTo inclusive by using the end of that day
+    const endOfDay = new Date(dateTo)
+    endOfDay.setDate(endOfDay.getDate() + 1)
+    pendingQuery = pendingQuery.lt('created_at', endOfDay.toISOString())
+  }
+
+  const { data: pending, error: fetchError } = await pendingQuery
 
   if (fetchError) {
     console.error('[platform-dispatches] Supabase fetch error:', fetchError)

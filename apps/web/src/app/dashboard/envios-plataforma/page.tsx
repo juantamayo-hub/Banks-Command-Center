@@ -10,12 +10,18 @@ export default function EnviosPlataformaPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [bankFilter, setBankFilter] = useState<PlatformBankName | 'Todos'>('Todos')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
 
-  const fetchDeals = useCallback(async () => {
+  const fetchDeals = useCallback(async (from?: string, to?: string) => {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/api/platform-dispatches')
+      const params = new URLSearchParams()
+      if (from) params.set('date_from', from)
+      if (to) params.set('date_to', to)
+      const url = '/api/platform-dispatches' + (params.size > 0 ? '?' + params.toString() : '')
+      const res = await fetch(url)
       const data = await res.json()
       if (!res.ok) {
         setError(data?.error ?? 'Error al cargar')
@@ -30,10 +36,13 @@ export default function EnviosPlataformaPage() {
   }, [])
 
   useEffect(() => {
-    fetchDeals()
-    const interval = setInterval(fetchDeals, 2 * 60 * 1000) // auto-refresh every 2 minutes
+    fetchDeals(dateFrom || undefined, dateTo || undefined)
+    const interval = setInterval(
+      () => fetchDeals(dateFrom || undefined, dateTo || undefined),
+      2 * 60 * 1000
+    )
     return () => clearInterval(interval)
-  }, [fetchDeals])
+  }, [fetchDeals, dateFrom, dateTo])
 
   function removeDeal(dealId: number) {
     setDeals((prev) => prev.filter((d) => d.deal_id !== dealId))
@@ -47,7 +56,7 @@ export default function EnviosPlataformaPage() {
   return (
     <div className="flex flex-col gap-6 p-6">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-xl font-semibold" style={{ color: 'var(--bayteca-green)' }}>
             Envíos por plataforma
@@ -56,13 +65,42 @@ export default function EnviosPlataformaPage() {
             Deals en <span className="font-medium">Doc. Completed</span> con bancos que requieren envío manual: CaixaBank, Abanca, Bankinter y Santander.
           </p>
         </div>
-        <button
-          onClick={fetchDeals}
-          disabled={loading}
-          className="shrink-0 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
-        >
-          {loading ? 'Cargando…' : '↻ Actualizar'}
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Date filter */}
+          <div className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5">
+            <span className="text-xs text-gray-500 whitespace-nowrap">Desde</span>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="text-sm text-gray-700 border-none outline-none bg-transparent"
+            />
+          </div>
+          <div className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5">
+            <span className="text-xs text-gray-500 whitespace-nowrap">Hasta</span>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="text-sm text-gray-700 border-none outline-none bg-transparent"
+            />
+          </div>
+          {(dateFrom || dateTo) && (
+            <button
+              onClick={() => { setDateFrom(''); setDateTo('') }}
+              className="text-xs text-gray-400 hover:text-gray-600 underline"
+            >
+              Limpiar
+            </button>
+          )}
+          <button
+            onClick={() => void fetchDeals(dateFrom || undefined, dateTo || undefined)}
+            disabled={loading}
+            className="shrink-0 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+          >
+            {loading ? 'Cargando…' : '↻ Actualizar'}
+          </button>
+        </div>
       </div>
 
       {/* Summary pills */}
@@ -112,7 +150,7 @@ export default function EnviosPlataformaPage() {
         <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center">
           <p className="text-sm text-red-700">{error}</p>
           <button
-            onClick={fetchDeals}
+            onClick={() => void fetchDeals(dateFrom || undefined, dateTo || undefined)}
             className="mt-3 text-sm text-red-600 underline hover:text-red-800"
           >
             Reintentar
