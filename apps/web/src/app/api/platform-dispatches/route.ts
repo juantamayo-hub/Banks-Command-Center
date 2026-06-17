@@ -29,7 +29,7 @@ export interface PlatformDealItem {
   deal_id: number
   deal_title: string
   person_name: string | null
-  banks: { name: PlatformBankName; sent: boolean }[]
+  banks: { name: PlatformBankName; sent: boolean; bank_deal_id: number | null }[]
 }
 
 export async function GET() {
@@ -127,7 +127,7 @@ export async function GET() {
   // ── 4. Fetch all pending dispatches from Supabase ─────────────────────────
   const { data: pending, error: fetchError } = await supabase
     .from('platform_dispatches')
-    .select('deal_id, bank_name, deal_title, person_name, sent_at')
+    .select('deal_id, bank_name, deal_title, person_name, sent_at, bank_deal_id')
     .is('sent_at', null)
     .order('created_at', { ascending: true })
 
@@ -139,18 +139,19 @@ export async function GET() {
   // ── 5. Group by deal ───────────────────────────────────────────────────────
   const byDeal = new Map<
     number,
-    { deal_title: string; person_name: string | null; banks: PlatformBankName[] }
+    { deal_title: string; person_name: string | null; banks: { name: PlatformBankName; bank_deal_id: number | null }[] }
   >()
 
   for (const row of pending ?? []) {
     const existing = byDeal.get(row.deal_id)
+    const bankEntry = { name: row.bank_name as PlatformBankName, bank_deal_id: row.bank_deal_id ?? null }
     if (existing) {
-      existing.banks.push(row.bank_name as PlatformBankName)
+      existing.banks.push(bankEntry)
     } else {
       byDeal.set(row.deal_id, {
         deal_title: row.deal_title ?? `Deal ${row.deal_id}`,
         person_name: row.person_name ?? null,
-        banks: [row.bank_name as PlatformBankName],
+        banks: [bankEntry],
       })
     }
   }
@@ -160,7 +161,7 @@ export async function GET() {
       deal_id,
       deal_title,
       person_name,
-      banks: banks.map((name) => ({ name, sent: false })),
+      banks: banks.map((b) => ({ name: b.name, sent: false, bank_deal_id: b.bank_deal_id })),
     })
   )
 

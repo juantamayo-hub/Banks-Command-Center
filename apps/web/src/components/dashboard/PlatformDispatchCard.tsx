@@ -7,6 +7,7 @@ import { BANK_COLOR, type PlatformBankName } from '@/lib/platformDispatch'
 interface BankItem {
   name: PlatformBankName
   sent: boolean
+  bank_deal_id: number | null
 }
 
 interface PlatformDispatchCardProps {
@@ -117,7 +118,8 @@ export default function PlatformDispatchCard({
       {/* Banks checklist */}
       <div className="px-5 py-4 flex flex-col gap-2">
         {banks.map((bank) => (
-          <div key={bank.name} className="flex items-center gap-3">
+          <div key={bank.name} className="flex flex-col gap-1">
+          <div className="flex items-center gap-3">
             {/* Status indicator */}
             <div
               className={`h-5 w-5 shrink-0 rounded flex items-center justify-center border transition-colors ${
@@ -196,14 +198,16 @@ export default function PlatformDispatchCard({
               )}
             </div>
           </div>
+          {/* Note box per bank — writes to the banking deal, not the general deal */}
+          {bank.bank_deal_id && bank.phase !== 'done' && (
+            <div className="pl-8">
+              <NoteBox dealId={bank.bank_deal_id} />
+            </div>
+          )}
+          </div>
         ))}
       </div>
 
-      {/* Note box */}
-      <div className="px-5 pb-4 border-t border-gray-100 pt-3">
-        <p className="text-xs text-gray-400 mb-1.5 font-medium">Nota al deal</p>
-        <NoteBox dealId={dealId} />
-      </div>
     </div>
   )
 }
