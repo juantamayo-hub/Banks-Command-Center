@@ -198,43 +198,6 @@ function parseFechaCreacion(raw: string): Date | null {
   return null
 }
 
-/**
- * In-batch deduplication:
- * - 9-digit petition numbers: group by first 6 digits (deal ID), keep the row
- *   with the highest 3-digit suffix (most recent dispatch from Caixa).
- * - 6-digit petition numbers: pass through UNLESS a 9-digit petition exists for
- *   the same deal (in which case the 9-digit one takes priority).
- * - All other lengths: pass through as-is (no in-batch dedup).
- */
-function dedupByDeal(rows: ParsedCaixaRow[]): ParsedCaixaRow[] {
-  const nineDigitMap = new Map<string, ParsedCaixaRow>() // key = first 6 digits
-  const others: ParsedCaixaRow[] = []
-
-  for (const row of rows) {
-    const digits = (row.numero_peticion ?? '').replace(/\D/g, '')
-    if (digits.length !== 9) {
-      others.push(row)
-      continue
-    }
-    const dealId = digits.substring(0, 6)
-    const existing = nineDigitMap.get(dealId)
-    if (!existing) {
-      nineDigitMap.set(dealId, row)
-    } else {
-      const existingSuffix = parseInt((existing.numero_peticion ?? '').replace(/\D/g, '').substring(6), 10)
-      const currentSuffix = parseInt(digits.substring(6), 10)
-      if (currentSuffix > existingSuffix) nineDigitMap.set(dealId, row)
-    }
-  }
-
-  // Drop 6-digit petitions when a 9-digit petition already covers the same deal
-  const filteredOthers = others.filter((row) => {
-    const digits = (row.numero_peticion ?? '').replace(/\D/g, '')
-    return !(digits.length === 6 && nineDigitMap.has(digits))
-  })
-
-  return [...filteredOthers, ...Array.from(nineDigitMap.values())]
-}
 
 function getTargetStage(estadoLead: string, motivoPendiente: string): { stageId: number; markWon: boolean } | null {
   const estado = estadoLead.trim()
@@ -492,7 +455,7 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const rows = dedupByDeal(body.rows as ParsedCaixaRow[])
+  const rows = body.rows as ParsedCaixaRow[]
   const dateFrom = new Date(body.date_from)
   if (isNaN(dateFrom.getTime())) {
     return NextResponse.json({ error: '`date_from` no es una fecha válida' }, { status: 400 })
@@ -529,22 +492,6 @@ export async function POST(req: NextRequest) {
     const estadoNorm = (row.col_D ?? '').trim()
     const motivoNorm = (row.col_E ?? '').trim()
     const resolucionNorm = (row.col_F ?? '').trim()
-
-    // Dedup check: composite key (numero_peticion + estado + motivo + resolución)
-    const { data: existing } = await supabase
-      .from('caixa_processed')
-      .select('id')
-      .eq('numero_peticion', numeroPeticion)
-      .eq('estado_del_lead', estadoNorm)
-      .eq('motivo_pendiente', motivoNorm)
-      .eq('resolucion', resolucionNorm)
-      .maybeSingle()
-
-    if (existing) {
-      results.push({ numero_peticion: numeroPeticion, deal_id: dealId, status: 'skipped', detail: 'Ya procesado' })
-      skipped++
-      continue
-    }
 
     // Process this row — two separate try/catch blocks:
     // - Note failure → real error, do NOT insert into DB (allow retry next upload)
