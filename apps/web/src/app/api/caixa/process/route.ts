@@ -493,6 +493,22 @@ export async function POST(req: NextRequest) {
     const motivoNorm = (row.col_E ?? '').trim()
     const resolucionNorm = (row.col_F ?? '').trim()
 
+    // Dedup: skip if already processed with same composite key (migration 011)
+    const { data: existing } = await supabase
+      .from('caixa_processed')
+      .select('id')
+      .eq('numero_peticion', numeroPeticion)
+      .eq('estado_del_lead', estadoNorm)
+      .eq('motivo_pendiente', motivoNorm)
+      .eq('resolucion', resolucionNorm)
+      .maybeSingle()
+
+    if (existing) {
+      results.push({ numero_peticion: numeroPeticion, deal_id: dealId, status: 'skipped', detail: 'Ya procesado (mismo estado)' })
+      skipped++
+      continue
+    }
+
     // Process this row — two separate try/catch blocks:
     // - Note failure → real error, do NOT insert into DB (allow retry next upload)
     // - Mark-lost failure → warning only, note was already added, still record as processed

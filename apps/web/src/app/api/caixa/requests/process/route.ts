@@ -145,20 +145,6 @@ export async function POST(req: NextRequest) {
       continue // no deal ID — skip silently
     }
 
-    // Dedup: skip if already processed
-    if (oportunidad) {
-      const { data: existing } = await supabase
-        .from('caixa_requests_responses')
-        .select('id')
-        .eq('oportunidad_caixa', oportunidad)
-        .maybeSingle()
-      if (existing) {
-        results.push({ oportunidad_caixa: oportunidad, id_bayteca: idBayteca, status: 'skipped', detail: 'Ya procesado' })
-        skipped++
-        continue
-      }
-    }
-
     // Guard: never touch won deals
     let dealStatus: string | null = null
     try {
