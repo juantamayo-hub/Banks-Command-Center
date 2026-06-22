@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
 
   if (!generalDealId || generalDealId <= 0) {
     return NextResponse.json(
-      { error: `El deal bancario #${bankDealId} no tiene un deal general vinculado` },
+      { error: `El deal bancario #${bankDealId} no tiene un deal general vinculado — ¿ingresaste el deal general en lugar del bancario?` },
       { status: 422 }
     )
   }
