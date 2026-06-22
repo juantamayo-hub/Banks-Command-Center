@@ -199,6 +199,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           <Suspense fallback={null}>
             <BankFilter banks={banks} currentBank={params.bank} />
           </Suspense>
+          {(dateFrom || dateTo || params.bank || q) && (
+            <a
+              href={`/dashboard?tab=${tab}`}
+              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors"
+            >
+              Limpiar filtros ×
+            </a>
+          )}
         </div>
       </div>
 
