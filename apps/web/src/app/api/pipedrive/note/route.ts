@@ -72,9 +72,11 @@ export async function POST(req: NextRequest) {
         )
         if (generalRes.ok) {
           const generalJson = await generalRes.json()
+          const ownerId: number | undefined   = generalJson?.data?.user_id?.id
           const ownerName: string | undefined = generalJson?.data?.user_id?.name
-          if (ownerName) {
-            noteContent = `@${ownerName} ${noteContent}`
+          if (ownerId && ownerName) {
+            const mention = `<a href="/users/details/${ownerId}" data-mentions="${ownerId}:${ownerId}">@${ownerName}</a>`
+            noteContent = `${mention} ${noteContent}`
           }
         }
       }
