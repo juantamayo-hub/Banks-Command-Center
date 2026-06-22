@@ -340,6 +340,7 @@ function mapRow_(headers, rowValues, bankId, opportunityId, rowNumber, syncedAt)
     importe:               toNumOrNull_(get(['Importe'])),
     link_dossier:          get(['Link Dossier']),
     timestamp_entry:       toIsoOrNull_(get(['Timestamp'])),
+    test_time:             toIsoOrNull_(get(['Test time', 'Test Time'])),
     send_trigger:          sendTrigger,
     timestamp_sent:        toIsoOrNull_(get(['Timestamp Sent'])),
     status_raw:            statusRaw !== null ? String(statusRaw) : null,

@@ -55,22 +55,22 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   let query = supabase
     .from('sheet_rows')
     .select(
-      'id, opportunity_id, bank_deal_id, nombre_cliente, importe, status, status_raw, red_flags, notas, timestamp_sent, timestamp_entry, synced_at, owner, sheet_row_number, banks(name, slug, has_dispatch)',
+      'id, opportunity_id, bank_deal_id, nombre_cliente, importe, status, status_raw, red_flags, notas, test_time, timestamp_sent, timestamp_entry, synced_at, owner, sheet_row_number, banks(name, slug, has_dispatch)',
       { count: 'exact' }
     )
 
   if (tab === 'enviados') {
     query = query
       .eq('status', 'sent')
-      .order('timestamp_sent', { ascending: false, nullsFirst: false })
-    if (dateFrom) query = query.gte('timestamp_sent', `${dateFrom}T00:00:00`)
-    if (dateTo)   query = query.lte('timestamp_sent', `${dateTo}T23:59:59`)
+      .order('test_time', { ascending: false, nullsFirst: false })
+    if (dateFrom) query = query.gte('test_time', `${dateFrom}T00:00:00`)
+    if (dateTo)   query = query.lte('test_time', `${dateTo}T23:59:59`)
   } else {
     query = query
       .neq('status', 'sent')
-      .order('timestamp_entry', { ascending: false, nullsFirst: false })
-    if (dateFrom) query = query.gte('timestamp_entry', `${dateFrom}T00:00:00`)
-    if (dateTo)   query = query.lte('timestamp_entry', `${dateTo}T23:59:59`)
+      .order('test_time', { ascending: false, nullsFirst: false })
+    if (dateFrom) query = query.gte('test_time', `${dateFrom}T00:00:00`)
+    if (dateTo)   query = query.lte('test_time', `${dateTo}T23:59:59`)
   }
 
   query = query.range(from, to)
