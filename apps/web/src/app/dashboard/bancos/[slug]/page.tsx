@@ -4,6 +4,7 @@ import StatsCard from '@/components/ui/StatsCard'
 import SubmissionsTable from '@/components/dashboard/SubmissionsTable'
 import Pagination from '@/components/dashboard/Pagination'
 import { Suspense } from 'react'
+import { fetchGDriveLinks } from '@/lib/pipedrive'
 
 const PAGE_SIZE = 50
 
@@ -95,6 +96,15 @@ export default async function BankPage({ params, searchParams }: BankPageProps) 
   const tableRows = rows ?? []
   const tableTotal = filteredCount ?? 0
 
+  // Batch-fetch Google Drive links for deals on this page
+  const pipedriveToken = process.env.PIPEDRIVE_API_TOKEN ?? ''
+  const uniqueDealIds = [...new Set(
+    tableRows.map((r) => (r as { opportunity_id?: number | null }).opportunity_id).filter((id): id is number => typeof id === 'number' && id > 0)
+  )]
+  const gDriveLinks = pipedriveToken
+    ? await fetchGDriveLinks(uniqueDealIds, pipedriveToken)
+    : {}
+
   // Top red flags — bank_top_flags() RPC replaces full red_flags column fetch (HIGH-4 fix)
   const { data: flagData } = await supabase.rpc('bank_top_flags', {
     p_bank_id: bank.id,
@@ -182,6 +192,7 @@ export default async function BankPage({ params, searchParams }: BankPageProps) 
         totalCount={tableTotal}
         currentPage={currentPage}
         pageSize={PAGE_SIZE}
+        gDriveLinks={gDriveLinks}
       />
 
       {/* Pagination */}

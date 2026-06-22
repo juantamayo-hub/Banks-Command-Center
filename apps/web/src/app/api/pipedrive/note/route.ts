@@ -48,13 +48,48 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Token de Pipedrive no configurado' }, { status: 500 })
   }
 
+  // Resolve owner name from the general deal linked to this banking deal
+  const GENERAL_DEAL_FIELD = '71edfe1562e9e19d4c7d96d38548dd009d4b3601'
+  let noteContent = note.trim()
+  try {
+    const bankingRes = await fetch(
+      `https://api.pipedrive.com/v1/deals/${deal_id}?api_token=${token}`,
+      { next: { revalidate: 0 } }
+    )
+    if (bankingRes.ok) {
+      const bankingJson = await bankingRes.json()
+      const rawField = bankingJson?.data?.[GENERAL_DEAL_FIELD]
+      const generalDealId: number | null =
+        typeof rawField === 'number'
+          ? rawField
+          : typeof rawField === 'object' && rawField !== null
+          ? (rawField as { value?: number }).value ?? null
+          : null
+      if (generalDealId && generalDealId > 0) {
+        const generalRes = await fetch(
+          `https://api.pipedrive.com/v1/deals/${generalDealId}?api_token=${token}`,
+          { next: { revalidate: 0 } }
+        )
+        if (generalRes.ok) {
+          const generalJson = await generalRes.json()
+          const ownerName: string | undefined = generalJson?.data?.user_id?.name
+          if (ownerName) {
+            noteContent = `@${ownerName} ${noteContent}`
+          }
+        }
+      }
+    }
+  } catch {
+    // silently skip — write note without tag
+  }
+
   let res: Response
   try {
     res = await fetch(`https://api.pipedrive.com/v1/notes?api_token=${token}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json; charset=utf-8' },
       body: JSON.stringify({
-        content: note.trim(),
+        content: noteContent,
         deal_id,
         pinned_to_deal_flag: false,
       }),

@@ -152,6 +152,7 @@ function doPost(e) {
       appendSheet.getRange(newRow, 2).setValue(rowData.nombre_cliente    || '');  // B: Nombre Cliente
       appendSheet.getRange(newRow, 3).setValue(rowData.importe           || '');  // C: Importe
       appendSheet.getRange(newRow, 6).setValue(rowData.bank_deal_id      || '');  // F: Bank Deal ID
+      appendSheet.getRange(newRow, 7).setValue('Yes');                            // G: Enviar
       SpreadsheetApp.flush();
       Logger.log('[relaunchWebApp] APPEND_ROW bank=' + bankSlug + ' sheet=' + sheetName + ' row=' + newRow);
       output.setContent(JSON.stringify({ ok: true, row: newRow }));

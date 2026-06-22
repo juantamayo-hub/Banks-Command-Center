@@ -5,11 +5,11 @@
  * Does NOT auto-dispatch — just writes the row.
  *
  * Body: {
- *   deal_id:       number,   // Pipedrive opportunity ID → col A
- *   nombre_cliente: string,  // → col B
- *   importe:       number,   // → col C
- *   bank_slug:     string,   // which sheet to write to
- *   bank_deal_id:  string,   // → col F
+ *   deal_id:        number,   // Pipedrive general deal ID → col A
+ *   nombre_cliente: string,   // → col B
+ *   importe:        number,   // → col C
+ *   bank_slug:      string,   // which sheet to write to
+ *   bank_deal_id:   number,   // Pipedrive banking deal ID → col F
  * }
  */
 
@@ -45,8 +45,8 @@ export async function POST(req: NextRequest) {
   if (typeof bank_slug !== 'string' || !VALID_SLUGS.has(bank_slug as string)) {
     return NextResponse.json({ error: '`bank_slug` inválido' }, { status: 400 })
   }
-  if (typeof bank_deal_id !== 'string' || bank_deal_id.trim() === '') {
-    return NextResponse.json({ error: '`bank_deal_id` requerido' }, { status: 400 })
+  if (typeof bank_deal_id !== 'number' || !Number.isInteger(bank_deal_id) || bank_deal_id <= 0) {
+    return NextResponse.json({ error: '`bank_deal_id` debe ser un entero positivo' }, { status: 400 })
   }
 
   const res = await fetch(webAppUrl, {
@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
         opportunity_id: deal_id,
         nombre_cliente: nombre_cliente.trim(),
         importe,
-        bank_deal_id: bank_deal_id.trim(),
+        bank_deal_id,
       },
     }),
   })

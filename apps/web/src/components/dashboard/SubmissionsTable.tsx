@@ -2,7 +2,6 @@ import StatusBadge from '@/components/ui/StatusBadge'
 import RelaunchButton from '@/components/dashboard/RelaunchButton'
 import NoteBox from '@/components/dashboard/NoteBox'
 import NotePreview from '@/components/dashboard/NotePreview'
-import { normalizeRedFlag, CLUSTER_BY_SLUG } from '@/lib/redFlagClusters'
 
 interface BankRef {
   name: string
@@ -34,6 +33,7 @@ interface SubmissionsTableProps {
   currentPage: number
   pageSize: number
   mode?: 'pendientes' | 'enviados'
+  gDriveLinks?: Record<number, string | null>
 }
 
 function formatImporte(value: number | null): string {
@@ -71,28 +71,16 @@ function getBankSlug(banks: BankRef | BankRef[] | null): string | null {
 }
 
 function FlagPills({ flags }: { flags: string[] }) {
-  const seen = new Map<string, string>()
-  for (const flag of flags) {
-    const cat = normalizeRedFlag(flag)
-    if (!seen.has(cat)) seen.set(cat, flag)
-  }
-
   return (
     <div className="flex flex-wrap gap-1">
-      {Array.from(seen.entries()).map(([cat, rawText]) => {
-        const cluster = CLUSTER_BY_SLUG[cat]
-        const label = cluster?.label ?? cat
-        const colorClass = cluster?.color ?? 'bg-gray-100 text-gray-600'
-        return (
-          <span
-            key={cat}
-            title={rawText}
-            className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${colorClass}`}
-          >
-            {label}
-          </span>
-        )
-      })}
+      {flags.map((flag, i) => (
+        <span
+          key={i}
+          className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-red-100 text-red-700"
+        >
+          {flag}
+        </span>
+      ))}
     </div>
   )
 }
@@ -117,6 +105,7 @@ export default function SubmissionsTable({
   currentPage,
   pageSize,
   mode = 'pendientes',
+  gDriveLinks,
 }: SubmissionsTableProps) {
   void _totalCount
 
@@ -174,10 +163,11 @@ export default function SubmissionsTable({
                   {getBankName(row.banks)}
                 </td>
               )
+              const gDriveUrl = row.opportunity_id ? (gDriveLinks?.[row.opportunity_id] ?? null) : null
               const clientCell = (
                 <td className="px-4 py-3 max-w-[200px]">
                   <p className="text-sm text-gray-700 truncate">{row.nombre_cliente ?? '—'}</p>
-                  <p className="text-xs text-gray-400 tabular-nums flex flex-wrap gap-x-1">
+                  <p className="text-xs text-gray-400 tabular-nums flex flex-wrap gap-x-1 items-center">
                     {row.opportunity_id ? (
                       <PipedriveLink id={row.opportunity_id} />
                     ) : (
@@ -187,6 +177,20 @@ export default function SubmissionsTable({
                       <>
                         <span>·</span>
                         <PipedriveLink id={row.bank_deal_id} label={`B:${row.bank_deal_id}`} />
+                      </>
+                    ) : null}
+                    {gDriveUrl ? (
+                      <>
+                        <span>·</span>
+                        <a
+                          href={gDriveUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="Dossier Google Drive"
+                          className="hover:text-indigo-600"
+                        >
+                          📁
+                        </a>
                       </>
                     ) : null}
                   </p>

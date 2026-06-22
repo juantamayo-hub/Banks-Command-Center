@@ -1,14 +1,17 @@
 /**
- * GET /api/nuevo-envio/verify?deal_id=&importe=
+ * GET /api/nuevo-envio/verify?bank_deal_id=&importe=
  *
- * Fetches the Pipedrive deal and checks if the entered importe matches
- * any of the 5 Importe Banco custom fields.
+ * Fetches the banking deal (pipeline 7) from Pipedrive, resolves the linked
+ * general deal via field 71edfe1562e9e19d4c7d96d38548dd009d4b3601, then checks
+ * whether the entered importe matches any of the 5 Importe Banco custom fields.
  *
  * Response (no match):  { match: false, importes_found: (number|null)[] }
- * Response (match):     { match: true, nombre_cliente: string, deal_title: string }
+ * Response (match):     { match: true, nombre_cliente: string, deal_title: string, general_deal_id: number }
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+
+const GENERAL_DEAL_FIELD = '71edfe1562e9e19d4c7d96d38548dd009d4b3601'
 
 const IMPORTE_FIELD_IDS = [
   '745c37d4e2ebe1c8c3c9330f40d48925ef7ee32e', // Importe Banco 1
@@ -23,12 +26,12 @@ export async function GET(req: NextRequest) {
   if (!token) return NextResponse.json({ error: 'PIPEDRIVE_API_TOKEN no configurado' }, { status: 500 })
 
   const { searchParams } = req.nextUrl
-  const dealIdStr = searchParams.get('deal_id') ?? ''
-  const importeStr = searchParams.get('importe') ?? ''
+  const bankDealIdStr = searchParams.get('bank_deal_id') ?? ''
+  const importeStr    = searchParams.get('importe') ?? ''
 
-  const dealId = parseInt(dealIdStr, 10)
-  if (!Number.isInteger(dealId) || dealId <= 0) {
-    return NextResponse.json({ error: 'deal_id inválido' }, { status: 400 })
+  const bankDealId = parseInt(bankDealIdStr, 10)
+  if (!Number.isInteger(bankDealId) || bankDealId <= 0) {
+    return NextResponse.json({ error: 'bank_deal_id inválido' }, { status: 400 })
   }
 
   const importeEntered = parseFloat(importeStr.replace(',', '.'))
@@ -36,22 +39,51 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'importe inválido' }, { status: 400 })
   }
 
-  // Fetch deal from Pipedrive
-  const res = await fetch(
-    `https://api.pipedrive.com/v1/deals/${dealId}?api_token=${token}`,
+  // 1. Fetch the banking deal
+  const bankingRes = await fetch(
+    `https://api.pipedrive.com/v1/deals/${bankDealId}?api_token=${token}`,
     { next: { revalidate: 0 } }
   )
-  if (res.status === 404) {
-    return NextResponse.json({ error: `Deal #${dealId} no encontrado en Pipedrive` }, { status: 404 })
+  if (bankingRes.status === 404) {
+    return NextResponse.json({ error: `Deal bancario #${bankDealId} no encontrado en Pipedrive` }, { status: 404 })
   }
-  if (!res.ok) {
-    return NextResponse.json({ error: `Error Pipedrive: ${res.status}` }, { status: 502 })
+  if (!bankingRes.ok) {
+    return NextResponse.json({ error: `Error Pipedrive: ${bankingRes.status}` }, { status: 502 })
+  }
+  const bankingJson = await bankingRes.json()
+  const bankingDeal = bankingJson?.data
+  if (!bankingDeal) {
+    return NextResponse.json({ error: 'Respuesta inesperada de Pipedrive' }, { status: 502 })
   }
 
-  const json = await res.json()
-  const deal = json?.data
+  // 2. Resolve general deal ID from the banking deal's custom field
+  const rawField = bankingDeal[GENERAL_DEAL_FIELD]
+  const generalDealId: number | null =
+    typeof rawField === 'number'
+      ? rawField
+      : typeof rawField === 'object' && rawField !== null
+      ? (rawField as { value?: number }).value ?? null
+      : null
+
+  if (!generalDealId || generalDealId <= 0) {
+    return NextResponse.json(
+      { error: `El deal bancario #${bankDealId} no tiene un deal general vinculado` },
+      { status: 422 }
+    )
+  }
+
+  // 3. Fetch the general deal and check importes
+  const generalRes = await fetch(
+    `https://api.pipedrive.com/v1/deals/${generalDealId}?api_token=${token}`,
+    { next: { revalidate: 0 } }
+  )
+  if (!generalRes.ok) {
+    return NextResponse.json({ error: `Error al obtener deal general #${generalDealId}` }, { status: 502 })
+  }
+  const generalJson = await generalRes.json()
+  const deal = generalJson?.data
   if (!deal) {
-    return NextResponse.json({ error: 'Respuesta inesperada de Pipedrive' }, { status: 502 })
+    return NextResponse.json({ error: 'Respuesta inesperada al obtener deal general' }, { status: 502 })
   }
 
   // Extract Importe Banco 1-5 values
@@ -62,7 +94,6 @@ export async function GET(req: NextRequest) {
     return isFinite(n) ? n : null
   })
 
-  // Check if entered importe matches any (tolerance 0.01)
   const match = importesFound.some(
     (v) => v !== null && Math.abs(v - importeEntered) < 0.01
   )
@@ -72,7 +103,12 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json(
     match
-      ? { match: true, nombre_cliente: nombreCliente, deal_title: deal.title ?? '' }
+      ? {
+          match: true,
+          nombre_cliente: nombreCliente,
+          deal_title: deal.title ?? '',
+          general_deal_id: generalDealId,
+        }
       : { match: false, importes_found: importesFound }
   )
 }

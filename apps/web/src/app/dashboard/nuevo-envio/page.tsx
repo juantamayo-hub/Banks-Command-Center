@@ -15,25 +15,25 @@ type Phase =
 interface VerifyResult {
   nombre_cliente: string
   deal_title: string
+  general_deal_id: number
 }
 
 export default function NuevoEnvioPage() {
-  const [dealId, setDealId]         = useState('')
+  const [bankDealId, setBankDealId] = useState('')
   const [importe, setImporte]       = useState('')
   const [bankSlug, setBankSlug]     = useState('')
-  const [bankDealId, setBankDealId] = useState('')
   const [phase, setPhase]           = useState<Phase>('idle')
   const [verifyResult, setVerifyResult] = useState<VerifyResult | null>(null)
   const [importesFound, setImportesFound] = useState<(number | null)[]>([])
   const [errorMsg, setErrorMsg]     = useState('')
-  const dealIdRef = useRef<HTMLInputElement>(null)
+  const bankDealIdRef = useRef<HTMLInputElement>(null)
 
   async function handleVerify() {
-    const did = parseInt(dealId.trim(), 10)
+    const bid = parseInt(bankDealId.trim(), 10)
     const imp = parseFloat(importe.trim().replace(',', '.'))
 
-    if (!Number.isInteger(did) || did <= 0) {
-      setErrorMsg('Ingresa un Deal ID válido.')
+    if (!Number.isInteger(bid) || bid <= 0) {
+      setErrorMsg('Ingresa un Deal ID bancario válido.')
       setPhase('error')
       return
     }
@@ -47,7 +47,7 @@ export default function NuevoEnvioPage() {
     setErrorMsg('')
 
     try {
-      const res  = await fetch(`/api/nuevo-envio/verify?deal_id=${did}&importe=${imp}`)
+      const res  = await fetch(`/api/nuevo-envio/verify?bank_deal_id=${bid}&importe=${imp}`)
       const data = await res.json()
 
       if (!res.ok) {
@@ -57,9 +57,12 @@ export default function NuevoEnvioPage() {
       }
 
       if (data.match) {
-        setVerifyResult({ nombre_cliente: data.nombre_cliente, deal_title: data.deal_title })
+        setVerifyResult({
+          nombre_cliente: data.nombre_cliente,
+          deal_title: data.deal_title,
+          general_deal_id: data.general_deal_id,
+        })
         setBankSlug('')
-        setBankDealId('')
         setPhase('match')
       } else {
         setImportesFound(data.importes_found ?? [])
@@ -76,10 +79,6 @@ export default function NuevoEnvioPage() {
       setErrorMsg('Selecciona un banco.')
       return
     }
-    if (!bankDealId.trim()) {
-      setErrorMsg('Ingresa el Deal ID del banco.')
-      return
-    }
 
     setPhase('creating')
     setErrorMsg('')
@@ -89,11 +88,11 @@ export default function NuevoEnvioPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          deal_id:        parseInt(dealId.trim(), 10),
+          deal_id:        verifyResult?.general_deal_id,
           nombre_cliente: verifyResult?.nombre_cliente ?? '',
           importe:        parseFloat(importe.trim().replace(',', '.')),
           bank_slug:      bankSlug,
-          bank_deal_id:   bankDealId.trim(),
+          bank_deal_id:   parseInt(bankDealId.trim(), 10),
         }),
       })
       const data = await res.json()
@@ -112,15 +111,14 @@ export default function NuevoEnvioPage() {
   }
 
   function reset() {
-    setDealId('')
+    setBankDealId('')
     setImporte('')
     setBankSlug('')
-    setBankDealId('')
     setPhase('idle')
     setVerifyResult(null)
     setImportesFound([])
     setErrorMsg('')
-    setTimeout(() => dealIdRef.current?.focus(), 50)
+    setTimeout(() => bankDealIdRef.current?.focus(), 50)
   }
 
   const bankName = ACTIVE_BANKS.find((b) => b.slug === bankSlug)?.name ?? ''
@@ -134,7 +132,7 @@ export default function NuevoEnvioPage() {
         Genera una fila en la hoja del banco para casos que no están registrados en el Sheet.
       </p>
 
-      {/* ── Step 1: Deal ID + Importe ── */}
+      {/* ── Step 1: Bank Deal ID + Importe ── */}
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">
           Paso 1 — Verificar deal
@@ -143,14 +141,14 @@ export default function NuevoEnvioPage() {
         <div className="flex flex-col gap-3">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Deal ID (general Pipedrive)
+              Deal ID del banco (Pipedrive, pipeline 7)
             </label>
             <input
-              ref={dealIdRef}
+              ref={bankDealIdRef}
               type="number"
-              value={dealId}
-              onChange={(e) => { setDealId(e.target.value); if (phase !== 'idle') setPhase('idle') }}
-              placeholder="ej. 311181"
+              value={bankDealId}
+              onChange={(e) => { setBankDealId(e.target.value); if (phase !== 'idle') setPhase('idle') }}
+              placeholder="ej. 415230"
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               disabled={phase === 'verifying' || phase === 'creating'}
             />
@@ -172,7 +170,7 @@ export default function NuevoEnvioPage() {
 
           <button
             onClick={handleVerify}
-            disabled={phase === 'verifying' || phase === 'creating' || !dealId || !importe}
+            disabled={phase === 'verifying' || phase === 'creating' || !bankDealId || !importe}
             className="w-full rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"
           >
             {phase === 'verifying' ? 'Verificando…' : 'Verificar'}
@@ -205,7 +203,7 @@ export default function NuevoEnvioPage() {
         )}
       </div>
 
-      {/* ── Step 2: Bank form (only when match) ── */}
+      {/* ── Step 2: Bank selection (only when match) ── */}
       {(phase === 'match' || phase === 'creating') && verifyResult && (
         <div className="mt-4 rounded-xl border border-green-200 bg-white p-6 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">
@@ -217,8 +215,11 @@ export default function NuevoEnvioPage() {
               ✓ Importe verificado
             </p>
             <p className="text-xs text-green-700 mt-0.5">
-              {verifyResult.deal_title || `Deal #${dealId}`}
+              {verifyResult.deal_title || `Deal bancario #${bankDealId}`}
               {verifyResult.nombre_cliente ? ` · ${verifyResult.nombre_cliente}` : ''}
+            </p>
+            <p className="text-xs text-green-600 mt-0.5">
+              Deal general: #{verifyResult.general_deal_id}
             </p>
           </div>
 
@@ -242,27 +243,13 @@ export default function NuevoEnvioPage() {
               </select>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Deal ID del banco
-              </label>
-              <input
-                type="text"
-                value={bankDealId}
-                onChange={(e) => { setBankDealId(e.target.value); setErrorMsg('') }}
-                placeholder="ej. EVO-2024-00123"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                disabled={phase === 'creating'}
-              />
-            </div>
-
             {errorMsg && (
               <p className="text-sm text-red-600">{errorMsg}</p>
             )}
 
             <button
               onClick={handleCreate}
-              disabled={phase === 'creating' || !bankSlug || !bankDealId.trim()}
+              disabled={phase === 'creating' || !bankSlug}
               className="w-full rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
             >
               {phase === 'creating' ? 'Generando…' : 'Generar fila en Sheet'}
@@ -279,7 +266,7 @@ export default function NuevoEnvioPage() {
             Fila generada en {bankName}
           </p>
           <p className="text-xs text-green-600 mt-1">
-            Deal #{dealId} · {importe} € · Bank Deal ID: {bankDealId}
+            Deal bancario #{bankDealId} · {importe} €
           </p>
           <button
             onClick={reset}
