@@ -44,10 +44,24 @@ export const OPTION_ID_TO_BANK: Record<number, PlatformBankName> = {
   2635: 'Santander', 2653: 'Santander', 2671: 'Santander', 2689: 'Santander', 2707: 'Santander',
 }
 
-// Pipedrive stages
-export const DOC_COMPLETED_STAGE_ID = 62     // source: trigger for discovery
-export const BANK_SUBMISSION_PIPELINE_ID = 7  // destination pipeline
-export const BANK_SUBMISSION_STAGE_ID = 70   // destination stage
+// Pipedrive stages — pipeline 7 (Bayteca_BankArea)
+export const DOC_COMPLETED_STAGE_ID = 62          // source: trigger for discovery
+export const BANK_SUBMISSION_PIPELINE_ID = 7       // destination pipeline
+export const PRE_BANK_SUBMISSION_STAGE_ID = 77    // order 1 — only stage that should be moved to BS
+export const BANK_SUBMISSION_STAGE_ID = 70        // order 2 — destination stage
+
+// Stage order map for pipeline 7. Used to guard against moving deals that are
+// already at or past Bank Submission.
+export const PIPELINE7_STAGE_ORDER: Record<number, number> = {
+  77: 1, // Pre Bank Submission
+  70: 2, // Bank Submission
+  71: 3, // Bank offers received
+  79: 4, // Pre - Valuation
+  72: 5, // Valuation
+  73: 6, // FEIN
+  74: 7, // Notary - Formalization
+  75: 8, // Notary - Signature
+}
 
 // Badge color per bank
 export const BANK_COLOR: Record<PlatformBankName, string> = {

@@ -133,6 +133,7 @@ export async function GET(req: Request) {
     .from('platform_dispatches')
     .select('deal_id, bank_name, deal_title, person_name, sent_at, bank_deal_id, created_at')
     .is('sent_at', null)
+    .is('dismissed_at', null)
     .order('created_at', { ascending: true })
 
   if (dateFrom) pendingQuery = pendingQuery.gte('created_at', dateFrom)

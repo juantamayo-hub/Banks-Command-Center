@@ -14,6 +14,7 @@ import { createAdminClient } from '@/lib/supabase/server'
 import {
   PLATFORM_BANKS,
   BANK_SUBMISSION_STAGE_ID,
+  PIPELINE7_STAGE_ORDER,
   type PlatformBankName,
 } from '@/lib/platformDispatch'
 
@@ -82,23 +83,47 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, pipedrive_moved: false, note_added: false, warning: 'bank_deal_id no disponible' })
   }
 
-  // ── 2. Move banking deal to stage 70 in Pipedrive ─────────────────────────
+  // ── 2. Move banking deal to stage 70 in Pipedrive (only if before BS) ──────
+  // Guard: only move to Bank Submission if the deal is currently in a stage
+  // that comes BEFORE Bank Submission (order < 2). If it's already at BS or
+  // further along the pipeline, leave it untouched.
   let pipedriveMoved = false
+  let pipedriveStageSkipped = false
   try {
-    const moveRes = await fetch(
-      `https://api.pipedrive.com/v1/deals/${bankDealId}?api_token=${token}`,
-      {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stage_id: BANK_SUBMISSION_STAGE_ID }),
-      }
+    // Fetch current stage of the banking deal
+    const currentDealRes = await fetch(
+      `https://api.pipedrive.com/v1/deals/${bankDealId}?api_token=${token}`
     )
-    pipedriveMoved = moveRes.ok
-    if (!moveRes.ok) {
-      console.warn(`[mark-sent] Pipedrive move failed ${moveRes.status} for banking deal ${bankDealId}`)
+    if (currentDealRes.ok) {
+      const currentDealData = await currentDealRes.json()
+      const currentStageId: number = currentDealData?.data?.stage_id ?? 0
+      const currentOrder = PIPELINE7_STAGE_ORDER[currentStageId] ?? 999
+      const bsOrder = PIPELINE7_STAGE_ORDER[BANK_SUBMISSION_STAGE_ID]! // 2
+
+      if (currentOrder < bsOrder) {
+        // Deal is before Bank Submission → move it
+        const moveRes = await fetch(
+          `https://api.pipedrive.com/v1/deals/${bankDealId}?api_token=${token}`,
+          {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ stage_id: BANK_SUBMISSION_STAGE_ID }),
+          }
+        )
+        pipedriveMoved = moveRes.ok
+        if (!moveRes.ok) {
+          console.warn(`[mark-sent] Pipedrive move failed ${moveRes.status} for banking deal ${bankDealId}`)
+        }
+      } else {
+        // Already at BS or beyond — skip the stage change
+        pipedriveStageSkipped = true
+        console.log(`[mark-sent] Deal ${bankDealId} is at stage ${currentStageId} (order ${currentOrder}) — skipping move to BS`)
+      }
+    } else {
+      console.warn(`[mark-sent] Could not fetch current stage for deal ${bankDealId}: ${currentDealRes.status}`)
     }
   } catch (err) {
-    console.warn('[mark-sent] Pipedrive move network error:', err)
+    console.warn('[mark-sent] Pipedrive stage check/move network error:', err)
   }
 
   // ── 3. Add auto-note to banking deal ──────────────────────────────────────
@@ -128,6 +153,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     ok: true,
     pipedrive_moved: pipedriveMoved,
+    pipedrive_stage_skipped: pipedriveStageSkipped,
     note_added: noteAdded,
   })
 }

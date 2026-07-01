@@ -18,7 +18,7 @@ interface PlatformDispatchCardProps {
   onAllSent: () => void  // called when every bank is marked sent → card disappears
 }
 
-type BankPhase = 'idle' | 'confirming' | 'loading' | 'done' | 'error'
+type BankPhase = 'idle' | 'confirming' | 'loading' | 'done' | 'error' | 'dismiss_confirming' | 'dismissing'
 
 export default function PlatformDispatchCard({
   dealId,
@@ -42,6 +42,42 @@ export default function PlatformDispatchCard({
     setBanks((prev) =>
       prev.map((b) => (b.name === bankName && b.phase === 'confirming' ? { ...b, phase: 'idle' } : b))
     )
+  }
+
+  function startDismissConfirm(bankName: PlatformBankName) {
+    setBanks((prev) =>
+      prev.map((b) => (b.name === bankName && b.phase === 'idle' ? { ...b, phase: 'dismiss_confirming' } : b))
+    )
+  }
+
+  function cancelDismiss(bankName: PlatformBankName) {
+    setBanks((prev) =>
+      prev.map((b) => (b.name === bankName && b.phase === 'dismiss_confirming' ? { ...b, phase: 'idle' } : b))
+    )
+  }
+
+  async function dismissBank(bankName: PlatformBankName) {
+    setBanks((prev) =>
+      prev.map((b) => (b.name === bankName ? { ...b, phase: 'dismissing' } : b))
+    )
+    try {
+      await fetch('/api/platform-dispatches/dismiss', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deal_id: dealId, bank_name: bankName }),
+      })
+    } catch {
+      // Fail silently — bank is removed from UI regardless
+    }
+    // Remove bank from local list; if all gone, card disappears
+    const updated = banks.map((b) =>
+      b.name === bankName ? { ...b, sent: true, phase: 'done' as BankPhase } : b
+    )
+    setBanks(updated)
+    if (updated.every((b) => b.sent || b.phase === 'done')) {
+      setLeaving(true)
+      setTimeout(onAllSent, 600)
+    }
   }
 
   async function markSent(bankName: PlatformBankName) {
@@ -120,22 +156,26 @@ export default function PlatformDispatchCard({
         {banks.map((bank) => (
           <div key={bank.name} className="flex flex-col gap-1">
           <div className="flex items-center gap-3">
-            {/* Status indicator */}
-            <div
-              className={`h-5 w-5 shrink-0 rounded flex items-center justify-center border transition-colors ${
-                bank.phase === 'done'
-                  ? 'bg-green-500 border-green-500'
-                  : bank.phase === 'loading'
-                  ? 'bg-gray-200 border-gray-300 animate-pulse'
-                  : 'bg-white border-gray-300'
-              }`}
-            >
-              {bank.phase === 'done' && (
+            {/* Status indicator / trash button */}
+            {bank.phase === 'done' ? (
+              <div className="h-5 w-5 shrink-0 rounded flex items-center justify-center border bg-green-500 border-green-500">
                 <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                 </svg>
-              )}
-            </div>
+              </div>
+            ) : bank.phase === 'loading' || bank.phase === 'dismissing' ? (
+              <div className="h-5 w-5 shrink-0 rounded border bg-gray-200 border-gray-300 animate-pulse" />
+            ) : (
+              <button
+                onClick={() => startDismissConfirm(bank.name)}
+                title="Descartar este envío"
+                className="h-5 w-5 shrink-0 flex items-center justify-center text-gray-300 hover:text-red-400 transition-colors"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            )}
 
             {/* Bank name badge */}
             <span
@@ -155,6 +195,24 @@ export default function PlatformDispatchCard({
                 >
                   Marcar enviado
                 </button>
+              )}
+
+              {bank.phase === 'dismiss_confirming' && (
+                <>
+                  <span className="text-xs text-gray-600">¿Descartar?</span>
+                  <button
+                    onClick={() => void dismissBank(bank.name)}
+                    className="rounded px-2.5 py-1 text-xs font-medium bg-red-500 text-white hover:bg-red-600 transition-colors"
+                  >
+                    Sí
+                  </button>
+                  <button
+                    onClick={() => cancelDismiss(bank.name)}
+                    className="text-xs text-gray-400 hover:text-gray-600"
+                  >
+                    No
+                  </button>
+                </>
               )}
 
               {bank.phase === 'confirming' && (
