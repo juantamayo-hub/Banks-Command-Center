@@ -63,6 +63,13 @@ export const PIPELINE7_STAGE_ORDER: Record<number, number> = {
   75: 8, // Notary - Signature
 }
 
+// ── Santander Hipoteca Joven fields ──────────────────────────────────────────
+// From general deal (pipeline 6):
+export const SANTANDER_EDAD_1T_FIELD = '603fc04228fa5186ffc181e33b239a716a70078c'    // edad 1er titular
+export const SANTANDER_EDAD_2T_FIELD = 'ec6ca39cfe6d29ffb81cfdcb96cbb8fdfee6ac49'  // edad 2do titular
+// From bank deal (pipeline 7):
+export const SANTANDER_PCT_HIPOTECA_FIELD = '916c1f454a9692ded61c82c331af63a1b631f1d3' // % de hipoteca
+
 // Badge color per bank
 export const BANK_COLOR: Record<PlatformBankName, string> = {
   CaixaBank: 'bg-blue-50 text-blue-700 border-blue-200',

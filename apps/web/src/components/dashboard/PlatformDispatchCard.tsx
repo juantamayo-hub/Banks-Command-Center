@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import NoteBox from '@/components/dashboard/NoteBox'
 import { BANK_COLOR, type PlatformBankName } from '@/lib/platformDispatch'
+import type { SantanderInfo } from '@/app/api/platform-dispatches/route'
 
 interface BankItem {
   name: PlatformBankName
@@ -16,6 +17,7 @@ interface PlatformDispatchCardProps {
   personName: string | null
   banks: BankItem[]
   onAllSent: () => void  // called when every bank is marked sent → card disappears
+  santander_info?: SantanderInfo
 }
 
 type BankPhase = 'idle' | 'confirming' | 'loading' | 'done' | 'error' | 'dismiss_confirming' | 'dismissing'
@@ -26,6 +28,7 @@ export default function PlatformDispatchCard({
   personName,
   banks: initialBanks,
   onAllSent,
+  santander_info,
 }: PlatformDispatchCardProps) {
   const [banks, setBanks] = useState<(BankItem & { phase: BankPhase; error?: string })[]>(
     initialBanks.map((b) => ({ ...b, phase: b.sent ? 'done' : 'idle' }))
@@ -185,6 +188,23 @@ export default function PlatformDispatchCard({
             >
               {bank.name}
             </span>
+            {/* Hipoteca Joven badge — only for Santander when conditions are met */}
+            {bank.name === 'Santander' && (() => {
+              const info = santander_info
+              if (!info) return null
+              const jovenAge =
+                (info.edad_1t !== null && !isNaN(info.edad_1t) && info.edad_1t <= 35) ||
+                (info.edad_2t !== null && !isNaN(info.edad_2t) && info.edad_2t <= 35)
+              // pct_hipoteca is stored as decimal (e.g. 0.9 = 90%)
+              const jovenPct =
+                info.pct_hipoteca !== null && !isNaN(info.pct_hipoteca) && info.pct_hipoteca > 0.9
+              if (!jovenAge || !jovenPct) return null
+              return (
+                <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold bg-yellow-50 text-yellow-700 border-yellow-300">
+                  ✦ Hipoteca Joven
+                </span>
+              )
+            })()}
 
             {/* Action buttons */}
             <div className="ml-auto flex items-center gap-1.5">
@@ -256,10 +276,46 @@ export default function PlatformDispatchCard({
               )}
             </div>
           </div>
-          {/* Note box per bank — writes to the banking deal, not the general deal */}
-          {bank.bank_deal_id && bank.phase !== 'done' && (
+          {/* Santander Hipoteca Joven extra fields */}
+          {bank.name === 'Santander' && (() => {
+            const info = santander_info
+            if (!info) return null
+            const jovenAge =
+              (info.edad_1t !== null && !isNaN(info.edad_1t) && info.edad_1t <= 35) ||
+              (info.edad_2t !== null && !isNaN(info.edad_2t) && info.edad_2t <= 35)
+            // pct_hipoteca is stored as decimal (e.g. 0.9 = 90%)
+            const jovenPct =
+              info.pct_hipoteca !== null && !isNaN(info.pct_hipoteca) && info.pct_hipoteca > 0.9
+            if (!jovenAge || !jovenPct) return null
+            const pctDisplay = info.pct_hipoteca !== null
+              ? `${Math.round(info.pct_hipoteca * 100)}%`
+              : '—'
+            return (
+              <div className="pl-8 flex flex-wrap gap-3 mt-0.5">
+                <div className="flex items-center gap-1 text-xs text-gray-600">
+                  <span className="text-gray-400">Edad 1T</span>
+                  <span className="font-semibold text-gray-800">{info.edad_1t ?? '—'}</span>
+                </div>
+                <div className="flex items-center gap-1 text-xs text-gray-600">
+                  <span className="text-gray-400">% Hipoteca</span>
+                  <span className="font-semibold text-gray-800">{pctDisplay}</span>
+                </div>
+                {info.edad_2t !== null && (
+                  <div className="flex items-center gap-1 text-xs text-gray-600">
+                    <span className="text-gray-400">Edad 2T</span>
+                    <span className="font-semibold text-gray-800">{info.edad_2t}</span>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
+          {/* Note box per bank — always writes to banking deal, never to the general deal */}
+          {bank.phase !== 'done' && (
             <div className="pl-8">
-              <NoteBox dealId={bank.bank_deal_id} />
+              {bank.bank_deal_id
+                ? <NoteBox dealId={bank.bank_deal_id} />
+                : <p className="mt-1.5 text-xs text-gray-400 italic">Sin deal bancario vinculado aún.</p>
+              }
             </div>
           )}
           </div>

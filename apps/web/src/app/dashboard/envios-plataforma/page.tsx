@@ -182,6 +182,7 @@ export default function EnviosPlataformaPage() {
               personName={deal.person_name}
               banks={deal.banks}
               onAllSent={() => removeDeal(deal.deal_id)}
+              santander_info={deal.santander_info}
             />
           ))}
         </div>
