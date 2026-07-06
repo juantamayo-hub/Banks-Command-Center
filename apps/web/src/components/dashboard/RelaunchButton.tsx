@@ -36,6 +36,14 @@ export default function RelaunchButton({
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [countdown, setCountdown] = useState<number | null>(null)
 
+  // ── HOOKS MUST ALL BE CALLED BEFORE ANY EARLY RETURN ─────────────────────
+  // Countdown after success — user clicks "Actualizar" to refresh manually
+  useEffect(() => {
+    if (countdown === null || countdown <= 0) return
+    const t = setTimeout(() => setCountdown((c) => (c !== null ? c - 1 : null)), 1000)
+    return () => clearTimeout(t)
+  }, [countdown])
+
   const normalStatus = status ?? 'unknown'
 
   // Banks that use a separate manual process — no button shown
@@ -91,13 +99,6 @@ export default function RelaunchButton({
     setPhase('success')
     setCountdown(60)
   }
-
-  // Countdown after success — user clicks "Actualizar" to refresh manually
-  useEffect(() => {
-    if (countdown === null || countdown <= 0) return
-    const t = setTimeout(() => setCountdown((c) => (c !== null ? c - 1 : null)), 1000)
-    return () => clearTimeout(t)
-  }, [countdown])
 
   // ── Success ────────────────────────────────────────────────────────────────
   if (phase === 'success') {
@@ -175,7 +176,7 @@ export default function RelaunchButton({
   }
 
   // ── Idle — action buttons ─────────────────────────────────────────────────
-  // pending_ready = first send → single "Enviar" button, no Autorizar needed
+  // pending_ready = first send → single "Autorizar envío" button, no Autorizar needed
   if (normalStatus === 'pending_ready') {
     return (
       <button
