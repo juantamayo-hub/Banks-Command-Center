@@ -48,18 +48,33 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   // PostgREST: show row if timestamp_entry is recent OR (timestamp_entry is null AND created_at is recent)
   const pendingAgeFilter = `timestamp_entry.gte.${cutoffDate},and(timestamp_entry.is.null,created_at.gte.${cutoffDate})`
 
+  // Pre-fetch bank IDs where has_dispatch=false (platform-only banks — excluded from pendientes)
+  const { data: noDispatchBanksRaw } = await supabase
+    .from('banks')
+    .select('id')
+    .eq('has_dispatch', false)
+  const noDispatchIds: string[] = (noDispatchBanksRaw ?? []).map(
+    (b: Record<string, string>) => b.id
+  )
+
   // Counts and bank list in parallel
+  let pendingCountQuery = supabase
+    .from('sheet_rows')
+    .select('*', { count: 'exact', head: true })
+    .neq('status', 'sent')
+    .eq('pipedrive_lost', false)
+    .eq('is_discarded', false)
+    .or(pendingAgeFilter)
+  if (noDispatchIds.length > 0) {
+    pendingCountQuery = pendingCountQuery.not('bank_id', 'in', `(${noDispatchIds.join(',')})`)
+  }
+
   const [
     { count: pendingCount },
     { count: sentCount },
     { data: banksData },
   ] = await Promise.all([
-    supabase
-      .from('sheet_rows')
-      .select('*', { count: 'exact', head: true })
-      .neq('status', 'sent')
-      .eq('pipedrive_lost', false)
-      .or(pendingAgeFilter),
+    pendingCountQuery,
     supabase.from('sheet_rows').select('*', { count: 'exact', head: true }).eq('status', 'sent'),
     supabase.from('banks').select('slug, name').eq('active', true).order('name', { ascending: true }),
   ])
@@ -83,9 +98,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     query = query
       .neq('status', 'sent')
       .eq('pipedrive_lost', false)
+      .eq('is_discarded', false)
       .or(pendingAgeFilter)
       .order('nombre_cliente', { ascending: true, nullsFirst: false })
       .order('test_time', { ascending: false, nullsFirst: false })
+    if (noDispatchIds.length > 0) {
+      query = query.not('bank_id', 'in', `(${noDispatchIds.join(',')})`)
+    }
     if (dateFrom) query = query.gte('test_time', `${dateFrom}T00:00:00`)
     if (dateTo)   query = query.lte('test_time', `${dateTo}T23:59:59`)
   }

@@ -121,6 +121,7 @@ export async function POST(req: NextRequest) {
   }
 
   // ── 3. Persist in Supabase submission_notes (only when sheet_row_id provided) ──
+  let dbSaved = false
   if (sheet_row_id && typeof sheet_row_id === 'string') {
     try {
       const supabase = await createAdminClient()
@@ -130,11 +131,13 @@ export async function POST(req: NextRequest) {
       if (dbError) {
         // Log but don't fail — the PD note was already saved
         console.error('[pipedrive/note] Supabase insert error:', dbError.message)
+      } else {
+        dbSaved = true
       }
     } catch (err) {
       console.error('[pipedrive/note] Supabase unexpected error:', err)
     }
   }
 
-  return NextResponse.json({ ok: true })
+  return NextResponse.json({ ok: true, db_saved: dbSaved })
 }

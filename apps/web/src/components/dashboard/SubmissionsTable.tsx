@@ -2,6 +2,7 @@ import StatusBadge from '@/components/ui/StatusBadge'
 import RelaunchButton from '@/components/dashboard/RelaunchButton'
 import NoteBox from '@/components/dashboard/NoteBox'
 import NoteHistory from '@/components/dashboard/NoteHistory'
+import DiscardButton from '@/components/dashboard/DiscardButton'
 
 interface BankRef {
   name: string
@@ -230,22 +231,27 @@ export default function SubmissionsTable({
                     <td className="px-4 py-3 w-56 align-top">
                       <NoteHistory notes={rowNotes} sheetNote={row.notas} />
                     </td>
-                    {/* Acción: relaunch + NoteBox */}
+                    {/* Acción: relaunch + NoteBox + Discard */}
                     <td className="px-4 py-3 align-top min-w-[180px]">
-                      <RelaunchButton
-                        rowId={row.id}
-                        status={row.status}
-                        clientName={row.nombre_cliente}
-                        hasDispatch={hasDispatch}
-                        bankSlug={bankSlug}
-                        sheetRowNumber={row.sheet_row_number}
-                      />
-                      {row.bank_deal_id ? (
-                        <NoteBox
-                          dealId={row.bank_deal_id}
-                          sheetRowId={row.id}
-                        />
-                      ) : null}
+                      <div className="flex items-start gap-2">
+                        <div className="flex-1 min-w-0">
+                          <RelaunchButton
+                            rowId={row.id}
+                            status={row.status}
+                            clientName={row.nombre_cliente}
+                            hasDispatch={hasDispatch}
+                            bankSlug={bankSlug}
+                            sheetRowNumber={row.sheet_row_number}
+                          />
+                          {row.bank_deal_id ? (
+                            <NoteBox
+                              dealId={row.bank_deal_id}
+                              sheetRowId={row.id}
+                            />
+                          ) : null}
+                        </div>
+                        <DiscardButton rowId={row.id} />
+                      </div>
                     </td>
                   </tr>
                 )

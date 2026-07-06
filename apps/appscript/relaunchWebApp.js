@@ -160,6 +160,7 @@ function doPost(e) {
       appendSheet.getRange(newRow, 7).setValue('Yes');                            // G: Autorizar envío
       appendSheet.getRange(newRow, 18).setValue(uid);                             // R: Item ID (UID)
       appendSheet.getRange(newRow, 19).setValue(testTime);                        // S: Test Time
+      appendSheet.getRange(newRow, 22).setValue('Sí');                            // V: Plataforma
       SpreadsheetApp.flush();
       Logger.log('[relaunchWebApp] APPEND_ROW bank=' + bankSlug + ' sheet=' + sheetName + ' row=' + newRow);
 
@@ -221,6 +222,10 @@ function doPost(e) {
       SpreadsheetApp.flush();
       Logger.log('[relaunchWebApp] Set Autorización=Yes bank=' + bankSlug + ' row=' + rowNumber);
     }
+
+    // ── Marcar columna V (Plataforma) = 'Sí' — indica envío desde plataforma web ──
+    sheet.getRange(rowNumber, 22).setValue('Sí');
+    SpreadsheetApp.flush();
 
     // ── Disparar postToN8N del banco ────────────────────────────────────────
     var result = config.fn(sheet, rowNumber, action);

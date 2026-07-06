@@ -1,8 +1,9 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 
-type Phase = 'idle' | 'loading' | 'sent' | 'error'
+type Phase = 'idle' | 'loading' | 'sent' | 'sent_pd_only' | 'error'
 
 interface NoteBoxProps {
   dealId: number | null
@@ -13,6 +14,7 @@ export default function NoteBox({ dealId, sheetRowId }: NoteBoxProps) {
   const [note, setNote] = useState('')
   const [phase, setPhase] = useState<Phase>('idle')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const router = useRouter()
 
   if (!dealId) return null
 
@@ -42,8 +44,14 @@ export default function NoteBox({ dealId, sheetRowId }: NoteBoxProps) {
       }
 
       setNote('')
-      setPhase('sent')
-      setTimeout(() => setPhase('idle'), 3000)
+      // If sheetRowId provided, refresh the page to show the new note in history
+      if (sheetRowId) {
+        router.refresh()
+        setPhase(data?.db_saved === false ? 'sent_pd_only' : 'sent')
+      } else {
+        setPhase('sent')
+      }
+      setTimeout(() => setPhase('idle'), 4000)
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'Error de red')
       setPhase('error')
@@ -70,6 +78,9 @@ export default function NoteBox({ dealId, sheetRowId }: NoteBoxProps) {
         </button>
         {phase === 'sent' && (
           <span className="text-xs font-medium text-green-600">✓ Guardada en PD y plataforma</span>
+        )}
+        {phase === 'sent_pd_only' && (
+          <span className="text-xs font-medium text-amber-600">✓ PD guardada (error en plataforma)</span>
         )}
         {phase === 'error' && errorMsg && (
           <span className="text-xs text-red-600">{errorMsg}</span>

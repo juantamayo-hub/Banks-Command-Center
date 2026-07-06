@@ -92,13 +92,12 @@ export default function RelaunchButton({
     setCountdown(60)
   }
 
-  // Auto-refresh countdown after success
+  // Countdown after success — user clicks "Actualizar" to refresh manually
   useEffect(() => {
-    if (countdown === null) return
-    if (countdown <= 0) { router.refresh(); setPhase('idle'); setCountdown(null); return }
-    const t = setTimeout(() => setCountdown((c) => (c ?? 1) - 1), 1000)
+    if (countdown === null || countdown <= 0) return
+    const t = setTimeout(() => setCountdown((c) => (c !== null ? c - 1 : null)), 1000)
     return () => clearTimeout(t)
-  }, [countdown, router])
+  }, [countdown])
 
   // ── Success ────────────────────────────────────────────────────────────────
   if (phase === 'success') {

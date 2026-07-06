@@ -57,6 +57,8 @@ const EXTRA_ALIASES: Record<string, string> = {
   'crextremadura': 'cr_extremadura',
   'ruralnostra': 'ruralnostra',
   'uci': 'uci',
+  'hipotecascom': 'uci',
+  'hipotecas': 'uci',
   'ing': 'ing',
 }
 Object.assign(SLUG_BY_NORMALIZED, EXTRA_ALIASES)
