@@ -181,10 +181,10 @@ export default function RelaunchButton({
     return (
       <button
         onClick={() => handleAction('ENVIAR')}
-        title="Enviar dossier al banco (primer envío)"
+        title="Autorizar envío del dossier al banco (primer envío)"
         className="rounded px-2 py-0.5 text-xs font-medium bg-green-50 text-green-700 hover:bg-green-100 transition-colors"
       >
-        Enviar
+        Autorizar envío
       </button>
     )
   }
