@@ -146,13 +146,20 @@ function doPost(e) {
         output.setContent(JSON.stringify({ ok: false, error: 'Hoja no encontrada: ' + sheetName }));
         return output;
       }
-      var rowData = body.row_data || {};
-      var newRow  = appendSheet.getLastRow() + 1;
+      var rowData  = body.row_data || {};
+      var newRow   = appendSheet.getLastRow() + 1;
+      var uid      = Utilities.getUuid();
+      var now      = new Date();
+      var testTime = now.getDate() + '/' +
+                     String(now.getMonth() + 1).padStart(2, '0') + '/' +
+                     now.getFullYear();                                            // d/MM/yyyy
       appendSheet.getRange(newRow, 1).setValue(rowData.opportunity_id   || '');  // A: Opportunity ID
       appendSheet.getRange(newRow, 2).setValue(rowData.nombre_cliente    || '');  // B: Nombre Cliente
       appendSheet.getRange(newRow, 3).setValue(rowData.importe           || '');  // C: Importe
       appendSheet.getRange(newRow, 6).setValue(rowData.bank_deal_id      || '');  // F: Bank Deal ID
       appendSheet.getRange(newRow, 7).setValue('Yes');                            // G: Autorizar envío
+      appendSheet.getRange(newRow, 18).setValue(uid);                             // R: Item ID (UID)
+      appendSheet.getRange(newRow, 19).setValue(testTime);                        // S: Test Time
       SpreadsheetApp.flush();
       Logger.log('[relaunchWebApp] APPEND_ROW bank=' + bankSlug + ' sheet=' + sheetName + ' row=' + newRow);
 
