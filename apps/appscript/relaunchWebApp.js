@@ -1,6 +1,7 @@
 /**
  * relaunchWebApp.js
  * Apps Script Web App — Dispatcher de Relanzamiento desde Plataforma
+ * Pushed: 2026-07-06
  *
  * DEPLOY:
  *   Ejecutar → Implementar → Nueva implementación
