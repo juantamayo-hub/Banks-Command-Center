@@ -119,6 +119,14 @@ function syncAllBanksToSupabase() {
     Logger.log('[syncToSupabase] MUESTRA DE ERRORES: ' + total.errors.slice(0, 3).join(' || '));
   }
 
+  // Sincronizar estado de Pipedrive (lost/open) para filas recientes (≤15 días).
+  // Se ejecuta cada 5 minutos para no saturar la API de PD.
+  try {
+    syncPipedriveStatus_(key);
+  } catch (e) {
+    Logger.log('[syncPipedriveStatus_] Error: ' + e.message);
+  }
+
   // Registrar el sync global en event_log
   try {
     logEvent_(key, {
@@ -139,23 +147,25 @@ function syncAllBanksToSupabase() {
 }
 
 /**
- * Crea un trigger de tiempo que ejecuta syncAllBanksToSupabase cada 5 minutos.
- * Ejecutar manualmente UNA SOLA VEZ al configurar el proyecto.
+ * Crea un trigger de tiempo que ejecuta syncAllBanksToSupabase cada 1 minuto.
+ * Si ya existe un trigger previo (5 min), lo elimina primero.
+ * Ejecutar manualmente UNA VEZ para activar o para cambiar la frecuencia.
  */
 function setupSyncTrigger() {
-  // Evitar duplicar triggers
+  // Eliminar triggers existentes para syncAllBanksToSupabase (evita duplicados
+  // y permite actualizar la frecuencia de 5 min → 1 min).
   var triggers = ScriptApp.getProjectTriggers();
   for (var i = 0; i < triggers.length; i++) {
     if (triggers[i].getHandlerFunction() === 'syncAllBanksToSupabase') {
-      Logger.log('[setupSyncTrigger] El trigger ya existe. No se creó duplicado.');
-      return;
+      ScriptApp.deleteTrigger(triggers[i]);
+      Logger.log('[setupSyncTrigger] Trigger previo eliminado.');
     }
   }
   ScriptApp.newTrigger('syncAllBanksToSupabase')
     .timeBased()
-    .everyMinutes(5)
+    .everyMinutes(1)
     .create();
-  Logger.log('[setupSyncTrigger] Trigger creado: syncAllBanksToSupabase cada 5 min.');
+  Logger.log('[setupSyncTrigger] Trigger creado: syncAllBanksToSupabase cada 1 min.');
 }
 
 /**
@@ -451,6 +461,134 @@ function findColIdx_(headers, names) {
  */
 function getServiceRoleKey_() {
   return PropertiesService.getScriptProperties().getProperty('SUPABASE_SERVICE_ROLE_KEY');
+}
+
+/**
+ * Guarda el API token de Pipedrive en Script Properties.
+ * Ejecutar UNA VEZ manualmente.
+ */
+function setPipedriveApiToken() {
+  var token = 'PEGA_TU_PIPEDRIVE_API_TOKEN_AQUI';
+  if (token === 'PEGA_TU_PIPEDRIVE_API_TOKEN_AQUI') {
+    Logger.log('ERROR: Reemplaza el valor antes de ejecutar.');
+    return;
+  }
+  PropertiesService.getScriptProperties().setProperty('PIPEDRIVE_API_TOKEN', token);
+  Logger.log('PIPEDRIVE_API_TOKEN guardado correctamente.');
+}
+
+/**
+ * Comprueba si los deals de filas pendientes recientes están como "lost" en Pipedrive.
+ * Solo se ejecuta una vez cada 5 minutos (throttle via Script Properties).
+ * Actualiza pipedrive_lost en sheet_rows en Supabase.
+ *
+ * @param {string} supabaseKey  - service_role key de Supabase
+ */
+function syncPipedriveStatus_(supabaseKey) {
+  // Throttle: no ejecutar más de una vez cada 5 minutos
+  var THROTTLE_MS = 5 * 60 * 1000;
+  var props = PropertiesService.getScriptProperties();
+  var lastCheckStr = props.getProperty('PD_STATUS_LAST_CHECK');
+  var now = Date.now();
+  if (lastCheckStr && (now - parseInt(lastCheckStr, 10)) < THROTTLE_MS) {
+    return; // demasiado pronto, saltar
+  }
+
+  var pdToken = props.getProperty('PIPEDRIVE_API_TOKEN');
+  if (!pdToken) {
+    Logger.log('[syncPipedriveStatus_] Sin PIPEDRIVE_API_TOKEN. Ejecuta setPipedriveApiToken() una vez.');
+    return;
+  }
+
+  props.setProperty('PD_STATUS_LAST_CHECK', String(now));
+
+  // Cutoff: últimos 15 días
+  var cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 15);
+  var cutoffIso = cutoff.toISOString();
+
+  // Obtener filas pendientes recientes de Supabase
+  var filter = 'status=not.in.(sent,offer_received,relaunch_requested,sending)' +
+               '&or=(timestamp_entry.gte.' + cutoffIso + ',and(timestamp_entry.is.null,created_at.gte.' + cutoffIso + '))' +
+               '&select=id,opportunity_id' +
+               '&limit=500';
+  var sbRes = UrlFetchApp.fetch(SUPABASE_REST + '/sheet_rows?' + filter, {
+    headers: buildHeaders_(supabaseKey),
+    muteHttpExceptions: true,
+  });
+  if (sbRes.getResponseCode() !== 200) {
+    Logger.log('[syncPipedriveStatus_] Error Supabase: ' + sbRes.getResponseCode());
+    return;
+  }
+  var rows = JSON.parse(sbRes.getContentText());
+  if (!rows || rows.length === 0) {
+    Logger.log('[syncPipedriveStatus_] Sin filas pendientes recientes para comprobar.');
+    return;
+  }
+
+  Logger.log('[syncPipedriveStatus_] Comprobando ' + rows.length + ' deals en Pipedrive…');
+
+  // Llamadas paralelas a PD API (lotes de 50)
+  var BATCH = 50;
+  var lostIds = [];
+  var openIds = [];
+
+  for (var i = 0; i < rows.length; i += BATCH) {
+    var batch = rows.slice(i, i + BATCH);
+    var requests = batch.map(function (row) {
+      return {
+        url: 'https://api.pipedrive.com/v1/deals/' + row.opportunity_id + '?api_token=' + pdToken,
+        muteHttpExceptions: true,
+      };
+    });
+
+    var pdResponses = UrlFetchApp.fetchAll(requests);
+    pdResponses.forEach(function (res, j) {
+      if (res.getResponseCode() !== 200) return;
+      try {
+        var data = JSON.parse(res.getContentText());
+        var status = data && data.data && data.data.status;
+        if (status === 'lost') {
+          lostIds.push(batch[j].id);
+        } else if (status === 'open' || status === 'won') {
+          openIds.push(batch[j].id);
+        }
+      } catch (e) {
+        Logger.log('[syncPipedriveStatus_] Error parse row ' + batch[j].id + ': ' + e);
+      }
+    });
+  }
+
+  // Marcar como lost en Supabase
+  if (lostIds.length > 0) {
+    UrlFetchApp.fetch(
+      SUPABASE_REST + '/sheet_rows?id=in.(' + lostIds.join(',') + ')',
+      {
+        method: 'PATCH',
+        headers: buildHeaders_(supabaseKey),
+        payload: JSON.stringify({ pipedrive_lost: true }),
+        muteHttpExceptions: true,
+      }
+    );
+    Logger.log('[syncPipedriveStatus_] Marcados como lost: ' + lostIds.length);
+  }
+
+  // Re-abrir los que ya no están lost
+  if (openIds.length > 0) {
+    UrlFetchApp.fetch(
+      SUPABASE_REST + '/sheet_rows?id=in.(' + openIds.join(',') + ')&pipedrive_lost=eq.true',
+      {
+        method: 'PATCH',
+        headers: buildHeaders_(supabaseKey),
+        payload: JSON.stringify({ pipedrive_lost: false }),
+        muteHttpExceptions: true,
+      }
+    );
+    Logger.log('[syncPipedriveStatus_] Re-abiertos: ' + openIds.length);
+  }
+
+  Logger.log('[syncPipedriveStatus_] checked=' + rows.length +
+             ' lost=' + lostIds.length + ' reopened=' + openIds.length);
 }
 
 // ---------------------------------------------------------------------------

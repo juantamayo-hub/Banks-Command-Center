@@ -1,18 +1,20 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { ACTIVE_BANKS } from '@/lib/banks'
 
 type Phase =
   | 'idle'
   | 'verifying'
-  | 'no_match'
   | 'match'
+  | 'bank_not_found'
   | 'creating'
   | 'success'
   | 'error'
 
 interface VerifyResult {
+  bank_slug: string
+  bank_name: string
+  importe: number | null
   nombre_cliente: string
   deal_title: string
   general_deal_id: number
@@ -20,25 +22,16 @@ interface VerifyResult {
 
 export default function NuevoEnvioPage() {
   const [bankDealId, setBankDealId] = useState('')
-  const [importe, setImporte]       = useState('')
-  const [bankSlug, setBankSlug]     = useState('')
   const [phase, setPhase]           = useState<Phase>('idle')
   const [verifyResult, setVerifyResult] = useState<VerifyResult | null>(null)
-  const [importesFound, setImportesFound] = useState<(number | null)[]>([])
+  const [bankNotFoundName, setBankNotFoundName] = useState('')
   const [errorMsg, setErrorMsg]     = useState('')
   const bankDealIdRef = useRef<HTMLInputElement>(null)
 
   async function handleVerify() {
     const bid = parseInt(bankDealId.trim(), 10)
-    const imp = parseFloat(importe.trim().replace(',', '.'))
-
     if (!Number.isInteger(bid) || bid <= 0) {
       setErrorMsg('Ingresa un Deal ID bancario válido.')
-      setPhase('error')
-      return
-    }
-    if (!isFinite(imp) || imp <= 0) {
-      setErrorMsg('Ingresa un importe válido.')
       setPhase('error')
       return
     }
@@ -47,7 +40,7 @@ export default function NuevoEnvioPage() {
     setErrorMsg('')
 
     try {
-      const res  = await fetch(`/api/nuevo-envio/verify?bank_deal_id=${bid}&importe=${imp}`)
+      const res  = await fetch(`/api/nuevo-envio/verify?bank_deal_id=${bid}`)
       const data = await res.json()
 
       if (!res.ok) {
@@ -56,18 +49,29 @@ export default function NuevoEnvioPage() {
         return
       }
 
-      if (data.match) {
+      if (data.ok === false && data.code === 'BANK_NOT_FOUND') {
+        setBankNotFoundName(data.bank_name_detected ?? '(desconocido)')
         setVerifyResult({
-          nombre_cliente: data.nombre_cliente,
-          deal_title: data.deal_title,
-          general_deal_id: data.general_deal_id,
+          bank_slug: '',
+          bank_name: '',
+          importe: data.importe ?? null,
+          nombre_cliente: data.nombre_cliente ?? '',
+          deal_title: '',
+          general_deal_id: data.general_deal_id ?? 0,
         })
-        setBankSlug('')
-        setPhase('match')
-      } else {
-        setImportesFound(data.importes_found ?? [])
-        setPhase('no_match')
+        setPhase('bank_not_found')
+        return
       }
+
+      setVerifyResult({
+        bank_slug:      data.bank_slug,
+        bank_name:      data.bank_name,
+        importe:        data.importe ?? null,
+        nombre_cliente: data.nombre_cliente ?? '',
+        deal_title:     data.deal_title ?? '',
+        general_deal_id: data.general_deal_id,
+      })
+      setPhase('match')
     } catch {
       setErrorMsg('Error de red al verificar.')
       setPhase('error')
@@ -75,10 +79,7 @@ export default function NuevoEnvioPage() {
   }
 
   async function handleCreate() {
-    if (!bankSlug) {
-      setErrorMsg('Selecciona un banco.')
-      return
-    }
+    if (!verifyResult) return
 
     setPhase('creating')
     setErrorMsg('')
@@ -88,10 +89,10 @@ export default function NuevoEnvioPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          deal_id:        verifyResult?.general_deal_id,
-          nombre_cliente: verifyResult?.nombre_cliente ?? '',
-          importe:        parseFloat(importe.trim().replace(',', '.')),
-          bank_slug:      bankSlug,
+          deal_id:        verifyResult.general_deal_id,
+          nombre_cliente: verifyResult.nombre_cliente,
+          importe:        verifyResult.importe ?? 0,
+          bank_slug:      verifyResult.bank_slug,
           bank_deal_id:   parseInt(bankDealId.trim(), 10),
         }),
       })
@@ -99,7 +100,7 @@ export default function NuevoEnvioPage() {
 
       if (!res.ok || data?.ok === false) {
         setErrorMsg(data?.error ?? `Error ${res.status}`)
-        setPhase('match')  // revert to form so user can retry
+        setPhase('match')
         return
       }
 
@@ -112,16 +113,14 @@ export default function NuevoEnvioPage() {
 
   function reset() {
     setBankDealId('')
-    setImporte('')
-    setBankSlug('')
     setPhase('idle')
     setVerifyResult(null)
-    setImportesFound([])
+    setBankNotFoundName('')
     setErrorMsg('')
     setTimeout(() => bankDealIdRef.current?.focus(), 50)
   }
 
-  const bankName = ACTIVE_BANKS.find((b) => b.slug === bankSlug)?.name ?? ''
+  const isLoading = phase === 'verifying' || phase === 'creating'
 
   return (
     <div className="p-8 max-w-xl">
@@ -129,13 +128,13 @@ export default function NuevoEnvioPage() {
         Nuevo envío
       </h1>
       <p className="text-sm text-gray-500 mb-6">
-        Genera una fila en la hoja del banco para casos que no están registrados en el Sheet.
+        Genera una fila en la hoja del banco. Solo necesitas el ID del deal bancario (pipeline 7).
       </p>
 
-      {/* ── Step 1: Bank Deal ID + Importe ── */}
+      {/* ── Step 1: Bank Deal ID ── */}
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">
-          Paso 1 — Verificar deal
+          Paso 1 — Deal bancario
         </p>
 
         <div className="flex flex-col gap-3">
@@ -150,50 +149,18 @@ export default function NuevoEnvioPage() {
               onChange={(e) => { setBankDealId(e.target.value); if (phase !== 'idle') setPhase('idle') }}
               placeholder="ej. 415230"
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              disabled={phase === 'verifying' || phase === 'creating'}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Importe del dossier
-            </label>
-            <input
-              type="text"
-              value={importe}
-              onChange={(e) => { setImporte(e.target.value); if (phase !== 'idle') setPhase('idle') }}
-              placeholder="ej. 150000"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              disabled={phase === 'verifying' || phase === 'creating'}
+              disabled={isLoading}
             />
           </div>
 
           <button
             onClick={handleVerify}
-            disabled={phase === 'verifying' || phase === 'creating' || !bankDealId || !importe}
+            disabled={isLoading || !bankDealId}
             className="w-full rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"
           >
-            {phase === 'verifying' ? 'Verificando…' : 'Verificar'}
+            {phase === 'verifying' ? 'Buscando en Pipedrive…' : 'Verificar'}
           </button>
         </div>
-
-        {/* No match state */}
-        {phase === 'no_match' && (
-          <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-4">
-            <p className="text-sm font-medium text-red-700">
-              El importe no coincide con ninguno de los dossieres ya creados.
-            </p>
-            {importesFound.some((v) => v !== null) && (
-              <p className="mt-1 text-xs text-red-500">
-                Importes en Pipedrive:{' '}
-                {importesFound
-                  .map((v, i) => (v !== null ? `Banco ${i + 1}: ${v.toLocaleString('es-ES')} €` : null))
-                  .filter(Boolean)
-                  .join(' · ')}
-              </p>
-            )}
-          </div>
-        )}
 
         {/* Generic error */}
         {phase === 'error' && (
@@ -203,70 +170,81 @@ export default function NuevoEnvioPage() {
         )}
       </div>
 
-      {/* ── Step 2: Bank selection (only when match) ── */}
+      {/* ── Bank not found ── */}
+      {phase === 'bank_not_found' && (
+        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-6 shadow-sm">
+          <p className="text-sm font-medium text-amber-800">
+            Banco no reconocido: &quot;{bankNotFoundName}&quot;
+          </p>
+          <p className="text-xs text-amber-600 mt-1">
+            Este banco no está en la lista de bancos activos de la plataforma. Verifica que el deal bancario es correcto o avisa al equipo técnico para añadirlo.
+          </p>
+          {verifyResult?.nombre_cliente && (
+            <p className="text-xs text-amber-700 mt-2">
+              Cliente detectado: <strong>{verifyResult.nombre_cliente}</strong>
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* ── Step 2: Confirmation (only when match) ── */}
       {(phase === 'match' || phase === 'creating') && verifyResult && (
         <div className="mt-4 rounded-xl border border-green-200 bg-white p-6 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">
-            Paso 2 — Configurar envío
+            Paso 2 — Confirmar y autorizar
           </p>
 
-          <div className="mb-4 rounded-lg bg-green-50 border border-green-200 px-4 py-3">
-            <p className="text-sm font-medium text-green-800">
-              ✓ Importe verificado
-            </p>
-            <p className="text-xs text-green-700 mt-0.5">
-              {verifyResult.deal_title || `Deal bancario #${bankDealId}`}
-              {verifyResult.nombre_cliente ? ` · ${verifyResult.nombre_cliente}` : ''}
-            </p>
-            <p className="text-xs text-green-600 mt-0.5">
-              Deal general: #{verifyResult.general_deal_id}
-            </p>
-          </div>
-
-          <div className="flex flex-col gap-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Banco
-              </label>
-              <select
-                value={bankSlug}
-                onChange={(e) => setBankSlug(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                disabled={phase === 'creating'}
-              >
-                <option value="">Selecciona un banco…</option>
-                {ACTIVE_BANKS.map((b) => (
-                  <option key={b.slug} value={b.slug}>
-                    {b.name}
-                  </option>
-                ))}
-              </select>
+          <div className="mb-4 rounded-lg bg-green-50 border border-green-200 px-4 py-3 flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-green-600 font-medium uppercase">Banco</span>
+              <span className="text-sm font-semibold text-green-900">{verifyResult.bank_name}</span>
             </div>
-
-            {errorMsg && (
-              <p className="text-sm text-red-600">{errorMsg}</p>
+            {verifyResult.importe !== null && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-green-600 font-medium uppercase">Importe</span>
+                <span className="text-sm text-green-800">
+                  {new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0 }).format(verifyResult.importe)}
+                </span>
+              </div>
             )}
-
-            <button
-              onClick={handleCreate}
-              disabled={phase === 'creating' || !bankSlug}
-              className="w-full rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
-            >
-              {phase === 'creating' ? 'Generando…' : 'Generar fila en Sheet'}
-            </button>
+            {verifyResult.nombre_cliente && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-green-600 font-medium uppercase">Cliente</span>
+                <span className="text-sm text-green-800">{verifyResult.nombre_cliente}</span>
+              </div>
+            )}
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-green-600 font-medium uppercase">Deal general</span>
+              <span className="text-sm text-green-800">#{verifyResult.general_deal_id}</span>
+            </div>
           </div>
+
+          {errorMsg && (
+            <p className="text-sm text-red-600 mb-3">{errorMsg}</p>
+          )}
+
+          <button
+            onClick={handleCreate}
+            disabled={phase === 'creating'}
+            className="w-full rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
+          >
+            {phase === 'creating' ? 'Autorizando…' : 'Autorizar envío'}
+          </button>
         </div>
       )}
 
       {/* ── Success ── */}
-      {phase === 'success' && (
+      {phase === 'success' && verifyResult && (
         <div className="mt-4 rounded-xl border border-green-300 bg-green-50 p-6 text-center shadow-sm">
           <p className="text-2xl mb-2">✅</p>
           <p className="text-sm font-semibold text-green-800">
-            Fila generada en {bankName}
+            Fila generada en {verifyResult.bank_name}
           </p>
           <p className="text-xs text-green-600 mt-1">
-            Deal bancario #{bankDealId} · {importe} €
+            Deal bancario #{bankDealId}
+            {verifyResult.importe !== null
+              ? ` · ${new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0 }).format(verifyResult.importe)}`
+              : ''}
           </p>
           <button
             onClick={reset}

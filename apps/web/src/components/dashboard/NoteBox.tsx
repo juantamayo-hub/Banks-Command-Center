@@ -6,9 +6,10 @@ type Phase = 'idle' | 'loading' | 'sent' | 'error'
 
 interface NoteBoxProps {
   dealId: number | null
+  sheetRowId?: string
 }
 
-export default function NoteBox({ dealId }: NoteBoxProps) {
+export default function NoteBox({ dealId, sheetRowId }: NoteBoxProps) {
   const [note, setNote] = useState('')
   const [phase, setPhase] = useState<Phase>('idle')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
@@ -26,7 +27,11 @@ export default function NoteBox({ dealId }: NoteBoxProps) {
       const res = await fetch('/api/pipedrive/note', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deal_id: dealId, note: trimmed }),
+        body: JSON.stringify({
+          deal_id: dealId,
+          ...(sheetRowId ? { sheet_row_id: sheetRowId } : {}),
+          note: trimmed,
+        }),
       })
       const data = await res.json()
 
@@ -38,7 +43,6 @@ export default function NoteBox({ dealId }: NoteBoxProps) {
 
       setNote('')
       setPhase('sent')
-      // Keep box active — reset success indicator after 3s
       setTimeout(() => setPhase('idle'), 3000)
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'Error de red')
@@ -53,7 +57,7 @@ export default function NoteBox({ dealId }: NoteBoxProps) {
         value={note}
         onChange={(e) => setNote(e.target.value)}
         disabled={phase === 'loading'}
-        placeholder="Escribe una nota para el deal..."
+        placeholder="Añadir nota..."
         className="w-full min-w-[180px] rounded border border-gray-200 px-2 py-1 text-xs text-gray-800 placeholder-gray-400 focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-300 disabled:bg-gray-50 resize-none"
       />
       <div className="flex items-center gap-2">
@@ -62,10 +66,10 @@ export default function NoteBox({ dealId }: NoteBoxProps) {
           disabled={phase === 'loading' || note.trim().length === 0}
           className="rounded px-2 py-0.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 disabled:cursor-not-allowed transition-colors"
         >
-          {phase === 'loading' ? 'Enviando…' : 'Enviar nota'}
+          {phase === 'loading' ? 'Guardando…' : 'Guardar nota'}
         </button>
         {phase === 'sent' && (
-          <span className="text-xs font-medium text-green-600">✓ Nota enviada</span>
+          <span className="text-xs font-medium text-green-600">✓ Guardada en PD y plataforma</span>
         )}
         {phase === 'error' && errorMsg && (
           <span className="text-xs text-red-600">{errorMsg}</span>

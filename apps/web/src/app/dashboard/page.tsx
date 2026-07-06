@@ -15,6 +15,9 @@ const PAGE_SIZE = 50
 const VALID_SLUGS: Set<string> = new Set(ACTIVE_BANKS.map((b) => b.slug))
 const SLUG_RE = /^[a-z0-9_]{1,40}$/
 
+// 15 days in ms — pending rows older than this are considered discarded
+const PENDING_CUTOFF_MS = 15 * 24 * 60 * 60 * 1000
+
 interface DashboardPageProps {
   searchParams: Promise<{
     tab?: string
@@ -40,13 +43,23 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   const supabase = await createClient()
 
+  // Cutoff ISO string for the 15-day pending filter
+  const cutoffDate = new Date(Date.now() - PENDING_CUTOFF_MS).toISOString()
+  // PostgREST: show row if timestamp_entry is recent OR (timestamp_entry is null AND created_at is recent)
+  const pendingAgeFilter = `timestamp_entry.gte.${cutoffDate},and(timestamp_entry.is.null,created_at.gte.${cutoffDate})`
+
   // Counts and bank list in parallel
   const [
     { count: pendingCount },
     { count: sentCount },
     { data: banksData },
   ] = await Promise.all([
-    supabase.from('sheet_rows').select('*', { count: 'exact', head: true }).neq('status', 'sent'),
+    supabase
+      .from('sheet_rows')
+      .select('*', { count: 'exact', head: true })
+      .neq('status', 'sent')
+      .eq('pipedrive_lost', false)
+      .or(pendingAgeFilter),
     supabase.from('sheet_rows').select('*', { count: 'exact', head: true }).eq('status', 'sent'),
     supabase.from('banks').select('slug, name').eq('active', true).order('name', { ascending: true }),
   ])
@@ -62,12 +75,16 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   if (tab === 'enviados') {
     query = query
       .eq('status', 'sent')
+      .order('nombre_cliente', { ascending: true, nullsFirst: false })
       .order('test_time', { ascending: false, nullsFirst: false })
     if (dateFrom) query = query.gte('test_time', `${dateFrom}T00:00:00`)
     if (dateTo)   query = query.lte('test_time', `${dateTo}T23:59:59`)
   } else {
     query = query
       .neq('status', 'sent')
+      .eq('pipedrive_lost', false)
+      .or(pendingAgeFilter)
+      .order('nombre_cliente', { ascending: true, nullsFirst: false })
       .order('test_time', { ascending: false, nullsFirst: false })
     if (dateFrom) query = query.gte('test_time', `${dateFrom}T00:00:00`)
     if (dateTo)   query = query.lte('test_time', `${dateTo}T23:59:59`)
@@ -102,6 +119,27 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const banks = banksData ?? []
   const tableRows = rows ?? []
   const tableTotal = filteredCount ?? 0
+
+  // Fetch platform notes for rows on this page
+  const rowIds = tableRows.map((r) => (r as { id: string }).id).filter(Boolean)
+  const { data: notesData } = rowIds.length
+    ? await supabase
+        .from('submission_notes')
+        .select('sheet_row_id, content, created_at')
+        .in('sheet_row_id', rowIds)
+        .order('created_at', { ascending: false })
+    : { data: [] as Array<{ sheet_row_id: string; content: string; created_at: string }> }
+
+  // Build notes map: sheet_row_id → notes[] (most recent first)
+  const notesMap: Record<string, Array<{ content: string; created_at: string }>> = {}
+  for (const note of notesData ?? []) {
+    const k = (note as { sheet_row_id: string }).sheet_row_id
+    if (!notesMap[k]) notesMap[k] = []
+    notesMap[k].push({
+      content: (note as { content: string }).content,
+      created_at: (note as { created_at: string }).created_at,
+    })
+  }
 
   // Batch-fetch Google Drive links for deals on this page
   const pipedriveToken = process.env.PIPEDRIVE_API_TOKEN ?? ''
@@ -188,6 +226,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           <span className="text-sm text-gray-400">
             ({tableTotal.toLocaleString('es-ES')} resultados)
           </span>
+          {tab === 'pendientes' && (
+            <span className="text-xs text-gray-400 italic">
+              · últimos 15 días · sin deals perdidos
+            </span>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Suspense fallback={null}>
@@ -218,6 +261,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         pageSize={PAGE_SIZE}
         mode={tab}
         gDriveLinks={gDriveLinks}
+        notesMap={notesMap}
       />
 
       {/* Pagination */}

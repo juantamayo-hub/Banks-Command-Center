@@ -1,7 +1,7 @@
 import StatusBadge from '@/components/ui/StatusBadge'
 import RelaunchButton from '@/components/dashboard/RelaunchButton'
 import NoteBox from '@/components/dashboard/NoteBox'
-import NotePreview from '@/components/dashboard/NotePreview'
+import NoteHistory from '@/components/dashboard/NoteHistory'
 
 interface BankRef {
   name: string
@@ -34,6 +34,7 @@ interface SubmissionsTableProps {
   pageSize: number
   mode?: 'pendientes' | 'enviados'
   gDriveLinks?: Record<number, string | null>
+  notesMap?: Record<string, Array<{ content: string; created_at: string }>>
 }
 
 function formatImporte(value: number | null): string {
@@ -106,6 +107,7 @@ export default function SubmissionsTable({
   pageSize,
   mode = 'pendientes',
   gDriveLinks,
+  notesMap = {},
 }: SubmissionsTableProps) {
   void _totalCount
 
@@ -132,7 +134,7 @@ export default function SubmissionsTable({
                 <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">Importe</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Estado</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Red Flags</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 w-64">Notas</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 w-56">Notas</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 w-52">Acción</th>
               </tr>
             ) : (
@@ -151,6 +153,7 @@ export default function SubmissionsTable({
               const flags = row.red_flags ?? []
               const hasDispatch = getBankDispatch(row.banks)
               const bankSlug = getBankSlug(row.banks)
+              const rowNotes = notesMap[row.id] ?? []
 
               // Shared cells
               const indexCell = (
@@ -223,13 +226,9 @@ export default function SubmissionsTable({
                         <span className="text-xs text-gray-300">—</span>
                       )}
                     </td>
-                    {/* Notas del Sheet */}
-                    <td className="px-4 py-3 w-64 align-top">
-                      {row.notas ? (
-                        <NotePreview text={row.notas} />
-                      ) : (
-                        <span className="text-xs text-gray-300">—</span>
-                      )}
+                    {/* Notas — plataforma (+ sheet como fallback) */}
+                    <td className="px-4 py-3 w-56 align-top">
+                      <NoteHistory notes={rowNotes} sheetNote={row.notas} />
                     </td>
                     {/* Acción: relaunch + NoteBox */}
                     <td className="px-4 py-3 align-top min-w-[180px]">
@@ -241,7 +240,12 @@ export default function SubmissionsTable({
                         bankSlug={bankSlug}
                         sheetRowNumber={row.sheet_row_number}
                       />
-                      <NoteBox dealId={row.bank_deal_id ?? null} />
+                      {row.bank_deal_id ? (
+                        <NoteBox
+                          dealId={row.bank_deal_id}
+                          sheetRowId={row.id}
+                        />
+                      ) : null}
                     </td>
                   </tr>
                 )

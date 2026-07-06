@@ -1,17 +1,19 @@
 /**
  * POST /api/pipedrive/note
  *
- * Creates a note on a Pipedrive deal.
+ * Creates a note on a Pipedrive deal AND persists it in submission_notes (Supabase).
  * Uses PIPEDRIVE_API_TOKEN — server-side only, never exposed to browser.
  *
- * Body:    { deal_id: number, note: string }
+ * Body:    { deal_id: number, sheet_row_id: string, note: string }
  * Success: { ok: true }
  * Failure: { error: string } with 400 / 500 / 502
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { createAdminClient } from '@/lib/supabase/server'
 
 const MAX_NOTE_LENGTH = 5000
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export async function POST(req: NextRequest) {
   let body: unknown
@@ -25,10 +27,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'El body debe ser un objeto JSON' }, { status: 400 })
   }
 
-  const { deal_id, note } = body as Record<string, unknown>
+  const { deal_id, sheet_row_id, note } = body as Record<string, unknown>
 
   if (typeof deal_id !== 'number' || !Number.isInteger(deal_id) || deal_id <= 0) {
     return NextResponse.json({ error: '`deal_id` debe ser un entero positivo' }, { status: 400 })
+  }
+
+  if (sheet_row_id !== undefined && (typeof sheet_row_id !== 'string' || !UUID_RE.test(sheet_row_id))) {
+    return NextResponse.json({ error: '`sheet_row_id` debe ser un UUID válido' }, { status: 400 })
   }
 
   if (typeof note !== 'string' || note.trim().length === 0) {
@@ -48,9 +54,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Token de Pipedrive no configurado' }, { status: 500 })
   }
 
-  // Resolve owner name from the general deal linked to this banking deal
+  const noteContent = note.trim()
+
+  // ── 1. Resolve owner name from the general deal linked to this banking deal ──
   const GENERAL_DEAL_FIELD = '71edfe1562e9e19d4c7d96d38548dd009d4b3601'
-  let noteContent = note.trim()
+  let pdNoteContent = noteContent
   try {
     const bankingRes = await fetch(
       `https://api.pipedrive.com/v1/deals/${deal_id}?api_token=${token}`,
@@ -76,7 +84,7 @@ export async function POST(req: NextRequest) {
           const ownerName: string | undefined = generalJson?.data?.user_id?.name
           if (ownerId && ownerName) {
             const mention = `<a href="/users/details/${ownerId}" data-mentions="${ownerId}:${ownerId}">@${ownerName}</a>`
-            noteContent = `${mention} ${noteContent}`
+            pdNoteContent = `${mention} ${noteContent}`
           }
         }
       }
@@ -85,13 +93,14 @@ export async function POST(req: NextRequest) {
     // silently skip — write note without tag
   }
 
-  let res: Response
+  // ── 2. Post to Pipedrive ───────────────────────────────────────────────────
+  let pdRes: Response
   try {
-    res = await fetch(`https://api.pipedrive.com/v1/notes?api_token=${token}`, {
+    pdRes = await fetch(`https://api.pipedrive.com/v1/notes?api_token=${token}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json; charset=utf-8' },
       body: JSON.stringify({
-        content: noteContent,
+        content: pdNoteContent,
         deal_id,
         pinned_to_deal_flag: false,
       }),
@@ -102,13 +111,29 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Error de red: ${msg}` }, { status: 502 })
   }
 
-  if (!res.ok) {
-    const text = await res.text()
-    console.error(`[pipedrive/note] Pipedrive ${res.status}:`, text.slice(0, 200))
+  if (!pdRes.ok) {
+    const text = await pdRes.text()
+    console.error(`[pipedrive/note] Pipedrive ${pdRes.status}:`, text.slice(0, 200))
     return NextResponse.json(
-      { error: `Pipedrive devolvió ${res.status}` },
+      { error: `Pipedrive devolvió ${pdRes.status}` },
       { status: 502 }
     )
+  }
+
+  // ── 3. Persist in Supabase submission_notes (only when sheet_row_id provided) ──
+  if (sheet_row_id && typeof sheet_row_id === 'string') {
+    try {
+      const supabase = await createAdminClient()
+      const { error: dbError } = await supabase
+        .from('submission_notes')
+        .insert({ sheet_row_id, content: noteContent })
+      if (dbError) {
+        // Log but don't fail — the PD note was already saved
+        console.error('[pipedrive/note] Supabase insert error:', dbError.message)
+      }
+    } catch (err) {
+      console.error('[pipedrive/note] Supabase unexpected error:', err)
+    }
   }
 
   return NextResponse.json({ ok: true })
