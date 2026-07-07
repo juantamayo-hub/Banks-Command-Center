@@ -1,7 +1,6 @@
 import StatusBadge from '@/components/ui/StatusBadge'
 import RelaunchButton from '@/components/dashboard/RelaunchButton'
-import NoteBox from '@/components/dashboard/NoteBox'
-import NoteHistory from '@/components/dashboard/NoteHistory'
+import NotesCell from '@/components/dashboard/NotesCell'
 import DiscardButton from '@/components/dashboard/DiscardButton'
 
 interface BankRef {
@@ -227,12 +226,17 @@ export default function SubmissionsTable({
                         <span className="text-xs text-gray-300">—</span>
                       )}
                     </td>
-                    {/* Notas — plataforma (+ sheet como fallback) */}
+                    {/* Notas — plataforma + input (estado local inmediato) */}
                     <td className="px-4 py-3 w-56 align-top">
-                      <NoteHistory notes={rowNotes} sheetNote={row.notas} />
+                      <NotesCell
+                        initialNotes={rowNotes}
+                        sheetNote={row.notas}
+                        dealId={row.bank_deal_id ?? null}
+                        sheetRowId={row.id}
+                      />
                     </td>
-                    {/* Acción: relaunch + NoteBox + Discard */}
-                    <td className="px-4 py-3 align-top min-w-[180px]">
+                    {/* Acción: relaunch + Discard */}
+                    <td className="px-4 py-3 align-top min-w-[160px]">
                       <div className="flex items-start gap-2">
                         <div className="flex-1 min-w-0">
                           <RelaunchButton
@@ -243,12 +247,6 @@ export default function SubmissionsTable({
                             bankSlug={bankSlug}
                             sheetRowNumber={row.sheet_row_number}
                           />
-                          {row.bank_deal_id ? (
-                            <NoteBox
-                              dealId={row.bank_deal_id}
-                              sheetRowId={row.id}
-                            />
-                          ) : null}
                         </div>
                         <DiscardButton rowId={row.id} />
                       </div>

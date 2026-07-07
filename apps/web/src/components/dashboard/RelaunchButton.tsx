@@ -8,7 +8,7 @@ import { requestRelaunch } from '@/app/actions/relaunch'
 const FORCE_REQUIRED = new Set(['sent', 'offer_received'])
 
 // Statuses where no action makes sense
-const NOT_RELAUNCHABLE = new Set(['sending', 'relaunch_requested', 'unknown'])
+const NOT_RELAUNCHABLE = new Set(['sending', 'relaunch_requested'])
 
 type Phase = 'idle' | 'confirm' | 'loading' | 'success' | 'error'
 type DispatchAction = 'ENVIAR' | 'AUTORIZACION'

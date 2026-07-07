@@ -1,20 +1,19 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 
 type Phase = 'idle' | 'loading' | 'sent' | 'sent_pd_only' | 'error'
 
 interface NoteBoxProps {
   dealId: number | null
   sheetRowId?: string
+  onSaved?: (content: string) => void
 }
 
-export default function NoteBox({ dealId, sheetRowId }: NoteBoxProps) {
+export default function NoteBox({ dealId, sheetRowId, onSaved }: NoteBoxProps) {
   const [note, setNote] = useState('')
   const [phase, setPhase] = useState<Phase>('idle')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
-  const router = useRouter()
 
   if (!dealId) return null
 
@@ -44,13 +43,14 @@ export default function NoteBox({ dealId, sheetRowId }: NoteBoxProps) {
       }
 
       setNote('')
-      // If sheetRowId provided, refresh the page to show the new note in history
-      if (sheetRowId) {
-        router.refresh()
-        setPhase(data?.db_saved === false ? 'sent_pd_only' : 'sent')
-      } else {
-        setPhase('sent')
+      const saved = data?.db_saved !== false
+      setPhase(saved ? 'sent' : 'sent_pd_only')
+
+      // Notify parent so it can update the note list immediately (no server refresh needed)
+      if (saved && onSaved) {
+        onSaved(trimmed)
       }
+
       setTimeout(() => setPhase('idle'), 4000)
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'Error de red')
