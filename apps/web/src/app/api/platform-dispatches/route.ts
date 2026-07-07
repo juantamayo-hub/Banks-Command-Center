@@ -13,6 +13,7 @@ import { createAdminClient } from '@/lib/supabase/server'
 import {
   BANK_FIELD_IDS,
   BANK_ID_FIELD_IDS,
+  BANK_LINK_FIELD_IDS,
   OPTION_ID_TO_BANK,
   DOC_COMPLETED_STAGE_ID,
   SANTANDER_EDAD_1T_FIELD,
@@ -119,9 +120,11 @@ export async function GET(req: Request) {
       if (!isNaN(val) && OPTION_ID_TO_BANK[val]) {
         const bankName = OPTION_ID_TO_BANK[val]
         if (!bankMap.has(bankName)) {
-          // Read the banking deal ID from the corresponding Bank N ID field
-          // The field may store a numeric ID or a full deal URL
-          bankMap.set(bankName, parseBankDealId(deal[BANK_ID_FIELD_IDS[i]]))
+          // Try the Numerical ID field first, fall back to the Text link field (URL)
+          const bankDealId =
+            parseBankDealId(deal[BANK_ID_FIELD_IDS[i]]) ??
+            parseBankDealId(deal[BANK_LINK_FIELD_IDS[i]])
+          bankMap.set(bankName, bankDealId)
         }
       }
     }

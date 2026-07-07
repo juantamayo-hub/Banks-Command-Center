@@ -20,8 +20,7 @@ export const BANK_FIELD_IDS = [
   '36ff3525fb8a73637e069099967b2afe164e408a', // Bank 5
 ] as const
 
-// Pipedrive custom field hash IDs for Bank 1–5 ID (banking deal ID in pipeline 7)
-// These are "double" fields on the general deal storing the ID of the banking deal.
+// Pipedrive custom field hash IDs for Bank 1–5 ID (Numerical field — pipeline 7 deal ID)
 // Must be indexed in sync with BANK_FIELD_IDS (slot 1 = index 0, etc.)
 export const BANK_ID_FIELD_IDS = [
   '04d666f12e4d27a3867daa5d7d6b777d76d24eb9', // Bank 1 ID
@@ -29,6 +28,16 @@ export const BANK_ID_FIELD_IDS = [
   '874add027adde7fa7690874e3bac581489387651', // Bank 3 ID
   '467feaa56488620159ef39890e6d8f96489bdbac', // Bank 4 ID
   'b3dfef96dce320a1cfa4605056757f7e79731676', // Bank 5 ID
+] as const
+
+// Pipedrive custom field hash IDs for Bank 1–5 link (Text field — URL like https://.../deal/12345)
+// Fallback when the Numerical ID field is empty. Indexed in sync with BANK_FIELD_IDS.
+export const BANK_LINK_FIELD_IDS = [
+  'fc8312a76b8fe194ba55b60f3e09ac7e7800a5bd', // Bank 1 link
+  'd78cdb37e370d21facdea787f4bd7a22520ac62d', // Bank 2 link
+  'b3b1fd8fba90a455d01fb4aa4805569d4b60070a', // Bank 3 link
+  '9a4d771432722d30f6e4abe8f0cee6a542793475', // Bank 4 link
+  '963244c4d383295066674c693d813b4abb27ae11', // Bank 5 link
 ] as const
 
 // Map: Pipedrive enum option ID → platform bank name
