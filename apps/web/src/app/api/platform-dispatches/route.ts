@@ -121,9 +121,12 @@ export async function GET(req: Request) {
         const bankName = OPTION_ID_TO_BANK[val]
         if (!bankMap.has(bankName)) {
           // Try the Numerical ID field first, fall back to the Text link field (URL)
+          const numericRaw = deal[BANK_ID_FIELD_IDS[i]]
+          const linkRaw = deal[BANK_LINK_FIELD_IDS[i]]
           const bankDealId =
-            parseBankDealId(deal[BANK_ID_FIELD_IDS[i]]) ??
-            parseBankDealId(deal[BANK_LINK_FIELD_IDS[i]])
+            parseBankDealId(numericRaw) ??
+            parseBankDealId(linkRaw)
+          console.log(`[platform-dispatches] deal=${deal.id} slot=${i+1} bank=${bankName} numericRaw=${JSON.stringify(numericRaw)} linkRaw=${JSON.stringify(linkRaw)} → bankDealId=${bankDealId}`)
           bankMap.set(bankName, bankDealId)
         }
       }
