@@ -311,11 +311,11 @@ export default function PlatformDispatchCard({
               </div>
             )
           })()}
-          {/* Note cell per bank — writes to banking deal (falls back to general deal) */}
-          {bank.phase !== 'done' && (
+          {/* Note cell per bank — always writes to banking deal, never to the general deal */}
+          {bank.phase !== 'done' && bank.bank_deal_id && (
             <div className="pl-8">
               <NotesCell
-                dealId={bank.bank_deal_id ?? dealId}
+                dealId={bank.bank_deal_id}
                 sheetRowId={bank.sheet_row_id ?? ''}
                 initialNotes={bank.notes ?? []}
               />
