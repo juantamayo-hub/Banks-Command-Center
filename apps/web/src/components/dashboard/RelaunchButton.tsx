@@ -10,6 +10,36 @@ const FORCE_REQUIRED = new Set(['sent', 'offer_received'])
 // Statuses where no action makes sense
 const NOT_RELAUNCHABLE = new Set(['sending', 'relaunch_requested'])
 
+// How long (ms) to keep the "Procesando" lock after a platform dispatch
+const DISPATCH_LOCK_TTL_MS = 10 * 60 * 1000 // 10 minutes
+
+function getDispatchLockKey(rowId: string) {
+  return `dispatched_${rowId}`
+}
+
+function isDispatchLocked(rowId: string): boolean {
+  try {
+    const raw = sessionStorage.getItem(getDispatchLockKey(rowId))
+    if (!raw) return false
+    const sentAt = parseInt(raw, 10)
+    return Date.now() - sentAt < DISPATCH_LOCK_TTL_MS
+  } catch {
+    return false
+  }
+}
+
+function setDispatchLock(rowId: string) {
+  try {
+    sessionStorage.setItem(getDispatchLockKey(rowId), String(Date.now()))
+  } catch { /* ignore */ }
+}
+
+function clearDispatchLock(rowId: string) {
+  try {
+    sessionStorage.removeItem(getDispatchLockKey(rowId))
+  } catch { /* ignore */ }
+}
+
 type Phase = 'idle' | 'confirm' | 'loading' | 'success' | 'error'
 type DispatchAction = 'ENVIAR' | 'AUTORIZACION'
 
@@ -35,8 +65,14 @@ export default function RelaunchButton({
   const [pendingAction, setPendingAction] = useState<DispatchAction>('ENVIAR')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [countdown, setCountdown] = useState<number | null>(null)
+  // Read lock from sessionStorage on mount (survives router.refresh())
+  const [locked, setLocked] = useState<boolean>(false)
 
   // ── HOOKS MUST ALL BE CALLED BEFORE ANY EARLY RETURN ─────────────────────
+  useEffect(() => {
+    setLocked(isDispatchLocked(rowId))
+  }, [rowId])
+
   // Countdown after success — user clicks "Actualizar" to refresh manually
   useEffect(() => {
     if (countdown === null || countdown <= 0) return
@@ -49,6 +85,26 @@ export default function RelaunchButton({
   // Banks that use a separate manual process — no button shown
   if (hasDispatch === false) {
     return <span className="text-xs text-gray-400 italic">Proceso manual</span>
+  }
+
+  // ── Dispatch lock: recently sent from platform, waiting for sync ──────────
+  if (locked && phase === 'idle') {
+    return (
+      <span className="flex items-center gap-1.5 flex-wrap">
+        <span className="text-xs text-purple-600 font-medium">Enviando…</span>
+        <button
+          onClick={() => {
+            clearDispatchLock(rowId)
+            setLocked(false)
+            router.refresh()
+          }}
+          className="text-xs text-gray-400 hover:text-gray-700 underline"
+          title="Comprobar estado actual en Supabase"
+        >
+          Refrescar
+        </button>
+      </span>
+    )
   }
 
   // Statuses that cannot be relaunched from the platform
@@ -96,6 +152,10 @@ export default function RelaunchButton({
       return
     }
 
+    // Lock this row immediately so it can't be re-dispatched even if the sync
+    // temporarily resets the status to the old Sheet value before n8n updates it.
+    setDispatchLock(rowId)
+    setLocked(true)
     setPhase('success')
     setCountdown(60)
   }
@@ -106,13 +166,19 @@ export default function RelaunchButton({
       <span className="flex items-center gap-2 flex-wrap">
         <span className="text-xs font-medium text-purple-600">✓ Solicitado</span>
         <button
-          onClick={() => { setCountdown(null); setPhase('idle'); router.refresh() }}
+          onClick={() => {
+            clearDispatchLock(rowId)
+            setLocked(false)
+            setCountdown(null)
+            setPhase('idle')
+            router.refresh()
+          }}
           className="text-xs text-gray-400 hover:text-gray-700 underline tabular-nums"
-          title="Actualizar estado desde Supabase"
+          title="Comprobar estado actual en Supabase"
         >
           {countdown !== null && countdown > 0
-            ? `Actualizar en ${countdown}s`
-            : 'Actualizar'}
+            ? `Refrescar en ${countdown}s`
+            : 'Refrescar'}
         </button>
       </span>
     )
@@ -144,7 +210,6 @@ export default function RelaunchButton({
     const label = isAutorizacion ? 'Autorizar' : 'Verificar'
     const firstName = clientName ? clientName.split(' ')[0] : null
 
-    // Warning text
     let warning: string | null = null
     if (needsForce) {
       warning = `⚠ Ya enviado${firstName ? ` (${firstName})` : ''}. ¿${label} de todos modos?`
@@ -176,7 +241,6 @@ export default function RelaunchButton({
   }
 
   // ── Idle — action buttons ─────────────────────────────────────────────────
-  // pending_ready = first send → single "Autorizar envío" button, no Autorizar needed
   if (normalStatus === 'pending_ready') {
     return (
       <button
