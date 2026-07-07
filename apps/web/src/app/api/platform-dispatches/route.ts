@@ -121,12 +121,9 @@ export async function GET(req: Request) {
         const bankName = OPTION_ID_TO_BANK[val]
         if (!bankMap.has(bankName)) {
           // Try the Numerical ID field first, fall back to the Text link field (URL)
-          const numericRaw = deal[BANK_ID_FIELD_IDS[i]]
-          const linkRaw = deal[BANK_LINK_FIELD_IDS[i]]
           const bankDealId =
-            parseBankDealId(numericRaw) ??
-            parseBankDealId(linkRaw)
-          console.log(`[platform-dispatches] deal=${deal.id} slot=${i+1} bank=${bankName} numericRaw=${JSON.stringify(numericRaw)} linkRaw=${JSON.stringify(linkRaw)} → bankDealId=${bankDealId}`)
+            parseBankDealId(deal[BANK_ID_FIELD_IDS[i]]) ??
+            parseBankDealId(deal[BANK_LINK_FIELD_IDS[i]])
           bankMap.set(bankName, bankDealId)
         }
       }
@@ -232,7 +229,55 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Error al leer base de datos' }, { status: 500 })
   }
 
-  // ── 4b. Fetch platform_dispatch_notes per dispatch id ────────────────────
+  // ── 4b. Recover bank_deal_id for pending rows that still have null ────────
+  // These are deals that left stage 62 before the link-field fix was deployed.
+  // Fetch them directly from Pipedrive and backfill bank_deal_id in Supabase.
+  const nullBankDealRows = (pending ?? []).filter((r) => !r.bank_deal_id)
+  if (nullBankDealRows.length > 0) {
+    const uniqueDealIds = [...new Set(nullBankDealRows.map((r) => r.deal_id as number))]
+    await Promise.all(
+      uniqueDealIds.map(async (dealId) => {
+        try {
+          const res = await fetch(
+            `https://api.pipedrive.com/v1/deals/${dealId}?api_token=${token}`
+          )
+          if (!res.ok) return
+          const json = await res.json()
+          const deal = json.data
+          if (!deal) return
+
+          // Find bank_deal_id for each null-bank_deal_id row for this deal
+          const rowsForDeal = nullBankDealRows.filter((r) => r.deal_id === dealId)
+          for (const row of rowsForDeal) {
+            const bankName = row.bank_name as PlatformBankName
+            for (let i = 0; i < BANK_FIELD_IDS.length; i++) {
+              const raw = deal[BANK_FIELD_IDS[i]]
+              const val = raw != null ? parseInt(String(raw), 10) : NaN
+              if (!isNaN(val) && OPTION_ID_TO_BANK[val] === bankName) {
+                const bankDealId =
+                  parseBankDealId(deal[BANK_ID_FIELD_IDS[i]]) ??
+                  parseBankDealId(deal[BANK_LINK_FIELD_IDS[i]])
+                if (bankDealId) {
+                  // Update in Supabase and patch the pending row in-memory
+                  await supabase
+                    .from('platform_dispatches')
+                    .update({ bank_deal_id: bankDealId })
+                    .eq('id', row.id)
+                  ;(row as Record<string, unknown>).bank_deal_id = bankDealId
+                  console.log(`[platform-dispatches] backfilled bank_deal_id=${bankDealId} for deal=${dealId} bank=${bankName}`)
+                }
+                break
+              }
+            }
+          }
+        } catch (err) {
+          console.warn(`[platform-dispatches] backfill fetch error for deal ${dealId}:`, err)
+        }
+      })
+    )
+  }
+
+  // ── 4c. Fetch platform_dispatch_notes per dispatch id ────────────────────
   const dispatchIds = (pending ?? []).map((r) => r.id as string)
   const dispatchIdToNotes = new Map<string, { content: string; created_at: string }[]>()
 
