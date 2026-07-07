@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import NoteBox from '@/components/dashboard/NoteBox'
+import NotesCell from '@/components/dashboard/NotesCell'
 import { BANK_COLOR, type PlatformBankName } from '@/lib/platformDispatch'
 import type { SantanderInfo } from '@/app/api/platform-dispatches/route'
 
@@ -9,6 +9,8 @@ interface BankItem {
   name: PlatformBankName
   sent: boolean
   bank_deal_id: number | null
+  sheet_row_id?: string | null
+  notes?: { content: string; created_at: string }[]
 }
 
 interface PlatformDispatchCardProps {
@@ -309,13 +311,14 @@ export default function PlatformDispatchCard({
               </div>
             )
           })()}
-          {/* Note box per bank — always writes to banking deal, never to the general deal */}
+          {/* Note cell per bank — writes to banking deal (falls back to general deal) */}
           {bank.phase !== 'done' && (
             <div className="pl-8">
-              {bank.bank_deal_id
-                ? <NoteBox dealId={bank.bank_deal_id} />
-                : <p className="mt-1.5 text-xs text-gray-400 italic">Sin deal bancario vinculado aún.</p>
-              }
+              <NotesCell
+                dealId={bank.bank_deal_id ?? dealId}
+                sheetRowId={bank.sheet_row_id ?? ''}
+                initialNotes={bank.notes ?? []}
+              />
             </div>
           )}
           </div>

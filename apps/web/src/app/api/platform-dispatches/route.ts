@@ -38,8 +38,29 @@ export interface PlatformDealItem {
   deal_id: number
   deal_title: string
   person_name: string | null
-  banks: { name: PlatformBankName; sent: boolean; bank_deal_id: number | null }[]
+  banks: {
+    name: PlatformBankName
+    sent: boolean
+    bank_deal_id: number | null
+    sheet_row_id: string | null
+    notes: { content: string; created_at: string }[]
+  }[]
   santander_info?: SantanderInfo
+}
+
+/** Parse a Pipedrive bank deal ID that may be stored as a number or a deal URL */
+function parseBankDealId(raw: unknown): number | null {
+  if (raw == null) return null
+  const str = String(raw).trim()
+  const direct = parseInt(str, 10)
+  if (!isNaN(direct) && direct > 0) return direct
+  // e.g. "https://mdsl.pipedrive.com/deal/350704"
+  const match = str.match(/\/deal\/(\d+)/)
+  if (match) {
+    const fromUrl = parseInt(match[1], 10)
+    if (!isNaN(fromUrl) && fromUrl > 0) return fromUrl
+  }
+  return null
 }
 
 export async function GET(req: Request) {
@@ -98,9 +119,8 @@ export async function GET(req: Request) {
         const bankName = OPTION_ID_TO_BANK[val]
         if (!bankMap.has(bankName)) {
           // Read the banking deal ID from the corresponding Bank N ID field
-          const idRaw = deal[BANK_ID_FIELD_IDS[i]]
-          const bankDealId = idRaw !== null && idRaw !== undefined ? parseInt(String(idRaw), 10) : NaN
-          bankMap.set(bankName, !isNaN(bankDealId) && bankDealId > 0 ? bankDealId : null)
+          // The field may store a numeric ID or a full deal URL
+          bankMap.set(bankName, parseBankDealId(deal[BANK_ID_FIELD_IDS[i]]))
         }
       }
     }
@@ -205,6 +225,42 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Error al leer base de datos' }, { status: 500 })
   }
 
+  // ── 4b. Look up sheet_row_id and submission_notes per bank_deal_id ─────────
+  const bankDealIds = (pending ?? [])
+    .map((r) => r.bank_deal_id)
+    .filter((id): id is number => id !== null && id !== undefined)
+
+  const bankDealIdToSheetRowId = new Map<number, string>()
+  const sheetRowIdToNotes = new Map<string, { content: string; created_at: string }[]>()
+
+  if (bankDealIds.length > 0) {
+    const { data: sheetRows } = await supabase
+      .from('sheet_rows')
+      .select('id, bank_deal_id')
+      .in('bank_deal_id', bankDealIds)
+
+    for (const row of sheetRows ?? []) {
+      if (row.bank_deal_id != null) {
+        bankDealIdToSheetRowId.set(row.bank_deal_id, row.id as string)
+      }
+    }
+
+    const sheetRowIds = Array.from(bankDealIdToSheetRowId.values())
+    if (sheetRowIds.length > 0) {
+      const { data: notes } = await supabase
+        .from('submission_notes')
+        .select('sheet_row_id, content, created_at')
+        .in('sheet_row_id', sheetRowIds)
+        .order('created_at', { ascending: false })
+
+      for (const note of notes ?? []) {
+        const arr = sheetRowIdToNotes.get(note.sheet_row_id as string) ?? []
+        arr.push({ content: note.content as string, created_at: note.created_at as string })
+        sheetRowIdToNotes.set(note.sheet_row_id as string, arr)
+      }
+    }
+  }
+
   // ── 5. Group by deal ───────────────────────────────────────────────────────
   const byDeal = new Map<
     number,
@@ -230,7 +286,11 @@ export async function GET(req: Request) {
       deal_id,
       deal_title,
       person_name,
-      banks: banks.map((b) => ({ name: b.name, sent: false, bank_deal_id: b.bank_deal_id })),
+      banks: banks.map((b) => {
+        const sheetRowId = b.bank_deal_id ? (bankDealIdToSheetRowId.get(b.bank_deal_id) ?? null) : null
+        const notes = sheetRowId ? (sheetRowIdToNotes.get(sheetRowId) ?? []) : []
+        return { name: b.name, sent: false, bank_deal_id: b.bank_deal_id, sheet_row_id: sheetRowId, notes }
+      }),
       ...(santanderInfoByDealId.has(deal_id) && { santander_info: santanderInfoByDealId.get(deal_id) }),
     })
   )
