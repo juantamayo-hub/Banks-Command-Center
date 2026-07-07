@@ -10,6 +10,7 @@ interface BankItem {
   sent: boolean
   bank_deal_id: number | null
   sheet_row_id?: string | null
+  platform_dispatch_id?: string | null
   notes?: { content: string; created_at: string }[]
 }
 
@@ -311,12 +312,13 @@ export default function PlatformDispatchCard({
               </div>
             )
           })()}
-          {/* Note cell per bank — always writes to banking deal, never to the general deal */}
+          {/* Note cell per bank — always writes to banking deal, persists via platform_dispatch_id */}
           {bank.phase !== 'done' && bank.bank_deal_id && (
             <div className="pl-8">
               <NotesCell
                 dealId={bank.bank_deal_id}
-                sheetRowId={bank.sheet_row_id ?? ''}
+                sheetRowId=""
+                platformDispatchId={bank.platform_dispatch_id ?? undefined}
                 initialNotes={bank.notes ?? []}
               />
             </div>

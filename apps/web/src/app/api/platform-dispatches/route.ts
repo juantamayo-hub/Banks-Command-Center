@@ -43,6 +43,7 @@ export interface PlatformDealItem {
     sent: boolean
     bank_deal_id: number | null
     sheet_row_id: string | null
+    platform_dispatch_id: string | null
     notes: { content: string; created_at: string }[]
   }[]
   santander_info?: SantanderInfo
@@ -205,7 +206,7 @@ export async function GET(req: Request) {
   // ── 4. Fetch all pending dispatches from Supabase ─────────────────────────
   let pendingQuery = supabase
     .from('platform_dispatches')
-    .select('deal_id, bank_name, deal_title, person_name, sent_at, bank_deal_id, created_at')
+    .select('id, deal_id, bank_name, deal_title, person_name, sent_at, bank_deal_id, created_at')
     .is('sent_at', null)
     .is('dismissed_at', null)
     .order('created_at', { ascending: true })
@@ -225,51 +226,42 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Error al leer base de datos' }, { status: 500 })
   }
 
-  // ── 4b. Look up sheet_row_id and submission_notes per bank_deal_id ─────────
-  const bankDealIds = (pending ?? [])
-    .map((r) => r.bank_deal_id)
-    .filter((id): id is number => id !== null && id !== undefined)
+  // ── 4b. Fetch platform_dispatch_notes per dispatch id ────────────────────
+  const dispatchIds = (pending ?? []).map((r) => r.id as string)
+  const dispatchIdToNotes = new Map<string, { content: string; created_at: string }[]>()
 
-  const bankDealIdToSheetRowId = new Map<number, string>()
-  const sheetRowIdToNotes = new Map<string, { content: string; created_at: string }[]>()
+  if (dispatchIds.length > 0) {
+    const { data: pdNotes } = await supabase
+      .from('platform_dispatch_notes')
+      .select('platform_dispatch_id, content, created_at')
+      .in('platform_dispatch_id', dispatchIds)
+      .order('created_at', { ascending: false })
 
-  if (bankDealIds.length > 0) {
-    const { data: sheetRows } = await supabase
-      .from('sheet_rows')
-      .select('id, bank_deal_id')
-      .in('bank_deal_id', bankDealIds)
-
-    for (const row of sheetRows ?? []) {
-      if (row.bank_deal_id != null) {
-        bankDealIdToSheetRowId.set(row.bank_deal_id, row.id as string)
-      }
-    }
-
-    const sheetRowIds = Array.from(bankDealIdToSheetRowId.values())
-    if (sheetRowIds.length > 0) {
-      const { data: notes } = await supabase
-        .from('submission_notes')
-        .select('sheet_row_id, content, created_at')
-        .in('sheet_row_id', sheetRowIds)
-        .order('created_at', { ascending: false })
-
-      for (const note of notes ?? []) {
-        const arr = sheetRowIdToNotes.get(note.sheet_row_id as string) ?? []
-        arr.push({ content: note.content as string, created_at: note.created_at as string })
-        sheetRowIdToNotes.set(note.sheet_row_id as string, arr)
-      }
+    for (const note of pdNotes ?? []) {
+      const dispId = note.platform_dispatch_id as string
+      const arr = dispatchIdToNotes.get(dispId) ?? []
+      arr.push({ content: note.content as string, created_at: note.created_at as string })
+      dispatchIdToNotes.set(dispId, arr)
     }
   }
 
   // ── 5. Group by deal ───────────────────────────────────────────────────────
   const byDeal = new Map<
     number,
-    { deal_title: string; person_name: string | null; banks: { name: PlatformBankName; bank_deal_id: number | null }[] }
+    {
+      deal_title: string
+      person_name: string | null
+      banks: { name: PlatformBankName; bank_deal_id: number | null; platform_dispatch_id: string }[]
+    }
   >()
 
   for (const row of pending ?? []) {
     const existing = byDeal.get(row.deal_id)
-    const bankEntry = { name: row.bank_name as PlatformBankName, bank_deal_id: row.bank_deal_id ?? null }
+    const bankEntry = {
+      name: row.bank_name as PlatformBankName,
+      bank_deal_id: row.bank_deal_id ?? null,
+      platform_dispatch_id: row.id as string,
+    }
     if (existing) {
       existing.banks.push(bankEntry)
     } else {
@@ -286,11 +278,14 @@ export async function GET(req: Request) {
       deal_id,
       deal_title,
       person_name,
-      banks: banks.map((b) => {
-        const sheetRowId = b.bank_deal_id ? (bankDealIdToSheetRowId.get(b.bank_deal_id) ?? null) : null
-        const notes = sheetRowId ? (sheetRowIdToNotes.get(sheetRowId) ?? []) : []
-        return { name: b.name, sent: false, bank_deal_id: b.bank_deal_id, sheet_row_id: sheetRowId, notes }
-      }),
+      banks: banks.map((b) => ({
+        name: b.name,
+        sent: false,
+        bank_deal_id: b.bank_deal_id,
+        sheet_row_id: null,
+        platform_dispatch_id: b.platform_dispatch_id,
+        notes: dispatchIdToNotes.get(b.platform_dispatch_id) ?? [],
+      })),
       ...(santanderInfoByDealId.has(deal_id) && { santander_info: santanderInfoByDealId.get(deal_id) }),
     })
   )

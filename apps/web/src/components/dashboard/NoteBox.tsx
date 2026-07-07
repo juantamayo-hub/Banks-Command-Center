@@ -7,10 +7,11 @@ type Phase = 'idle' | 'loading' | 'sent' | 'sent_pd_only' | 'error'
 interface NoteBoxProps {
   dealId: number | null
   sheetRowId?: string
+  platformDispatchId?: string
   onSaved?: (content: string) => void
 }
 
-export default function NoteBox({ dealId, sheetRowId, onSaved }: NoteBoxProps) {
+export default function NoteBox({ dealId, sheetRowId, platformDispatchId, onSaved }: NoteBoxProps) {
   const [note, setNote] = useState('')
   const [phase, setPhase] = useState<Phase>('idle')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
@@ -31,6 +32,7 @@ export default function NoteBox({ dealId, sheetRowId, onSaved }: NoteBoxProps) {
         body: JSON.stringify({
           deal_id: dealId,
           ...(sheetRowId ? { sheet_row_id: sheetRowId } : {}),
+          ...(platformDispatchId ? { platform_dispatch_id: platformDispatchId } : {}),
           note: trimmed,
         }),
       })

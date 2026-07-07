@@ -23,6 +23,7 @@ interface NotesCellProps {
   sheetNote?: string | null
   dealId: number | null
   sheetRowId: string
+  platformDispatchId?: string
 }
 
 export default function NotesCell({
@@ -30,6 +31,7 @@ export default function NotesCell({
   sheetNote,
   dealId,
   sheetRowId,
+  platformDispatchId,
 }: NotesCellProps) {
   const [localNotes, setLocalNotes] = useState<Note[]>([])
 
@@ -45,7 +47,7 @@ export default function NotesCell({
   return (
     <div className="flex flex-col gap-1">
       <NoteHistory notes={allNotes} sheetNote={sheetNote} />
-      <NoteBox dealId={dealId} sheetRowId={sheetRowId} onSaved={handleNoteSaved} />
+      <NoteBox dealId={dealId} sheetRowId={sheetRowId} platformDispatchId={platformDispatchId} onSaved={handleNoteSaved} />
     </div>
   )
 }

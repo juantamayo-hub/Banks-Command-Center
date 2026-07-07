@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'El body debe ser un objeto JSON' }, { status: 400 })
   }
 
-  const { deal_id, sheet_row_id, note } = body as Record<string, unknown>
+  const { deal_id, sheet_row_id, platform_dispatch_id, note } = body as Record<string, unknown>
 
   if (typeof deal_id !== 'number' || !Number.isInteger(deal_id) || deal_id <= 0) {
     return NextResponse.json({ error: '`deal_id` debe ser un entero positivo' }, { status: 400 })
@@ -35,6 +35,10 @@ export async function POST(req: NextRequest) {
 
   if (sheet_row_id !== undefined && (typeof sheet_row_id !== 'string' || !UUID_RE.test(sheet_row_id))) {
     return NextResponse.json({ error: '`sheet_row_id` debe ser un UUID válido' }, { status: 400 })
+  }
+
+  if (platform_dispatch_id !== undefined && (typeof platform_dispatch_id !== 'string' || !UUID_RE.test(platform_dispatch_id))) {
+    return NextResponse.json({ error: '`platform_dispatch_id` debe ser un UUID válido' }, { status: 400 })
   }
 
   if (typeof note !== 'string' || note.trim().length === 0) {
@@ -120,17 +124,30 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  // ── 3. Persist in Supabase submission_notes (only when sheet_row_id provided) ──
+  // ── 3. Persist in Supabase (submission_notes or platform_dispatch_notes) ──
   let dbSaved = false
+  const supabase = await createAdminClient()
+
   if (sheet_row_id && typeof sheet_row_id === 'string') {
     try {
-      const supabase = await createAdminClient()
       const { error: dbError } = await supabase
         .from('submission_notes')
         .insert({ sheet_row_id, content: noteContent })
       if (dbError) {
-        // Log but don't fail — the PD note was already saved
-        console.error('[pipedrive/note] Supabase insert error:', dbError.message)
+        console.error('[pipedrive/note] Supabase submission_notes error:', dbError.message)
+      } else {
+        dbSaved = true
+      }
+    } catch (err) {
+      console.error('[pipedrive/note] Supabase unexpected error:', err)
+    }
+  } else if (platform_dispatch_id && typeof platform_dispatch_id === 'string') {
+    try {
+      const { error: dbError } = await supabase
+        .from('platform_dispatch_notes')
+        .insert({ platform_dispatch_id, content: noteContent })
+      if (dbError) {
+        console.error('[pipedrive/note] Supabase platform_dispatch_notes error:', dbError.message)
       } else {
         dbSaved = true
       }
