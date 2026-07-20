@@ -127,6 +127,14 @@ function syncAllBanksToSupabase() {
     Logger.log('[syncPipedriveStatus_] Error: ' + e.message);
   }
 
+  // Limpiar entradas anti-duplicado obsoletas (throttle 1 hora).
+  // Evita que Script Properties supere su cuota de 500 propiedades / 500 KB.
+  try {
+    purgeStaleAntiDupProps_();
+  } catch (e) {
+    Logger.log('[purgeStaleAntiDupProps_] Error: ' + e.message);
+  }
+
   // Registrar el sync global en event_log
   try {
     logEvent_(key, {
@@ -589,6 +597,74 @@ function syncPipedriveStatus_(supabaseKey) {
 
   Logger.log('[syncPipedriveStatus_] checked=' + rows.length +
              ' lost=' + lostIds.length + ' reopened=' + openIds.length);
+}
+
+// ---------------------------------------------------------------------------
+// Limpieza de Script Properties anti-duplicado — añadido 2026-07-20
+// ---------------------------------------------------------------------------
+
+/**
+ * Borra entradas anti-duplicado obsoletas de Script Properties.
+ *
+ * Cada script ROW_ID {BANCO} guarda claves con el patrón *_LAST_SEND_*
+ * para evitar envíos dobles durante una ventana de 20 segundos.
+ * Esas claves nunca se borran automáticamente, por lo que acumulan
+ * hasta superar la cuota de Google (500 props / 500 KB).
+ *
+ * Esta función se llama desde syncAllBanksToSupabase() con throttle de 1 hora.
+ */
+function purgeStaleAntiDupProps_() {
+  var THROTTLE_MS  = 60 * 60 * 1000; // ejecutar máximo una vez por hora
+  var MAX_AGE_MS   = 60 * 60 * 1000; // borrar entradas con más de 1 hora
+  var THROTTLE_KEY = 'ANTIDDUP_PURGE_LAST_RUN';
+
+  var props = PropertiesService.getScriptProperties();
+  var lastRunStr = props.getProperty(THROTTLE_KEY);
+  var now = Date.now();
+
+  if (lastRunStr && (now - parseInt(lastRunStr, 10)) < THROTTLE_MS) {
+    return; // demasiado pronto, saltar
+  }
+
+  var all = props.getProperties();
+  var toDelete = [];
+
+  Object.keys(all).forEach(function (key) {
+    // Solo claves anti-duplicado (todas contienen "_LAST_SEND_")
+    if (key.indexOf('_LAST_SEND_') === -1) return;
+    var millis = parseInt(all[key], 10);
+    if (isNaN(millis)) return;
+    if (now - millis > MAX_AGE_MS) {
+      toDelete.push(key);
+    }
+  });
+
+  toDelete.forEach(function (k) { props.deleteProperty(k); });
+  props.setProperty(THROTTLE_KEY, String(now));
+
+  Logger.log('[purgeStaleAntiDupProps_] deleted=' + toDelete.length +
+             ' remaining=' + (Object.keys(all).length - toDelete.length));
+}
+
+/**
+ * Versión manual: borra TODAS las entradas anti-duplicado sin importar su edad.
+ * Ejecutar UNA VEZ desde el editor de Apps Script para solucionar el error
+ * "You have exceeded the property storage quota" de inmediato.
+ */
+function purgeAllAntiDupPropsNow() {
+  var props = PropertiesService.getScriptProperties();
+  var all = props.getProperties();
+  var toDelete = [];
+
+  Object.keys(all).forEach(function (key) {
+    if (key.indexOf('_LAST_SEND_') !== -1) {
+      toDelete.push(key);
+    }
+  });
+
+  toDelete.forEach(function (k) { props.deleteProperty(k); });
+  Logger.log('[purgeAllAntiDupPropsNow] deleted=' + toDelete.length +
+             ' total_props_before=' + Object.keys(all).length);
 }
 
 // ---------------------------------------------------------------------------
