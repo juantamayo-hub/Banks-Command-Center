@@ -82,6 +82,7 @@ export const BANK_SLUGS = [
   'cr_extremadura',
   'sabadell',
   'banca_360',
+  'pichincha',
 ] as const;
 
 /** A single bank slug. Derived from BANK_SLUGS so it stays in sync automatically. */
