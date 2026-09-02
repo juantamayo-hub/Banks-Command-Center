@@ -25,4 +25,5 @@ export const ACTIVE_BANKS = [
   { slug: 'cr_extremadura', name: 'CR Extremadura'         },
   { slug: 'sabadell',       name: 'Sabadell no residentes' },
   { slug: 'banca_360',      name: 'Banca 360 / MSF 360'   },
+  { slug: 'pichincha',      name: 'Pichincha'             },
 ] as const

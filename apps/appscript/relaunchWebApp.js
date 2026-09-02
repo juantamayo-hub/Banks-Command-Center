@@ -61,7 +61,8 @@ var APPEND_SHEET_NAMES = {
   'caixa_popular':  'Caixa Popular Test',
   'cr_aragon':      'CR Aragon Test',
   'ruralnostra':    'RURALNOSTRA',
-  'abanca':         'Abanca'
+  'abanca':         'Abanca',
+  'pichincha':      'Pichincha'
 };
 
 // ── Mapa slug → { sheetName, fn(sheet, row, action) } ────────────────────────
@@ -101,7 +102,9 @@ var DISPATCH_MAP = {
   'cr_aragon':     { sheetName: 'CR Aragon Test',
                      fn: function(s,r,a){ return postToN8NCRARAGON(s, r, { mode:'manual', preferredAction:a, source:'platform' }); } },
   'ruralnostra':   { sheetName: 'RURALNOSTRA',
-                     fn: function(s,r,a){ return postToN8NRuralnostra(s, r, { mode:'manual', preferredAction:a, source:'platform' }); } }
+                     fn: function(s,r,a){ return postToN8NRuralnostra(s, r, { mode:'manual', preferredAction:a, source:'platform' }); } },
+  'pichincha':     { sheetName: 'Pichincha',
+                     fn: function(s,r,a){ return postToN8NPICHINCHA(s, r, { mode:'manual', preferredAction:a, source:'platform' }); } }
   // cr_extremadura: sin ROW_ID script — no soportado
 };
 
@@ -168,9 +171,27 @@ function doPost(e) {
       // Disparar postToN8N directamente si el banco tiene dispatch configurado.
       // onEdit NO se dispara para ediciones programáticas, por lo que llamamos
       // la función de envío explícitamente aquí.
+      //
+      // Excepción: ibercaja usa delay de 1 minuto vía time trigger para dar
+      // tiempo a que la fila quede visible antes del dispatch.
       var dispatchConfig = DISPATCH_MAP[bankSlug];
       var dispatched = false;
       if (dispatchConfig) {
+        if (bankSlug === 'ibercaja') {
+          // Guardar fila pendiente y programar dispatch con delay de 1 min
+          var props = PropertiesService.getScriptProperties();
+          var pendingRaw = props.getProperty('IBERCAJA_DELAYED_ROWS') || '[]';
+          var pendingRows = JSON.parse(pendingRaw);
+          pendingRows.push(newRow);
+          props.setProperty('IBERCAJA_DELAYED_ROWS', JSON.stringify(pendingRows));
+          ScriptApp.newTrigger('dispatchIbercajaDelayed_')
+            .timeBased()
+            .after(60 * 1000)
+            .create();
+          Logger.log('[relaunchWebApp] APPEND_ROW ibercaja row=' + newRow + ' scheduled for delayed dispatch');
+          output.setContent(JSON.stringify({ ok: true, row: newRow, dispatched: false, scheduled: true }));
+          return output;
+        }
         try {
           var dispatchResult = dispatchConfig.fn(appendSheet, newRow, 'ENVIAR');
           dispatched = (dispatchResult === true);
@@ -239,6 +260,60 @@ function doPost(e) {
     Logger.log('[relaunchWebApp] Error: ' + err);
     output.setContent(JSON.stringify({ ok: false, error: String(err) }));
     return output;
+  }
+}
+
+// ── Dispatch diferido Ibercaja ────────────────────────────────────────────────
+/**
+ * Ejecutada por un time-based trigger ~1 minuto después de APPEND_ROW ibercaja.
+ * Lee las filas pendientes de Script Properties y llama postToN8NIbercaja.
+ * Limpia el trigger al finalizar.
+ */
+function dispatchIbercajaDelayed_() {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) {
+    Logger.log('[dispatchIbercajaDelayed_] No se pudo obtener lock — otra ejecución en curso');
+    return;
+  }
+
+  try {
+    var props = PropertiesService.getScriptProperties();
+    var pendingRaw = props.getProperty('IBERCAJA_DELAYED_ROWS') || '[]';
+    var pendingRows = JSON.parse(pendingRaw);
+
+    if (!pendingRows.length) {
+      Logger.log('[dispatchIbercajaDelayed_] Sin filas pendientes');
+      return;
+    }
+
+    // Limpiar antes de procesar para evitar re-procesado si falla a mitad
+    props.deleteProperty('IBERCAJA_DELAYED_ROWS');
+    lock.releaseLock();
+
+    var ss    = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName(APPEND_SHEET_NAMES['ibercaja']);
+    if (!sheet) {
+      Logger.log('[dispatchIbercajaDelayed_] Hoja ibercaja no encontrada');
+      return;
+    }
+
+    pendingRows.forEach(function(rowNum) {
+      try {
+        Logger.log('[dispatchIbercajaDelayed_] Dispatching ibercaja row=' + rowNum);
+        postToN8NIbercaja(sheet, rowNum, { mode: 'manual', preferredAction: 'ENVIAR', source: 'platform' });
+      } catch (err) {
+        Logger.log('[dispatchIbercajaDelayed_] Error row=' + rowNum + ': ' + err);
+      }
+    });
+
+  } finally {
+    if (lock.hasLock()) lock.releaseLock();
+    // Eliminar todos los triggers completados de esta función
+    ScriptApp.getProjectTriggers().forEach(function(t) {
+      if (t.getHandlerFunction() === 'dispatchIbercajaDelayed_') {
+        ScriptApp.deleteTrigger(t);
+      }
+    });
   }
 }
 

@@ -125,6 +125,7 @@ export const ACTIVE_BANKS: readonly BankDescriptor[] = [
   { slug: 'cr_extremadura', name: 'CR Extremadura',         sheet_name: 'CR Extremadura'              },
   { slug: 'sabadell',       name: 'Sabadell no residentes', sheet_name: 'Sabadell no residentes'      },
   { slug: 'banca_360',      name: 'Banca 360 / MSF 360',   sheet_name: 'MSF 360 - Sabadell Residentes' },
+  { slug: 'pichincha',      name: 'Pichincha',             sheet_name: 'Pichincha'                     },
 ] as const;
 
 

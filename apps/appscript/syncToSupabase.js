@@ -52,6 +52,7 @@ var BANK_CONFIG = [
   { slug: 'caixa_popular',  sheetName: 'Caixa Popular Test'            },
   { slug: 'cr_aragon',      sheetName: 'CR Aragon Test'                },
   { slug: 'ruralnostra',    sheetName: 'RURALNOSTRA'                   },
+  { slug: 'pichincha',      sheetName: 'Pichincha'                     },
 ];
 
 

@@ -79,6 +79,11 @@ export const SANTANDER_EDAD_2T_FIELD = 'ec6ca39cfe6d29ffb81cfdcb96cbb8fdfee6ac49
 // From bank deal (pipeline 7):
 export const SANTANDER_PCT_HIPOTECA_FIELD = '916c1f454a9692ded61c82c331af63a1b631f1d3' // % de hipoteca
 
+// ── Kutxabank constants (separate flow: ZIP + Rastreator, not standard platform dispatch) ──
+
+// Kutxabank Pipedrive option IDs — one per bank slot, indexed in sync with BANK_FIELD_IDS
+export const KUTXABANK_OPTION_IDS = [2633, 2651, 2669, 2687, 2705] as const
+
 // Badge color per bank
 export const BANK_COLOR: Record<PlatformBankName, string> = {
   CaixaBank: 'bg-blue-50 text-blue-700 border-blue-200',

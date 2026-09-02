@@ -63,7 +63,8 @@ function procesarFilasPorTiempoV2() {
       { value: 'Cajamar', sheetName: 'Cajamar Test' },
       { value: 'Caixa Popular', sheetName: 'Caixa Popular Test' },
       { value: 'CR Aragón', sheetName: 'CR Aragon Test' },
-      { value: 'RURALNOSTRA', sheetName: 'RURALNOSTRA' }
+      { value: 'RURALNOSTRA', sheetName: 'RURALNOSTRA' },
+      { value: 'Pichincha', sheetName: 'Pichincha' },
     ];
 
     const COLUMNA_ENLACE_MAPEO = {
@@ -520,6 +521,18 @@ if (sheetName === 'UCI') {
     ' a ' +
     (startRow + numRows - 1)
   );
+
+  if (sheetName === 'Pichincha') {
+    Logger.log(
+        '🚀 Activando Pichincha para filas ' +
+        startRow +
+        ' a ' +
+        (startRow + numRows - 1)
+    );
+
+    procesarFilasCreadasPorScriptPICHINCHA(startRow, numRows);
+    return;
+}
 
   procesarFilasCreadasPorScriptIbercaja(startRow, numRows);
   return;
