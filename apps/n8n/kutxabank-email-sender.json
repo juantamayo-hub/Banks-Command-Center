@@ -1,0 +1,254 @@
+{
+  "name": "Kutxabank - Email Sender",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "kutxabank-email-sender",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 300],
+      "webhookId": "kutxabank-email-sender"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.pipedrive.com/v1/deals/{{ $json.body.deal_id }}",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "api_token",
+              "value": "={{ $env.PIPEDRIVE_API_TOKEN }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-deal",
+      "name": "Get General Deal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.pipedrive.com/v1/deals/{{ $('Webhook').first().json.body.bank_deal_id }}",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "api_token",
+              "value": "={{ $env.PIPEDRIVE_API_TOKEN }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-bank-deal",
+      "name": "Get Bank Deal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const webhook   = $('Webhook').first().json.body;\nconst deal      = $('Get General Deal').first().json.data || {};\nconst bankDeal  = $('Get Bank Deal').first().json.data || {};\n\nconst dealId     = webhook.deal_id;\nconst bankDealId = webhook.bank_deal_id;\nconst zipFileId  = webhook.zip_file_id || '';\nconst zipLink    = webhook.zip_drive_link || '';\n\n// Basic client fields — fallback to webhook if deal not available\nconst nombre = webhook.nombre_cliente || deal.person_name || '';\nconst dni    = webhook.dni || deal['60228dc43313b931378ec9bb3f21f7ad7f5a144c'] || '';\nconst plan   = webhook.plan || deal['b5d36c005e38a4cd72d831be655996a3d6b34dc1'] || '';\n\n// Email routing\n// KUTXABANK_EMAIL env var = production mailbox; fallback = test\nconst toEmail  = $env.KUTXABANK_EMAIL || 'juan.tamayo@huspy.io';\nconst bccList  = [\n  `mdsl+deal${dealId}@pipedrivemail.com`,\n  `mdsl+deal${bankDealId}@pipedrivemail.com`\n].join(',');\n\nconst subject  = `Kutxabank - Nuevo Expediente - ${bankDealId} - ${plan} - ${nombre} - DNI ${dni}`;\n\n// ── Enum maps (same field IDs as CR Teruel) ─────────────────────────────────\nconst mortgageMap = {\n  1458: 'Fija', 1459: 'Variable', 1460: 'Mixta',\n  2451: 'Fija y Mixta', 2452: 'Variable y Mixta',\n  2453: 'Fija y Variable', 2454: 'Fija, Mixta y Variable'\n};\nconst compraMap = {\n  2547: 'Primera residencia', 2548: 'Segunda residencia', 2549: 'Inversión',\n  2550: 'Cambio de hipoteca', 2551: 'Extinción de condominio', 2552: 'Autopromoción'\n};\nconst contractType1Map = {\n  2613: 'Indefinido', 2614: 'Funcionario', 2615: 'Autónomo', 2616: 'Temporal',\n  2617: 'Interino', 2618: 'Fijo discontínuo', 2619: 'Desempleado',\n  2620: 'Jubilado', 2863: 'Pensionista'\n};\nconst maritalStatus1Map = {\n  2621: 'Soltero', 2622: 'Casado en Gananciales',\n  2623: 'Casado en Separación de bienes', 2624: 'Viudo', 2625: 'Divorciado'\n};\nconst contractType2Map = {\n  2526: 'Indefinido', 2527: 'Funcionario', 2528: 'Autónomo', 2529: 'Temporal',\n  2530: 'Desempleado', 2531: 'Interino', 2532: 'Fijo discontínuo', 2864: 'Pensionista'\n};\nconst maritalStatus2Map = {\n  2533: 'Soltero', 2534: 'Casado en Gananciales',\n  2535: 'Casado en Separación de bienes', 2536: 'Viudo', 2537: 'Divorciado'\n};\nconst provinceEnumMap = {\n  2553: 'Albacete', 2554: 'Alicante/Alacant', 2555: 'Almería', 2556: 'Araba/Álava',\n  2557: 'Asturias', 2558: 'Ávila', 2559: 'Badajoz', 2560: 'Balears, Illes',\n  2561: 'Barcelona', 2562: 'Bizkaia', 2563: 'Burgos', 2564: 'Cáceres',\n  2565: 'Cádiz', 2566: 'Cantabria', 2567: 'Castellón/Castelló', 2568: 'Ciudad Real',\n  2569: 'Córdoba', 2570: 'Coruña, A', 2571: 'Cuenca', 2572: 'Gipuzkoa',\n  2573: 'Girona', 2574: 'Granada', 2575: 'Guadalajara', 2576: 'Huelva',\n  2577: 'Huesca', 2578: 'Jaén', 2579: 'León', 2580: 'Lleida', 2581: 'Lugo',\n  2582: 'Madrid', 2583: 'Málaga', 2584: 'Murcia', 2585: 'Navarra',\n  2586: 'Ourense', 2587: 'Palencia', 2588: 'Palmas, Las', 2589: 'Pontevedra',\n  2590: 'Rioja, La', 2591: 'Salamanca', 2592: 'Santa Cruz de Tenerife',\n  2593: 'Segovia', 2594: 'Sevilla', 2595: 'Soria', 2596: 'Tarragona',\n  2597: 'Teruel', 2598: 'Toledo', 2599: 'Valencia/València', 2600: 'Valladolid',\n  2601: 'Zamora', 2602: 'Zaragoza', 2603: 'Ceuta', 2604: 'Melilla',\n  2605: 'Canarias', 3052: 'Vitoria', 3053: 'Oviedo', 3113: 'TBC'\n};\n\nconst resolveEnum = (rawValue, map) => {\n  if (!rawValue && rawValue !== 0) return '-';\n  const key = typeof rawValue === 'object' ? (rawValue.id ?? rawValue.value) : rawValue;\n  return map[Number(key)] || String(rawValue);\n};\n\n// ── Field resolution ─────────────────────────────────────────────────────────\nconst tipoHip      = resolveEnum(deal['9663fa3058468da182be6afbf71a501b8c9fb89e'], mortgageMap);\nconst tipoComp     = resolveEnum(deal['bc2fb38a576f000bd311e49d4da2dd20dbf9439b'], compraMap);\nconst contrato1    = resolveEnum(deal['5788be4f764dabff9006ab5d685ae8061c7db3d9'], contractType1Map);\nconst estadoCivil1 = resolveEnum(deal['94162c8595944c684ec0e62dd8f8f5bfde30f7d1'], maritalStatus1Map);\nconst contrato2    = resolveEnum(deal['9d6bb0a4cffae14651df0370331afa40b101c6e9'], contractType2Map);\nconst estadoCivil2 = resolveEnum(deal['b51dfe92bec2db54fbf8f3849e642d20449cc807'], maritalStatus2Map);\nconst provincia    = resolveEnum(deal['15edcbc34620af8067c2413c2d9793b2a6bba3ba'], provinceEnumMap);\n\nconst importeBanco = bankDeal['b80d8ee37cc14ecdd7d8a640a57d6bd85308d5b9'] || deal['b80d8ee37cc14ecdd7d8a640a57d6bd85308d5b9'] || '';\n\n// ── Segundo titular ──────────────────────────────────────────────────────────\nconst segundoTitularNombre = deal['209a0da7966a29bf05e96b6a124536222e0318dd'] || '';\n\nconst seccionSegundoTitular = segundoTitularNombre ? `\n<p>👤 <strong>Datos 2do titular:</strong></p>\n<p>\nNombre: ${segundoTitularNombre}<br>\nDNI: ${deal['c83f49f1e2fd08f55a16b159dd88802d2b5baa04'] || '-'}<br>\nCorreo electrónico: ${deal['43cad7dea8c1b587f141432e1a3965260ae6e0cb'] || '-'}<br>\nTeléfono: ${deal['5acbbd2a39279bc8fb30ec62dba1529cd7ada335'] || '-'}<br>\nIngresos mensuales: ${deal['a52a8dcf3e016ffd7e670c6d888d30b4f08dc895'] || '-'} €<br>\nDeudas mensuales: ${deal['eeb214b68e7334f31d6254f42ee39fd2967f8e44'] || '-'} €<br>\nTipo de contrato: ${contrato2}<br>\nAntigüedad laboral: ${deal['7b9c465c402175d6b8aaf029007ec3807495e806'] || '-'}<br>\nEstado civil: ${estadoCivil2}\n</p>` : '';\n\n// ── HTML body ────────────────────────────────────────────────────────────────\nconst body = `<p>Buenos días.</p>\n<p>Compartimos el dossier completo de un cliente interesado en obtener una hipoteca con Kutxabank. A continuación, detallamos los datos principales.</p>\n\n<p><strong>⚠️ IMPORTANTE:</strong> Los documentos se adjuntan en un archivo ZIP encriptado con contraseña.<br>\nLa contraseña es el <strong>DNI del titular: ${dni}</strong></p>\n\n<p>Resumen: ${deal['de65f08f768d5985a623e6a05e033ac55b4781eb'] || ''}</p>\n\n<p>👤 <strong>Datos 1er titular:</strong></p>\n<p>\nNombre: ${deal.person_name || nombre}<br>\nEdad: ${deal['603fc04228fa5186ffc181e33b239a716a70078c'] || '-'}<br>\nDNI: ${dni}<br>\nCorreo electrónico: ${deal['7708e6e9db2709552beafef5fda4929298d71417'] || '-'}<br>\nTeléfono: ${deal['95abb5a0541d1b72ffbe2f1abefc5464f6421e3b'] || '-'}<br>\nIngresos mensuales: ${deal['8e0e7ac2bd665bc3c0c5eb7d979a1ae1d9bc1300'] || '-'} €<br>\nDeudas mensuales: ${deal['d36439696132252825354878c99d027a3af2d553'] || '-'} €<br>\nTipo de contrato: ${contrato1}<br>\nAntigüedad laboral: ${deal['be0f811d86cd2f929e602b57b0745ca59fcbf73e'] || '-'}<br>\nEstado civil: ${estadoCivil1}\n</p>\n\n${seccionSegundoTitular}\n\n<p>🏠 <strong>Datos de la operación:</strong></p>\n<p>\nImporte de compraventa: ${deal['184fc13001dbca74b20c77f0fcfdec161b5cb492'] || '-'} €<br>\nImporte solicitado: ${importeBanco} €<br>\nAhorros / contribución inicial: ${deal['c5f5be52374084fe506fcab9870b296e4ff4f494'] || '-'} €<br>\nProvincia: ${provincia}<br>\nDirección del inmueble: ${deal['51edb7d9fe7a23d2ff47bfd802068172cf20e61b'] || '-'}<br>\nTipo de compra: ${tipoComp}<br>\nTipo de hipoteca solicitada: ${tipoHip}<br>\nPlazo: ${deal['718ded557b843ad6ec94558a1da186ca063b11ee'] || '-'} años\n</p>\n\n<p>Quedamos atentos.<br>Muchas gracias,<br>Saludos</p>`;\n\n// Note for Pipedrive\nconst noteContent = `📧 Expediente enviado a Kutxabank\\nDeal Banco: #${bankDealId}\\nAsunto: ${subject}${zipLink ? `\\n📎 ZIP Drive: ${zipLink}` : ''}`;\n\nreturn [{ json: { toEmail, bccList, subject, body, noteContent, zipFileId } }];"
+      },
+      "id": "prepare-email",
+      "name": "Prepare Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $('Prepare Email').first().json.zipFileId }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "download-zip",
+      "name": "Download ZIP",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [880, 300],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "REPLACE_WITH_YOUR_CREDENTIAL_ID",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combine ZIP binary with email JSON data\nconst emailData = $('Prepare Email').first().json;\nconst zipItem   = $input.first();\n\n// The Google Drive download node puts the file in binary\nconst zipBinary = Object.values(zipItem.binary || {})[0] || null;\n\nconst binary = {};\nif (zipBinary) {\n  // Rename the binary to 'zip' so Gmail node can reference it\n  binary['zip'] = zipBinary;\n}\n\nreturn [{ json: { ...emailData }, binary }];"
+      },
+      "id": "merge-attachment",
+      "name": "Merge Attachment",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 300]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.toEmail }}",
+        "subject": "={{ $json.subject }}",
+        "emailType": "html",
+        "message": "={{ $json.body }}",
+        "options": {
+          "bccList": "={{ $json.bccList }}",
+          "attachmentsUi": {
+            "attachmentsBinary": [
+              {
+                "property": "zip"
+              }
+            ]
+          }
+        }
+      },
+      "id": "send-gmail",
+      "name": "Send Gmail",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [1320, 300],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "REPLACE_WITH_YOUR_CREDENTIAL_ID",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.pipedrive.com/v1/notes",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "api_token",
+              "value": "={{ $env.PIPEDRIVE_API_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ content: $('Prepare Email').first().json.noteContent, deal_id: $('Webhook').first().json.body.bank_deal_id, pinned_to_deal_flag: 1 }) }}",
+        "options": {}
+      },
+      "id": "create-note",
+      "name": "Create Pipedrive Note",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get General Deal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get General Deal": {
+      "main": [
+        [
+          {
+            "node": "Get Bank Deal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Bank Deal": {
+      "main": [
+        [
+          {
+            "node": "Prepare Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Email": {
+      "main": [
+        [
+          {
+            "node": "Download ZIP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download ZIP": {
+      "main": [
+        [
+          {
+            "node": "Merge Attachment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Attachment": {
+      "main": [
+        [
+          {
+            "node": "Send Gmail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Gmail": {
+      "main": [
+        [
+          {
+            "node": "Create Pipedrive Note",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z",
+      "id": "kutxabank",
+      "name": "kutxabank"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "versionId": "1"
+}

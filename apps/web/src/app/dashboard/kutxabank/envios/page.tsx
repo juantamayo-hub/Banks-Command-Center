@@ -1,0 +1,329 @@
+'use client'
+
+import { useState, useRef, useCallback } from 'react'
+import * as XLSX from 'xlsx'
+import type { ParsedEnviosRow } from '@/app/api/kutxabank/process-envios/route'
+
+// ── Column indices (0-based) ──────────────────────────────────────────────────
+const COL = {
+  DEAL_ID:          0, // A
+  DNI:              1, // B
+  IMPORTE_COMPRA:   2, // C
+  IMPORTE_HIPOTECA: 3, // D
+  INGRESOS_1T:      4, // E
+  TIPO_CONTRATO_1T: 5, // F
+  INGRESOS_2T:      6, // G
+  TIPO_CONTRATO_2T: 7, // H
+  RESPUESTA:        8, // I
+} as const
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+interface ProcessResponse {
+  total:    number
+  approved: number
+  rejected: number
+  skipped:  number
+  errors:   number
+  results: Array<{
+    deal_id:      string
+    dni:          string
+    respuesta:    string
+    status:       'approved' | 'rejected' | 'skipped' | 'error'
+    detail?:      string
+    bank_deal_id?: number | null
+  }>
+}
+
+type Stage = 'idle' | 'previewing' | 'processing' | 'done'
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function cellStr(row: unknown[], idx: number): string {
+  const val = row[idx]
+  if (val == null) return ''
+  return String(val).trim()
+}
+
+function parseWorkbook(wb: import('xlsx').WorkBook): ParsedEnviosRow[] {
+  const ws = wb.Sheets[wb.SheetNames[0]]
+  const raw = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '', raw: false })
+  return raw.slice(1).flatMap((row) => {
+    const dealId = cellStr(row as unknown[], COL.DEAL_ID)
+    if (!dealId) return []
+    return [{
+      deal_id:          dealId,
+      dni:              cellStr(row as unknown[], COL.DNI),
+      importe_compra:   cellStr(row as unknown[], COL.IMPORTE_COMPRA),
+      importe_hipoteca: cellStr(row as unknown[], COL.IMPORTE_HIPOTECA),
+      ingresos_1t:      cellStr(row as unknown[], COL.INGRESOS_1T),
+      tipo_contrato_1t: cellStr(row as unknown[], COL.TIPO_CONTRATO_1T),
+      ingresos_2t:      cellStr(row as unknown[], COL.INGRESOS_2T),
+      tipo_contrato_2t: cellStr(row as unknown[], COL.TIPO_CONTRATO_2T),
+      respuesta:        cellStr(row as unknown[], COL.RESPUESTA),
+    }]
+  })
+}
+
+function StatusBadge({ status }: { status: ProcessResponse['results'][number]['status'] }) {
+  const styles = {
+    approved: 'bg-green-100 text-green-800',
+    rejected: 'bg-red-100 text-red-700',
+    skipped:  'bg-gray-100 text-gray-600',
+    error:    'bg-orange-100 text-orange-700',
+  }
+  const labels = {
+    approved: 'Aprobado',
+    rejected: 'Rechazado',
+    skipped:  'Omitido',
+    error:    'Error',
+  }
+  return (
+    <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${styles[status]}`}>
+      {labels[status]}
+    </span>
+  )
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+
+export default function KutxabankEnviosPage() {
+  const [stage, setStage]         = useState<Stage>('idle')
+  const [fileName, setFileName]   = useState<string | null>(null)
+  const [parsedRows, setParsedRows] = useState<ParsedEnviosRow[]>([])
+  const [response, setResponse]   = useState<ProcessResponse | null>(null)
+  const [dragOver, setDragOver]   = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleFile = useCallback((file: File) => {
+    setFileName(file.name)
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      try {
+        const wb = XLSX.read(e.target!.result as ArrayBuffer, { type: 'array', cellDates: true })
+        const rows = parseWorkbook(wb)
+        setParsedRows(rows)
+        setStage('previewing')
+      } catch (err) {
+        alert(`Error al leer el archivo: ${err instanceof Error ? err.message : String(err)}`)
+      }
+    }
+    reader.readAsArrayBuffer(file)
+  }, [])
+
+  const onDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setDragOver(false)
+    const file = e.dataTransfer.files[0]
+    if (file) handleFile(file)
+  }, [handleFile])
+
+  const onFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) handleFile(file)
+  }, [handleFile])
+
+  const handleProcess = useCallback(async () => {
+    setStage('processing')
+    try {
+      const res = await fetch('/api/kutxabank/process-envios', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rows: parsedRows }),
+      })
+      const data: ProcessResponse = await res.json()
+      setResponse(data)
+      setStage('done')
+    } catch (err) {
+      alert(`Error al procesar: ${err instanceof Error ? err.message : String(err)}`)
+      setStage('previewing')
+    }
+  }, [parsedRows])
+
+  const reset = useCallback(() => {
+    setStage('idle')
+    setFileName(null)
+    setParsedRows([])
+    setResponse(null)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }, [])
+
+  const toSend   = parsedRows.filter((r) => r.respuesta === 'Enviar').length
+  const toReject = parsedRows.filter((r) => r.respuesta === 'No enviar').length
+
+  return (
+    <div className="p-8 max-w-5xl">
+      {/* Header */}
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold text-gray-900">Kutxabank — Procesar Envíos (1 Filtro)</h1>
+        <p className="mt-1 text-sm text-gray-500">
+          Sube el Excel "1 Filtro" de Rastreator. Las filas con "Enviar" se aprueban;
+          las de "No enviar" se marcan como perdidas en Pipedrive.
+        </p>
+      </div>
+
+      {/* Drop zone */}
+      {stage === 'idle' && (
+        <div
+          onDrop={onDrop}
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+          onDragLeave={() => setDragOver(false)}
+          onClick={() => fileInputRef.current?.click()}
+          className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-12 transition-colors ${
+            dragOver ? 'border-teal-400 bg-teal-50' : 'border-gray-300 bg-gray-50 hover:border-gray-400'
+          }`}
+        >
+          <span className="mb-3 text-4xl">📤</span>
+          <p className="text-sm font-medium text-gray-700">
+            Arrastra aquí el Excel "1 Filtro" o haz clic para seleccionarlo
+          </p>
+          <p className="mt-1 text-xs text-gray-400">Formatos: .xlsx, .xls</p>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls"
+            className="hidden"
+            onChange={onFileChange}
+          />
+        </div>
+      )}
+
+      {/* Preview */}
+      {stage === 'previewing' && (
+        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <h2 className="mb-4 text-base font-semibold text-gray-900">Vista previa</h2>
+          <div className="mb-5 grid grid-cols-4 gap-4 text-center">
+            <div className="rounded-lg bg-gray-50 p-4">
+              <p className="text-2xl font-bold text-gray-900">{parsedRows.length}</p>
+              <p className="mt-1 text-xs text-gray-500">Filas totales</p>
+            </div>
+            <div className="rounded-lg bg-green-50 p-4">
+              <p className="text-2xl font-bold text-green-700">{toSend}</p>
+              <p className="mt-1 text-xs text-gray-500">Para enviar</p>
+            </div>
+            <div className="rounded-lg bg-red-50 p-4">
+              <p className="text-2xl font-bold text-red-700">{toReject}</p>
+              <p className="mt-1 text-xs text-gray-500">Para rechazar</p>
+            </div>
+            <div className="rounded-lg bg-amber-50 p-4">
+              <p className="text-sm font-medium text-amber-700 truncate">{fileName}</p>
+              <p className="mt-1 text-xs text-gray-500">Archivo</p>
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={handleProcess}
+              className="rounded-lg bg-teal-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-teal-700 transition-colors"
+            >
+              Procesar {parsedRows.length} fila{parsedRows.length !== 1 ? 's' : ''}
+            </button>
+            <button
+              onClick={reset}
+              className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Processing spinner */}
+      {stage === 'processing' && (
+        <div className="flex flex-col items-center justify-center rounded-xl border border-gray-200 bg-white p-12 shadow-sm">
+          <div className="mb-4 h-10 w-10 animate-spin rounded-full border-4 border-teal-200 border-t-teal-600" />
+          <p className="text-sm font-medium text-gray-700">Procesando filas…</p>
+        </div>
+      )}
+
+      {/* Done */}
+      {stage === 'done' && response && (
+        <div className="space-y-6">
+          <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+            <h2 className="mb-4 text-base font-semibold text-gray-900">Resultado</h2>
+            <div className="grid grid-cols-5 gap-3 text-center">
+              <div className="rounded-lg bg-gray-50 p-3">
+                <p className="text-xl font-bold text-gray-900">{response.total}</p>
+                <p className="mt-1 text-xs text-gray-500">Total</p>
+              </div>
+              <div className="rounded-lg bg-green-50 p-3">
+                <p className="text-xl font-bold text-green-700">{response.approved}</p>
+                <p className="mt-1 text-xs text-gray-500">Aprobados</p>
+              </div>
+              <div className="rounded-lg bg-red-50 p-3">
+                <p className="text-xl font-bold text-red-700">{response.rejected}</p>
+                <p className="mt-1 text-xs text-gray-500">Rechazados</p>
+              </div>
+              <div className="rounded-lg bg-gray-100 p-3">
+                <p className="text-xl font-bold text-gray-500">{response.skipped}</p>
+                <p className="mt-1 text-xs text-gray-500">Omitidos</p>
+              </div>
+              <div className="rounded-lg bg-orange-50 p-3">
+                <p className="text-xl font-bold text-orange-700">{response.errors}</p>
+                <p className="mt-1 text-xs text-gray-500">Errores</p>
+              </div>
+            </div>
+            <div className="mt-5">
+              <button
+                onClick={reset}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Subir otro archivo
+              </button>
+            </div>
+          </div>
+
+          {response.results.length > 0 && (
+            <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+              <table className="min-w-full divide-y divide-gray-200 text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                      Deal ID
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                      DNI
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                      Respuesta
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                      Estado
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                      Detalle
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {response.results.map((r, i) => (
+                    <tr key={i} className={r.status === 'error' ? 'bg-orange-50' : ''}>
+                      <td className="px-4 py-3 font-mono text-gray-700">{r.deal_id}</td>
+                      <td className="px-4 py-3 text-gray-600">{r.dni || '—'}</td>
+                      <td className="px-4 py-3 text-gray-600">{r.respuesta || '—'}</td>
+                      <td className="px-4 py-3">
+                        <StatusBadge status={r.status} />
+                      </td>
+                      <td className="px-4 py-3 text-xs text-gray-500">
+                        {r.detail}
+                        {r.bank_deal_id && (
+                          <a
+                            href={`https://mdsl.pipedrive.com/deal/${r.bank_deal_id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="ml-2 text-indigo-600 hover:underline"
+                          >
+                            Bank #{r.bank_deal_id}
+                          </a>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}

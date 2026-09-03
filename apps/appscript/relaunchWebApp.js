@@ -138,6 +138,56 @@ function doPost(e) {
       return output;
     }
 
+    // ── KUTXA_SYNC_ENVIOS: sincroniza filas aprobadas al Sheet de Kutxabank ──
+    if (action === 'KUTXA_SYNC_ENVIOS') {
+      var rows = body.rows || [];
+      if (!rows.length) {
+        output.setContent(JSON.stringify({ ok: true, synced: 0 }));
+        return output;
+      }
+
+      var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+      // "Ops. Enviadas" tab: append ID + DNI for each approved row
+      var opsSheet = ss.getSheetByName('Ops. Enviadas');
+      // "1 Filtro" tab: mark "Respuesta Rastreator" column (I = col 9) as processed
+      var filtroSheet = ss.getSheetByName('1 Filtro');
+
+      var synced = 0;
+      for (var i = 0; i < rows.length; i++) {
+        var rowData = rows[i];
+        var dealId  = String(rowData.deal_id || '').trim();
+        var dni     = String(rowData.dni || '').trim();
+
+        if (!dealId) continue;
+
+        // Append to "Ops. Enviadas"
+        if (opsSheet) {
+          var newRow = opsSheet.getLastRow() + 1;
+          opsSheet.getRange(newRow, 1).setValue(dealId);  // A: ID
+          opsSheet.getRange(newRow, 2).setValue(dni);     // B: DNI
+          Logger.log('[KUTXA_SYNC_ENVIOS] Appended to Ops. Enviadas row=' + newRow + ' dealId=' + dealId);
+        }
+
+        // Mark "Respuesta Rastreator" (col I = 9) in "1 Filtro" for this deal
+        if (filtroSheet) {
+          var filtroData = filtroSheet.getDataRange().getValues();
+          for (var r = 1; r < filtroData.length; r++) {
+            if (String(filtroData[r][0]).trim() === dealId) {
+              filtroSheet.getRange(r + 1, 9).setValue('Procesado');
+              Logger.log('[KUTXA_SYNC_ENVIOS] Marked 1 Filtro row=' + (r + 1) + ' dealId=' + dealId);
+              break;
+            }
+          }
+        }
+        synced++;
+      }
+
+      SpreadsheetApp.flush();
+      output.setContent(JSON.stringify({ ok: true, synced: synced }));
+      return output;
+    }
+
     // ── APPEND_ROW: escribe una nueva fila en la hoja del banco ────────────
     if (action === 'APPEND_ROW') {
       var sheetName = APPEND_SHEET_NAMES[bankSlug];

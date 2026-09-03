@@ -1,0 +1,202 @@
+{
+  "name": "Kutxabank - Rastreator Sync",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Cada 5 minutos",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "1M-gqoiozJZz7nXgnVSPLtG253tLtgsoLgd7uTm3i_e8",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "1º Filtro",
+          "mode": "name"
+        },
+        "options": {
+          "headerRow": 1
+        }
+      },
+      "id": "read-rastreator",
+      "name": "Leer Rastreator",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [460, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_WITH_YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Map sheet rows to API payload\n// Columns: ID | DNI | Importe compraventa | Importe hipoteca | Ingresos 1T | Tipo contrato 1T | Ingresos 2T | Tipo contrato 2T | Respuesta Rastreator\n\nconst rows = [];\n\nfor (let i = 0; i < items.length; i++) {\n  const row = items[i].json;\n\n  // Deal ID is in the 'ID' column\n  const dealIdRaw = row['ID'] || row['id'] || '';\n  const dealId = parseInt(String(dealIdRaw).trim(), 10);\n  if (!dealId || isNaN(dealId) || dealId <= 0) continue;\n\n  // 'Respuesta Rastreator' column (last column)\n  const respuesta = String(row['Respuesta Rastreator'] || '').trim();\n  if (!respuesta) continue;\n\n  let rastreatorStatus;\n  if (respuesta === 'Enviar') {\n    rastreatorStatus = 'approved';\n  } else if (respuesta === 'No enviar') {\n    rastreatorStatus = 'rejected';\n  } else {\n    // Any other value (blank handled above) → pending\n    continue;\n  }\n\n  // Row number is 1-based in sheet; header is row 1, so data starts at row 2\n  const rastreatorRow = i + 2; // i is 0-based index of data rows after header\n\n  rows.push({\n    deal_id: dealId,\n    rastreator_status: rastreatorStatus,\n    rastreator_row: rastreatorRow\n  });\n}\n\nif (rows.length === 0) {\n  // Return a no-op marker so downstream nodes don't fail\n  return [{ json: { rows: [], skipped: true } }];\n}\n\nreturn [{ json: { rows } }];"
+      },
+      "id": "map-rows",
+      "name": "Mapear filas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-skip",
+              "leftValue": "={{ $json.skipped }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-skip",
+      "name": "¿Hay filas?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.COMMAND_CENTER_URL }}/api/kutxabank/sync-rastreator",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-kutxabank-secret",
+              "value": "={{ $env.KUTXABANK_API_SECRET }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ rows: $json.rows }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "post-sync",
+      "name": "Sync a Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 400]
+    },
+    {
+      "parameters": {},
+      "id": "no-op-skip",
+      "name": "Sin cambios",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1120, 200]
+    }
+  ],
+  "connections": {
+    "Cada 5 minutos": {
+      "main": [
+        [
+          {
+            "node": "Leer Rastreator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer Rastreator": {
+      "main": [
+        [
+          {
+            "node": "Mapear filas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mapear filas": {
+      "main": [
+        [
+          {
+            "node": "¿Hay filas?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Hay filas?": {
+      "main": [
+        [
+          {
+            "node": "Sin cambios",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sync a Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z",
+      "id": "kutxabank",
+      "name": "kutxabank"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "versionId": "1"
+}

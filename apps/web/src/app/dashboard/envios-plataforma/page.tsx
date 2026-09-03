@@ -251,7 +251,7 @@ export default function EnviosPlataformaPage() {
             {kutxaSubs.length > 0 ? `${kutxaSubs.length} caso${kutxaSubs.length !== 1 ? 's' : ''}` : ''}
           </span>
           <span className="rounded-full bg-teal-50 border border-teal-200 px-2 py-0.5 text-xs font-medium text-teal-700">
-            ZIP + Rastreator
+            Listos para enviar
           </span>
         </div>
 

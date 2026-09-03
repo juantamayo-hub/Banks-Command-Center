@@ -40,11 +40,35 @@ const DOC_LABELS: Record<string, string> = {
 type SendPhase = 'idle' | 'confirming' | 'loading' | 'done' | 'error'
 
 export default function KutxabankCard({ submission: sub, onSent }: Props) {
-  const [phase, setPhase]   = useState<SendPhase>('idle')
-  const [errMsg, setErrMsg] = useState('')
+  const [phase, setPhase]     = useState<SendPhase>('idle')
+  const [errMsg, setErrMsg]   = useState('')
   const [leaving, setLeaving] = useState(false)
+  const [dismissing, setDismissing] = useState(false)
 
   const canSend = sub.rastreator_status === 'approved'
+
+  async function doDismiss() {
+    if (!confirm('¿Eliminar esta tarjeta? Se ocultará de la lista.')) return
+    setDismissing(true)
+    try {
+      const res = await fetch('/api/kutxabank/dismiss', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ submission_id: sub.id }),
+      })
+      if (res.ok) {
+        setLeaving(true)
+        setTimeout(() => onSent(sub.id), 500)
+      } else {
+        const data = await res.json()
+        alert(data?.error ?? 'Error al eliminar')
+      }
+    } catch {
+      alert('Error de red')
+    } finally {
+      setDismissing(false)
+    }
+  }
 
   async function doSend() {
     setPhase('loading')
@@ -115,9 +139,22 @@ export default function KutxabankCard({ submission: sub, onSent }: Props) {
             )}
           </div>
         </div>
-        <span className={`shrink-0 rounded-full border px-2.5 py-0.5 text-xs font-medium ${statusConfig.cls}`}>
-          {statusConfig.label}
-        </span>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${statusConfig.cls}`}>
+            {statusConfig.label}
+          </span>
+          <button
+            onClick={doDismiss}
+            disabled={dismissing}
+            title="Eliminar tarjeta"
+            className="rounded p-1 text-gray-300 hover:bg-red-50 hover:text-red-500 transition-colors disabled:opacity-40"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round"
+                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* Body */}

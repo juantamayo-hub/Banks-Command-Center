@@ -66,6 +66,24 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             </div>
           </div>
 
+          {/* Kutxabank section */}
+          <div className="mt-6">
+            <p
+              className="mb-1 px-3 text-xs font-semibold uppercase tracking-wider"
+              style={{ color: 'var(--bayteca-green-light)' }}
+            >
+              Kutxabank
+            </p>
+            <div className="flex flex-col gap-0.5">
+              <Link href="/dashboard/kutxabank/envios" className="sidebar-link sidebar-link-sm">
+                📤 Procesar Envíos
+              </Link>
+              <Link href="/dashboard/kutxabank/estados" className="sidebar-link sidebar-link-sm">
+                📊 Procesar Estados
+              </Link>
+            </div>
+          </div>
+
           {/* Bancos section */}
           <div className="mt-6">
             <p

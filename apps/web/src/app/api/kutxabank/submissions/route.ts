@@ -28,7 +28,8 @@ export async function GET() {
   const { data, error } = await supabase
     .from('kutxabank_submissions')
     .select('*')
-    .neq('rastreator_status', 'sent')
+    .eq('rastreator_status', 'approved')
+    .is('dismissed_at', null)
     .order('created_at', { ascending: false })
 
   if (error) {
