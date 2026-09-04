@@ -32,7 +32,7 @@ const PIPEDRIVE_BASE  = 'https://api.pipedrive.com/v1'
 // ── Stage map ─────────────────────────────────────────────────────────────────
 
 const STAGE_MAP: Record<string, number | null> = {
-  'Pendiente de envío a Kutxabank': 70,
+  'Pendiente de envío a Kutxabank': 77,
   'Enviado a Kutxabank':            70,
   'Pendiente de llamada':           null,
   'Oferta recibida':                71,
@@ -47,7 +47,8 @@ const STAGE_MAP: Record<string, number | null> = {
 }
 
 const STAGE_NAMES: Record<number, string> = {
-  70: 'BS',
+  77: 'BS (Pendiente envío)',
+  70: 'BS (Enviado)',
   71: 'BoR',
   72: 'Valuation',
   73: 'FEIN',

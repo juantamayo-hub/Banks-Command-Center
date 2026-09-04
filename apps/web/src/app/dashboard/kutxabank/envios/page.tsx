@@ -45,9 +45,20 @@ function cellStr(row: unknown[], idx: number): string {
   return String(val).trim()
 }
 
-function parseWorkbook(wb: import('xlsx').WorkBook): ParsedEnviosRow[] {
-  const ws = wb.Sheets[wb.SheetNames[0]]
-  const raw = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '', raw: false })
+// Sheet names to look for (in order of preference)
+// Kutxabank uses "1º Filtro" (ordinal º) or "1 Filtro"
+const FILTRO_SHEET_NAMES = ['1º Filtro', '1° Filtro', '1 Filtro', '1er Filtro']
+
+function findSheet(wb: import('xlsx').WorkBook): import('xlsx').WorkSheet {
+  for (const name of FILTRO_SHEET_NAMES) {
+    if (wb.Sheets[name]) return wb.Sheets[name]
+  }
+  return wb.Sheets[wb.SheetNames[0]]
+}
+
+function parseWorkbook(wb: import('xlsx').WorkBook, rawStrings = false): ParsedEnviosRow[] {
+  const ws = findSheet(wb)
+  const raw = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '', raw: !rawStrings })
   return raw.slice(1).flatMap((row) => {
     const dealId = cellStr(row as unknown[], COL.DEAL_ID)
     if (!dealId) return []
@@ -97,18 +108,22 @@ export default function KutxabankEnviosPage() {
 
   const handleFile = useCallback((file: File) => {
     setFileName(file.name)
+    const isCSV = file.name.toLowerCase().endsWith('.csv')
     const reader = new FileReader()
     reader.onload = (e) => {
       try {
-        const wb = XLSX.read(e.target!.result as ArrayBuffer, { type: 'array', cellDates: true })
-        const rows = parseWorkbook(wb)
+        const wb = isCSV
+          ? XLSX.read(e.target!.result as string, { type: 'string', raw: true })
+          : XLSX.read(e.target!.result as ArrayBuffer, { type: 'array', cellDates: true })
+        const rows = parseWorkbook(wb, isCSV)
         setParsedRows(rows)
         setStage('previewing')
       } catch (err) {
         alert(`Error al leer el archivo: ${err instanceof Error ? err.message : String(err)}`)
       }
     }
-    reader.readAsArrayBuffer(file)
+    if (isCSV) reader.readAsText(file, 'utf-8')
+    else reader.readAsArrayBuffer(file)
   }, [])
 
   const onDrop = useCallback((e: React.DragEvent) => {
@@ -177,11 +192,11 @@ export default function KutxabankEnviosPage() {
           <p className="text-sm font-medium text-gray-700">
             Arrastra aquí el Excel "1 Filtro" o haz clic para seleccionarlo
           </p>
-          <p className="mt-1 text-xs text-gray-400">Formatos: .xlsx, .xls</p>
+          <p className="mt-1 text-xs text-gray-400">Formatos: .xlsx, .xls, .csv</p>
           <input
             ref={fileInputRef}
             type="file"
-            accept=".xlsx,.xls"
+            accept=".xlsx,.xls,.csv"
             className="hidden"
             onChange={onFileChange}
           />

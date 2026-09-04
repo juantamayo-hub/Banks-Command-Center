@@ -280,9 +280,6 @@ export default function EnviosPlataformaPage() {
           <div className="rounded-xl border border-gray-200 bg-white py-12 text-center">
             <p className="text-xl mb-2">✅</p>
             <p className="text-sm font-medium text-gray-700">No hay casos Kutxabank pendientes</p>
-            <p className="text-xs text-gray-400 mt-1">
-              Los casos aparecen automáticamente cuando un deal llega a Doc. Completed con Kutxabank seleccionado.
-            </p>
           </div>
         )}
 
