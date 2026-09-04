@@ -28,7 +28,7 @@
         "operation": "download",
         "fileId": {
           "__rl": true,
-          "value": "={{ $env.KUTXABANK_SHEET_ID }}",
+          "value": "1M-gqoiozJZz7nXgnVSPLtG253tLtgsoLgd7uTm3i_e8",
           "mode": "id"
         },
         "options": {
@@ -43,12 +43,12 @@
       "id": "download-sheet",
       "name": "Descargar Sheet como XLSX",
       "type": "n8n-nodes-base.googleDrive",
-      "typeVersion": 3,
+      "typeVersion": 2,
       "position": [240, 300],
       "credentials": {
         "googleDriveOAuth2Api": {
-          "id": "REPLACE_WITH_YOUR_CREDENTIAL_ID",
-          "name": "Juanjo Google Drive"
+          "id": "YgHXlMGu6BPZkHAh",
+          "name": "Juanjo"
         }
       }
     },
@@ -75,8 +75,8 @@
       "position": [480, 300],
       "credentials": {
         "gmailOAuth2": {
-          "id": "REPLACE_WITH_YOUR_CREDENTIAL_ID",
-          "name": "Gmail"
+          "id": "sW0S8ksGFfOAk3zC",
+          "name": "Hipotecas Bayteca"
         }
       }
     }
