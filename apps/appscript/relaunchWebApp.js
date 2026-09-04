@@ -140,42 +140,62 @@ function doPost(e) {
 
     // ── KUTXA_SYNC_ENVIOS: sincroniza filas aprobadas al Sheet de Kutxabank ──
     if (action === 'KUTXA_SYNC_ENVIOS') {
+      // rows: [{ deal_id, dni, respuesta }]
+      // respuesta: 'Enviar' → append to Ops. Enviadas + mark col I as 'Enviado'
+      // respuesta: 'No enviar' → only mark col I as 'No enviar' (no append)
       var rows = body.rows || [];
       if (!rows.length) {
-        output.setContent(JSON.stringify({ ok: true, synced: 0 }));
+        output.setContent(JSON.stringify({ ok: true, synced: 0, skipped: 0 }));
         return output;
       }
 
       var ss = SpreadsheetApp.getActiveSpreadsheet();
-
-      // "Ops. Enviadas" tab: append ID + DNI for each approved row
-      var opsSheet = ss.getSheetByName('Ops. Enviadas');
-      // "1 Filtro" tab: mark "Respuesta Rastreator" column (I = col 9) as processed
+      var opsSheet    = ss.getSheetByName('Ops. Enviadas');
       var filtroSheet = ss.getSheetByName('1 Filtro');
 
-      var synced = 0;
+      // Build set of deal_ids already in "Ops. Enviadas" (col A) for dedup
+      var existingOpsIds = {};
+      if (opsSheet && opsSheet.getLastRow() > 1) {
+        var opsColA = opsSheet.getRange(2, 1, opsSheet.getLastRow() - 1, 1).getValues();
+        for (var e = 0; e < opsColA.length; e++) {
+          var eid = String(opsColA[e][0]).trim();
+          if (eid) existingOpsIds[eid] = true;
+        }
+      }
+
+      // Read 1 Filtro once (col A = ID, col I = Respuesta Rastreator)
+      var filtroData = filtroSheet ? filtroSheet.getDataRange().getValues() : [];
+
+      var synced = 0, skipped = 0;
       for (var i = 0; i < rows.length; i++) {
-        var rowData = rows[i];
-        var dealId  = String(rowData.deal_id || '').trim();
-        var dni     = String(rowData.dni || '').trim();
+        var rowData   = rows[i];
+        var dealId    = String(rowData.deal_id || '').trim();
+        var dni       = String(rowData.dni || '').trim();
+        var respuesta = String(rowData.respuesta || 'Enviar').trim();
 
         if (!dealId) continue;
 
-        // Append to "Ops. Enviadas"
-        if (opsSheet) {
-          var newRow = opsSheet.getLastRow() + 1;
-          opsSheet.getRange(newRow, 1).setValue(dealId);  // A: ID
-          opsSheet.getRange(newRow, 2).setValue(dni);     // B: DNI
-          Logger.log('[KUTXA_SYNC_ENVIOS] Appended to Ops. Enviadas row=' + newRow + ' dealId=' + dealId);
+        if (respuesta === 'Enviar') {
+          // Dedup: skip if already in Ops. Enviadas
+          if (existingOpsIds[dealId]) {
+            Logger.log('[KUTXA_SYNC_ENVIOS] SKIP duplicate Ops. Enviadas dealId=' + dealId);
+            skipped++;
+          } else if (opsSheet) {
+            var newRow = opsSheet.getLastRow() + 1;
+            opsSheet.getRange(newRow, 1).setValue(dealId);
+            opsSheet.getRange(newRow, 2).setValue(dni);
+            existingOpsIds[dealId] = true; // prevent re-add within same batch
+            Logger.log('[KUTXA_SYNC_ENVIOS] Appended Ops. Enviadas row=' + newRow + ' dealId=' + dealId);
+          }
         }
 
-        // Mark "Respuesta Rastreator" (col I = 9) in "1 Filtro" for this deal
+        // Mark col I (Respuesta Rastreator) in 1 Filtro for both Enviar and No enviar
         if (filtroSheet) {
-          var filtroData = filtroSheet.getDataRange().getValues();
+          var label = (respuesta === 'Enviar') ? 'Enviado' : 'No enviar';
           for (var r = 1; r < filtroData.length; r++) {
             if (String(filtroData[r][0]).trim() === dealId) {
-              filtroSheet.getRange(r + 1, 9).setValue('Procesado');
-              Logger.log('[KUTXA_SYNC_ENVIOS] Marked 1 Filtro row=' + (r + 1) + ' dealId=' + dealId);
+              filtroSheet.getRange(r + 1, 9).setValue(label);
+              Logger.log('[KUTXA_SYNC_ENVIOS] Marked 1 Filtro row=' + (r + 1) + ' dealId=' + dealId + ' label=' + label);
               break;
             }
           }
@@ -184,7 +204,7 @@ function doPost(e) {
       }
 
       SpreadsheetApp.flush();
-      output.setContent(JSON.stringify({ ok: true, synced: synced }));
+      output.setContent(JSON.stringify({ ok: true, synced: synced, skipped: skipped }));
       return output;
     }
 

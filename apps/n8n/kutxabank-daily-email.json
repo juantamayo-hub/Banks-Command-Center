@@ -25,105 +25,74 @@
     },
     {
       "parameters": {
-        "operation": "read",
-        "documentId": {
+        "operation": "download",
+        "fileId": {
           "__rl": true,
           "value": "={{ $env.KUTXABANK_SHEET_ID }}",
           "mode": "id"
         },
-        "sheetName": {
-          "__rl": true,
-          "value": "1 Filtro",
-          "mode": "name"
-        },
         "options": {
-          "headerRow": 1
+          "fileName": "=Kutxabank_{{ $now.format('yyyy-MM-dd_HHmm') }}.xlsx",
+          "googleFileConversion": {
+            "conversion": {
+              "docsToFormat": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            }
+          }
         }
       },
-      "id": "read-1-filtro",
-      "name": "Read 1 Filtro",
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.5,
-      "position": [220, 200]
-    },
-    {
-      "parameters": {
-        "operation": "read",
-        "documentId": {
-          "__rl": true,
-          "value": "={{ $env.KUTXABANK_SHEET_ID }}",
-          "mode": "id"
-        },
-        "sheetName": {
-          "__rl": true,
-          "value": "Ops. Enviadas",
-          "mode": "name"
-        },
-        "options": {
-          "headerRow": 1
+      "id": "download-sheet",
+      "name": "Descargar Sheet como XLSX",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [240, 300],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "REPLACE_WITH_YOUR_CREDENTIAL_ID",
+          "name": "Juanjo Google Drive"
         }
-      },
-      "id": "read-ops-enviadas",
-      "name": "Read Ops. Enviadas",
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.5,
-      "position": [220, 420]
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "language": "javaScript",
-        "jsCode": "// Build HTML tables from both sheets\nconst filtroRows = $('Read 1 Filtro').all();\nconst opsRows = $('Read Ops. Enviadas').all();\n\nfunction buildTable(rows, label) {\n  if (!rows || rows.length === 0) {\n    return `<h3>${label}</h3><p>Sin datos.</p>`;\n  }\n  const headers = Object.keys(rows[0].json);\n  const ths = headers.map(h => `<th style=\"border:1px solid #ccc;padding:6px 10px;background:#f5f5f5;text-align:left;font-size:12px\">${h}</th>`).join('');\n  const trs = rows.map(row => {\n    const tds = headers.map(h => `<td style=\"border:1px solid #e0e0e0;padding:5px 10px;font-size:12px\">${row.json[h] ?? ''}</td>`).join('');\n    return `<tr>${tds}</tr>`;\n  }).join('');\n  return `\n    <h3 style=\"color:#2d6a4f;margin:24px 0 8px\">${label} (${rows.length} filas)</h3>\n    <table style=\"border-collapse:collapse;width:100%;margin-bottom:16px\">\n      <thead><tr>${ths}</tr></thead>\n      <tbody>${trs}</tbody>\n    </table>`;\n}\n\nconst now = new Date().toLocaleString('es-ES', { timeZone: 'Europe/Madrid' });\nconst html = `\n<!DOCTYPE html>\n<html>\n<body style=\"font-family:Arial,sans-serif;color:#333;max-width:900px;margin:0 auto;padding:16px\">\n  <h2 style=\"color:#2d6a4f\">Kutxabank — Resumen diario (${now})</h2>\n  ${buildTable(filtroRows, '1 Filtro')}\n  ${buildTable(opsRows, 'Ops. Enviadas')}\n  <p style=\"font-size:11px;color:#999;margin-top:32px\">Enviado automáticamente por Banks Command Center.</p>\n</body>\n</html>`;\n\nreturn [{ json: { html, subject: `Kutxabank diario — ${now}` } }];"
-      },
-      "id": "build-email",
-      "name": "Build HTML Email",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [460, 300]
+      }
     },
     {
       "parameters": {
         "sendTo": "juan.tamayo@huspy.io",
-        "subject": "={{ $json.subject }}",
-        "message": "={{ $json.html }}",
+        "subject": "=Kutxabank diario — {{ $now.setZone('Europe/Madrid').toFormat('d/M/yyyy HH:mm') }}",
+        "message": "Adjunto el Excel con las tabs '1 Filtro' y 'Ops. Enviadas' del día.",
         "options": {
+          "attachmentsUi": {
+            "attachmentsBinary": [
+              {
+                "property": "data"
+              }
+            ]
+          },
           "appendAttribution": false
         }
       },
       "id": "send-email",
-      "name": "Send Email",
+      "name": "Send Email con adjunto",
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.1,
-      "position": [680, 300]
+      "position": [480, 300],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "REPLACE_WITH_YOUR_CREDENTIAL_ID",
+          "name": "Gmail"
+        }
+      }
     }
   ],
   "connections": {
     "Schedule (13:00 & 17:00 Mon-Fri)": {
       "main": [
         [
-          { "node": "Read 1 Filtro", "type": "main", "index": 0 },
-          { "node": "Read Ops. Enviadas", "type": "main", "index": 0 }
+          { "node": "Descargar Sheet como XLSX", "type": "main", "index": 0 }
         ]
       ]
     },
-    "Read 1 Filtro": {
+    "Descargar Sheet como XLSX": {
       "main": [
         [
-          { "node": "Build HTML Email", "type": "main", "index": 0 }
-        ]
-      ]
-    },
-    "Read Ops. Enviadas": {
-      "main": [
-        [
-          { "node": "Build HTML Email", "type": "main", "index": 0 }
-        ]
-      ]
-    },
-    "Build HTML Email": {
-      "main": [
-        [
-          { "node": "Send Email", "type": "main", "index": 0 }
+          { "node": "Send Email con adjunto", "type": "main", "index": 0 }
         ]
       ]
     }

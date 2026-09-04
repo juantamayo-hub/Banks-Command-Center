@@ -103,7 +103,7 @@ async function addPipedriveNote(dealId: number, content: string): Promise<void> 
 
 // ── Apps Script sync ──────────────────────────────────────────────────────────
 
-async function syncToSheet(rows: Array<{ deal_id: string; dni: string }>): Promise<void> {
+async function syncToSheet(rows: Array<{ deal_id: string; dni: string; respuesta: string }>): Promise<void> {
   const url    = process.env.APPS_SCRIPT_WEB_APP_URL
   const secret = process.env.APPS_SCRIPT_RELAUNCH_SECRET
   if (!url || !secret) return
@@ -140,8 +140,8 @@ export async function POST(req: Request) {
   const supabase = await createAdminClient()
   const results: RowResult[] = []
 
-  // Collect "Enviar" rows for Sheet sync
-  const approvedForSync: Array<{ deal_id: string; dni: string }> = []
+  // Collect rows to sync to Google Sheet (Enviar + No enviar)
+  const rowsForSync: Array<{ deal_id: string; dni: string; respuesta: string }> = []
 
   for (const row of rows) {
     const dealIdStr  = String(row.deal_id ?? '').trim()
@@ -175,7 +175,7 @@ export async function POST(req: Request) {
           .update({ rastreator_status: 'approved' })
           .eq('deal_id', dealId)
       }
-      approvedForSync.push({ deal_id: dealIdStr, dni })
+      rowsForSync.push({ deal_id: dealIdStr, dni, respuesta: 'Enviar' })
       results.push({
         deal_id: dealIdStr,
         dni,
@@ -205,6 +205,7 @@ export async function POST(req: Request) {
           .eq('deal_id', dealId)
       }
 
+      rowsForSync.push({ deal_id: dealIdStr, dni, respuesta: 'No enviar' })
       results.push({
         deal_id: dealIdStr,
         dni,
@@ -218,9 +219,9 @@ export async function POST(req: Request) {
     }
   }
 
-  // Sync approved rows to Google Sheet (non-blocking)
-  if (approvedForSync.length > 0) {
-    void syncToSheet(approvedForSync)
+  // Sync rows to Google Sheet: Enviar → append + mark; No enviar → only mark (non-blocking)
+  if (rowsForSync.length > 0) {
+    void syncToSheet(rowsForSync)
   }
 
   const approved = results.filter((r) => r.status === 'approved').length
