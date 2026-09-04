@@ -1,38 +1,22 @@
 /**
  * POST /api/kutxabank/create-zip
  *
- * Called from n8n after downloading individual files from Google Drive.
- * Creates a single password-protected ZIP (ZipCrypto, password = DNI)
- * and returns it as binary.
+ * Called from n8n after converting files to base64 in JSON.
+ * Creates a single ZIP (no password) with all files and returns binary.
  *
  * Body:
  *   files        - array of { data: base64, fileName: string }
- *   dni          - password for the ZIP (DNI del cliente)
  *   zipFilename  - desired output filename
  */
 
-// force-dynamic prevents build-time module evaluation (archiver has side effects)
+import JSZip from 'jszip'
+
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
 interface ZipFile {
   data: string      // base64
   fileName: string
-}
-
-let _formatRegistered = false
-
-function getArchiver() {
-  // Late-require to avoid Turbopack bundling issues
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const archiver = require('archiver')
-  if (!_formatRegistered) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const plugin = require('archiver-zip-encrypted')
-    archiver.registerFormat('zip-encrypted', plugin)
-    _formatRegistered = true
-  }
-  return archiver
 }
 
 export async function POST(req: Request) {
@@ -44,7 +28,6 @@ export async function POST(req: Request) {
   }
 
   const files = body.files ?? []
-  const dni = (body.dni ?? 'bayteca').trim()
   const zipFilename = (body.zipFilename ?? 'Kutxabank.zip').trim()
 
   if (files.length === 0) {
@@ -52,27 +35,18 @@ export async function POST(req: Request) {
   }
 
   try {
-    const archiver = getArchiver()
+    const zip = new JSZip()
 
-    const zipBuffer = await new Promise<Buffer>((resolve, reject) => {
-      const chunks: Buffer[] = []
+    for (const file of files) {
+      // data arrives as base64 (re-encoded in n8n Code node)
+      const buf = Buffer.from(file.data, 'base64')
+      zip.file(file.fileName, buf)
+    }
 
-      const archive = archiver.create('zip-encrypted', {
-        zlib: { level: 8 },
-        encryptionMethod: 'zipCrypto',
-        password: dni,
-      })
-
-      archive.on('data', (chunk: Buffer) => chunks.push(chunk))
-      archive.on('end', () => resolve(Buffer.concat(chunks)))
-      archive.on('error', reject)
-
-      for (const file of files) {
-        const buf = Buffer.from(file.data, 'base64')
-        archive.append(buf, { name: file.fileName })
-      }
-
-      archive.finalize()
+    const zipBuffer = await zip.generateAsync({
+      type: 'nodebuffer',
+      compression: 'DEFLATE',
+      compressionOptions: { level: 6 },
     })
 
     return new Response(zipBuffer as unknown as BodyInit, {
