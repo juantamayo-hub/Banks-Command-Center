@@ -55,8 +55,8 @@
     {
       "parameters": {
         "sendTo": "juan.tamayo@huspy.io",
-        "subject": "=Kutxabank diario — {{ $now.setZone('Europe/Madrid').toFormat('d/M/yyyy HH:mm') }}",
-        "message": "Adjunto el Excel con las tabs '1 Filtro' y 'Ops. Enviadas' del día.",
+        "subject": "=Kutxabank — {{ $now.setZone('Europe/Madrid').toFormat('d/M/yyyy') }} ({{ $now.setZone('Europe/Madrid').hour < 14 ? '13:00' : '17:00' }})",
+        "message": "<p>={{ $now.setZone('Europe/Madrid').hour < 14 ? 'Buenos días' : 'Buenas tardes' }},</p><p>A continuación encontrarás el Excel con el estado actualizado de los casos de Kutxabank a fecha de hoy, <strong>{{ $now.setZone('Europe/Madrid').toFormat('d/M/yyyy') }}</strong>.</p><p>El archivo adjunto incluye las siguientes pestañas:</p><ul><li><strong>1º Filtro</strong> — Casos pendientes de respuesta de Rastreator</li><li><strong>Ops. Enviadas</strong> — Operaciones enviadas y su estado actual</li></ul><p>Un saludo,<br><em>Equipo Hipotecas Bayteca</em></p>",
         "options": {
           "attachmentsUi": {
             "attachmentsBinary": [
@@ -65,7 +65,8 @@
               }
             ]
           },
-          "appendAttribution": false
+          "appendAttribution": false,
+          "emailType": "html"
         }
       },
       "id": "send-email",
