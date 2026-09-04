@@ -3,7 +3,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## 🏦 Kutxabank ZIP Creator\n\n**Trigger:** Pipedrive webhook `deal.updated` → stage 62 + Kutxabank detectado\n\n**Flujo:**\n1. Webhook → validar stage 62 + Kutxabank en Bank 1–5\n2. Buscar archivos C003–C008 / D003–D008 en Google Drive\n3. Crear ZIP con contraseña = DNI del cliente (ZipCrypto tradicional)\n4. Subir ZIP a la carpeta del cliente en Drive\n5. Escribir fila en Rastreator sheet '1º Filtro'\n6. Guardar en Supabase vía nuestro API\n7. Crear nota en Pipedrive bank deal\n\n⚠️ **Configurar antes de activar:**\n- Credential: `Pipedrive API` → cuenta Hipotecas Bancos\n- Credential: `Google Drive OAuth2` → cuenta con acceso a las carpetas\n- Credential: `Google Sheets OAuth2` → misma cuenta\n- Env var en el nodo HTTP: `KUTXABANK_API_SECRET` (igual que en Vercel)\n- Webhook URL Pipedrive: conectar en Pipedrive > Tools > Webhooks\n\n⚠️ **Sheet Rastreator ID:** `1M-gqoiozJZz7nXgnVSPLtG253tLtgsoLgd7uTm3i_e8`\n⚠️ **Hoja:** `1º Filtro`",
+        "content": "## 🏦 Kutxabank ZIP Creator\n\n**Trigger:** Pipedrive webhook `deal.updated` → stage 62 + Kutxabank detectado\n\n**Flujo:**\n1. Webhook → validar stage 62 + Kutxabank en Bank 1–5\n2. Buscar archivos C003–C008 / D003–D008 en Google Drive\n3. Descargar cada archivo (filesystem-v2 binary)\n4. moveBinaryData → convierte binary a base64 en JSON\n5. Agregar todos los items en 1 → construir body\n6. HTTP Request a /api/kutxabank/create-zip → devuelve ZIP con contraseña ZipCrypto = DNI\n7. Subir ZIP a la carpeta del cliente en Drive\n8. Escribir fila en Rastreator sheet '1º Filtro'\n9. Guardar en Supabase vía nuestro API\n10. Crear nota en Pipedrive bank deal\n\n⚠️ **Configurar antes de activar:**\n- Credential: `Pipedrive API` → cuenta Hipotecas Bancos\n- Credential: `Google Drive OAuth2` → cuenta con acceso a las carpetas\n- Credential: `Google Sheets OAuth2` → misma cuenta\n- Webhook URL Pipedrive: conectar en Pipedrive > Tools > Webhooks\n\n⚠️ **Sheet Rastreator ID:** `1M-gqoiozJZz7nXgnVSPLtG253tLtgsoLgd7uTm3i_e8`\n⚠️ **Hoja:** `1º Filtro`",
         "height": 420,
         "width": 600,
         "color": 5
@@ -228,6 +228,77 @@
     },
     {
       "parameters": {
+        "mode": "binaryToJson",
+        "setAllData": false,
+        "sourceKey": "data",
+        "destinationKey": "fileBase64",
+        "encoding": "base64"
+      },
+      "id": "node-extract-b64",
+      "name": "Extraer Base64",
+      "type": "n8n-nodes-base.moveBinaryData",
+      "typeVersion": 1,
+      "position": [
+        2640,
+        704
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Agregar todos los items (uno por archivo) en un único body\n// para llamar al endpoint /api/kutxabank/create-zip\n//\n// Cada item tiene en json:\n//   fileBase64  – contenido del PDF en base64 (resuelto por moveBinaryData)\n//   fileName    – nombre del archivo\n//   + contexto: dni, zipFilename, folderId, dealId, bankDealId...\n\nconst items = $input.all();\nif (items.length === 0) {\n  throw new Error('No items to zip');\n}\n\nconst first = items[0].json;\n\nconst files = items.map(item => ({\n  data: item.json.fileBase64,\n  fileName: item.json.fileName,\n}));\n\nreturn [{\n  json: {\n    files,\n    dni: first.dni,\n    zipFilename: first.zipFilename,\n    folderId: first.folderId,\n    dealId: first.dealId,\n    bankDealId: first.bankDealId,\n    nombreCliente: first.nombreCliente,\n    missingDocs: first.missingDocs || [],\n    fileCount: files.length,\n    // financieros\n    importeCompraventa: first.importeCompraventa,\n    importeHipoteca: first.importeHipoteca,\n    ingresos1T: first.ingresos1T,\n    contrato1T: first.contrato1T,\n    ingresos2T: first.ingresos2T,\n    contrato2T: first.contrato2T,\n  }\n}];\n"
+      },
+      "id": "node-prepare-zip",
+      "name": "Preparar solicitud ZIP",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2880,
+        704
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://banks-command-center.vercel.app/api/kutxabank/create-zip",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($json) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      },
+      "id": "node-zip-api",
+      "name": "Crear ZIP via API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3100,
+        704
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Restaurar contexto JSON + pasar el binario ZIP al nodo de subida.\n// El HTTP Request anterior devolvió el ZIP como binary;\n// este nodo lo combina con el contexto de 'Preparar solicitud ZIP'.\n\nconst ctx = $('Preparar solicitud ZIP').first().json;\n\nreturn [{\n  json: {\n    dealId:          ctx.dealId,\n    bankDealId:      ctx.bankDealId,\n    folderId:        ctx.folderId,\n    zipFilename:     ctx.zipFilename,\n    nombreCliente:   ctx.nombreCliente,\n    dni:             ctx.dni,\n    missingDocs:     ctx.missingDocs || [],\n    fileCount:       ctx.fileCount || 0,\n    zipCreated:      true,\n    importeCompraventa: ctx.importeCompraventa,\n    importeHipoteca:    ctx.importeHipoteca,\n    ingresos1T:         ctx.ingresos1T,\n    contrato1T:         ctx.contrato1T,\n    ingresos2T:         ctx.ingresos2T,\n    contrato2T:         ctx.contrato2T,\n  },\n  binary: $input.first().binary   // referencia filesystem-v2 del ZIP — Drive lo resuelve\n}];\n"
+      },
+      "id": "node-create-zip",
+      "name": "Crear ZIP",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3300,
+        704
+      ]
+    },
+    {
+      "parameters": {
         "name": "={{ $json.zipFilename }}",
         "driveId": {
           "__rl": true,
@@ -246,7 +317,7 @@
       "type": "n8n-nodes-base.googleDrive",
       "typeVersion": 3,
       "position": [
-        3072,
+        3520,
         704
       ],
       "credentials": {
@@ -265,7 +336,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3280,
+        3740,
         704
       ]
     },
@@ -386,7 +457,7 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
       "position": [
-        3504,
+        3964,
         704
       ],
       "credentials": {
@@ -463,7 +534,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        3728,
+        4188,
         704
       ],
       "credentials": {
@@ -486,7 +557,7 @@
       "type": "n8n-nodes-base.pipedrive",
       "typeVersion": 1,
       "position": [
-        3952,
+        4412,
         704
       ],
       "credentials": {
@@ -495,35 +566,6 @@
           "name": "Hipotecas Bancos"
         }
       }
-    },
-    {
-      "parameters": {
-        "operation": "zip",
-        "binaryPropertyName": "data",
-        "options": {}
-      },
-      "id": "node-compress",
-      "name": "Comprimir archivos",
-      "type": "n8n-nodes-base.compression",
-      "typeVersion": 1.1,
-      "position": [
-        2640,
-        704
-      ]
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "// Añade contexto JSON al ZIP creado por el nodo Compression.\n// NO lee bytes binarios — solo pasa el binario de referencia al siguiente nodo.\n\nconst ctx = $('Filtrar documentos C/D').first().json;\nconst zipFilename = ctx.zipFilename\n  || `Kutxabank_${ctx.bankDealId || 'unknown'}_${ctx.dni || ''}.zip`;\nconst missingDocs = ctx.missingDocs || [];\nconst fileCount   = $('Descargar archivo').all().length;\n\nreturn [{\n  json: { ...ctx, zipCreated: true, missingDocs, zipFilename, fileCount },\n  binary: $input.first().binary   // referencia filesystem-v2 — el Drive node la resuelve\n}];\n"
-      },
-      "id": "node-create-zip",
-      "name": "Crear ZIP",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        2880,
-        704
-      ]
     }
   ],
   "connections": {
@@ -626,7 +668,51 @@
       "main": [
         [
           {
-            "node": "Comprimir archivos",
+            "node": "Extraer Base64",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraer Base64": {
+      "main": [
+        [
+          {
+            "node": "Preparar solicitud ZIP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar solicitud ZIP": {
+      "main": [
+        [
+          {
+            "node": "Crear ZIP via API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crear ZIP via API": {
+      "main": [
+        [
+          {
+            "node": "Crear ZIP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crear ZIP": {
+      "main": [
+        [
+          {
+            "node": "Subir ZIP a Drive",
             "type": "main",
             "index": 0
           }
@@ -671,28 +757,6 @@
         [
           {
             "node": "Nota en Pipedrive",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Comprimir archivos": {
-      "main": [
-        [
-          {
-            "node": "Crear ZIP",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Crear ZIP": {
-      "main": [
-        [
-          {
-            "node": "Subir ZIP a Drive",
             "type": "main",
             "index": 0
           }
