@@ -35,6 +35,9 @@ const DOC_LABELS: Record<string, string> = {
   D006: 'Nómina 2do Titular',
   D007: 'Contrato 2do Titular',
   D008: 'Renta 2do Titular',
+  F016: 'Otros',
+  AUTH_KUTXABANK: 'Autorización Kutxabank',
+  AUTH_BAYTECA: 'Autorización Bayteca',
 }
 
 type SendPhase = 'idle' | 'confirming' | 'loading' | 'done' | 'error'
