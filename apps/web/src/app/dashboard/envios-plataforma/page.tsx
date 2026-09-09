@@ -158,7 +158,7 @@ export default function EnviosPlataformaPage() {
       <section className="flex flex-col gap-4">
         <div className="flex items-center gap-3">
           <h2 className="text-sm font-semibold text-gray-700">
-            CaixaBank · Abanca · Bankinter · Santander
+            CaixaBank · Abanca · Bankinter · Santander · Sabadell
           </h2>
           <span className="text-xs text-gray-400">{deals.length} pendientes</span>
         </div>

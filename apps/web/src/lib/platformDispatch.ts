@@ -8,7 +8,7 @@
  * On mark-sent: deal moves to pipeline 7, stage 70 (Bank Submission).
  */
 
-export const PLATFORM_BANKS = ['CaixaBank', 'Abanca', 'Bankinter', 'Santander'] as const
+export const PLATFORM_BANKS = ['CaixaBank', 'Abanca', 'Bankinter', 'Santander', 'Sabadell'] as const
 export type PlatformBankName = (typeof PLATFORM_BANKS)[number]
 
 // Pipedrive custom field hash IDs for Bank 1–5 (which bank option)
@@ -51,6 +51,8 @@ export const OPTION_ID_TO_BANK: Record<number, PlatformBankName> = {
   2639: 'Bankinter', 2657: 'Bankinter', 2675: 'Bankinter', 2693: 'Bankinter', 2711: 'Bankinter',
   // Santander
   2635: 'Santander', 2653: 'Santander', 2671: 'Santander', 2689: 'Santander', 2707: 'Santander',
+  // Sabadell
+  2627: 'Sabadell',  2645: 'Sabadell',  2663: 'Sabadell',  2681: 'Sabadell',  2699: 'Sabadell',
 }
 
 // Pipedrive stages — pipeline 7 (Bayteca_BankArea)
@@ -90,4 +92,5 @@ export const BANK_COLOR: Record<PlatformBankName, string> = {
   Abanca:    'bg-emerald-50 text-emerald-700 border-emerald-200',
   Bankinter: 'bg-orange-50 text-orange-700 border-orange-200',
   Santander: 'bg-red-50 text-red-700 border-red-200',
+  Sabadell:  'bg-purple-50 text-purple-700 border-purple-200',
 }
