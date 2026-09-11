@@ -48,7 +48,7 @@ export default function KutxabankCard({ submission: sub, onSent }: Props) {
   const [leaving, setLeaving] = useState(false)
   const [dismissing, setDismissing] = useState(false)
 
-  const canSend = sub.rastreator_status === 'approved'
+  const canSend = sub.rastreator_status === 'approved' && !!sub.zip_file_id && !!sub.bank_deal_id
 
   async function doDismiss() {
     if (!confirm('¿Eliminar esta tarjeta? Se ocultará de la lista.')) return
@@ -178,7 +178,13 @@ export default function KutxabankCard({ submission: sub, onSent }: Props) {
             Abrir ZIP encriptado en Drive
           </a>
         ) : (
-          <p className="text-xs text-gray-400 italic">ZIP pendiente de creación…</p>
+          <div className="flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
+            <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round"
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            ZIP pendiente de creacion — no se puede enviar sin ZIP
+          </div>
         )}
 
         {/* Missing docs */}
@@ -214,6 +220,10 @@ export default function KutxabankCard({ submission: sub, onSent }: Props) {
                 >
                   Enviar a Kutxabank
                 </button>
+              ) : sub.rastreator_status === 'approved' && (!sub.zip_file_id || !sub.bank_deal_id) ? (
+                <p className="text-xs text-red-600">
+                  No se puede enviar: falta {!sub.zip_file_id ? 'ZIP' : ''}{!sub.zip_file_id && !sub.bank_deal_id ? ' y ' : ''}{!sub.bank_deal_id ? 'deal bancario' : ''}
+                </p>
               ) : sub.rastreator_status === 'pending' ? (
                 <p className="text-xs text-amber-600">
                   Esperando aprobación Rastreator para habilitar envío

@@ -50,6 +50,18 @@ export async function POST(req: Request) {
     )
   }
 
+  // Validate required fields — ZIP Creator must have run first
+  const missing: string[] = []
+  if (!sub.bank_deal_id) missing.push('bank_deal_id')
+  if (!sub.zip_file_id) missing.push('zip_file_id')
+  if (!sub.deal_id) missing.push('deal_id')
+  if (missing.length > 0) {
+    return NextResponse.json(
+      { error: `Faltan campos obligatorios: ${missing.join(', ')}. ¿Ya corrió el ZIP Creator?` },
+      { status: 409 }
+    )
+  }
+
   // Call n8n Email Sender webhook
   const n8nWebhookUrl = process.env.KUTXABANK_N8N_EMAIL_WEBHOOK_URL
   if (!n8nWebhookUrl) {
