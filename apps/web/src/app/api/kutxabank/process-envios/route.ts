@@ -4,14 +4,15 @@
  * Processes rows from the Kutxabank "1 Filtro" Excel.
  * Columns (0-indexed):
  *   A(0): ID (general deal_id)
- *   B(1): DNI
- *   C(2): Importe compraventa
- *   D(3): Importe hipoteca
- *   E(4): Ingresos 1T
- *   F(5): Tipo contrato 1T
- *   G(6): Ingresos 2T
- *   H(7): Tipo contrato 2T
- *   I(8): Respuesta Rastreator ("Enviar" / "No enviar" / empty)
+ *   B(1): DNI 1T
+ *   C(2): DNI 2T
+ *   D(3): Importe compraventa
+ *   E(4): Importe hipoteca
+ *   F(5): Ingresos 1T
+ *   G(6): Tipo contrato 1T
+ *   H(7): Ingresos 2T
+ *   I(8): Tipo contrato 2T
+ *   J(9): Respuesta Rastreator ("Enviar" / "No enviar" / empty)
  *
  * "Enviar"    → update rastreator_status='approved' in Supabase
  *             → call Apps Script to sync Google Sheet
@@ -34,14 +35,15 @@ const LOST_REASON_FIELD = '5af7c8a4d8341bfe53526b6a7b4e2fc793503a90'
 
 export interface ParsedEnviosRow {
   deal_id:            string   // col A (0) — general deal_id
-  dni:                string   // col B (1)
-  importe_compra:     string   // col C (2)
-  importe_hipoteca:   string   // col D (3)
-  ingresos_1t:        string   // col E (4)
-  tipo_contrato_1t:   string   // col F (5)
-  ingresos_2t:        string   // col G (6)
-  tipo_contrato_2t:   string   // col H (7)
-  respuesta:          string   // col I (8) — "Enviar" / "No enviar" / ""
+  dni:                string   // col B (1) — DNI 1T
+  dni_2t:             string   // col C (2) — DNI 2T
+  importe_compra:     string   // col D (3)
+  importe_hipoteca:   string   // col E (4)
+  ingresos_1t:        string   // col F (5)
+  tipo_contrato_1t:   string   // col G (6)
+  ingresos_2t:        string   // col H (7)
+  tipo_contrato_2t:   string   // col I (8)
+  respuesta:          string   // col J (9) — "Enviar" / "No enviar" / ""
 }
 
 interface RowResult {

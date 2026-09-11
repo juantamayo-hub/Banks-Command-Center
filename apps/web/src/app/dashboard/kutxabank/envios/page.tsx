@@ -7,14 +7,15 @@ import type { ParsedEnviosRow } from '@/app/api/kutxabank/process-envios/route'
 // ── Column indices (0-based) ──────────────────────────────────────────────────
 const COL = {
   DEAL_ID:          0, // A
-  DNI:              1, // B
-  IMPORTE_COMPRA:   2, // C
-  IMPORTE_HIPOTECA: 3, // D
-  INGRESOS_1T:      4, // E
-  TIPO_CONTRATO_1T: 5, // F
-  INGRESOS_2T:      6, // G
-  TIPO_CONTRATO_2T: 7, // H
-  RESPUESTA:        8, // I
+  DNI_1T:           1, // B
+  DNI_2T:           2, // C
+  IMPORTE_COMPRA:   3, // D
+  IMPORTE_HIPOTECA: 4, // E
+  INGRESOS_1T:      5, // F
+  TIPO_CONTRATO_1T: 6, // G
+  INGRESOS_2T:      7, // H
+  TIPO_CONTRATO_2T: 8, // I
+  RESPUESTA:        9, // J
 } as const
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -64,7 +65,8 @@ function parseWorkbook(wb: import('xlsx').WorkBook, rawStrings = false): ParsedE
     if (!dealId) return []
     return [{
       deal_id:          dealId,
-      dni:              cellStr(row as unknown[], COL.DNI),
+      dni:              cellStr(row as unknown[], COL.DNI_1T),
+      dni_2t:           cellStr(row as unknown[], COL.DNI_2T),
       importe_compra:   cellStr(row as unknown[], COL.IMPORTE_COMPRA),
       importe_hipoteca: cellStr(row as unknown[], COL.IMPORTE_HIPOTECA),
       ingresos_1t:      cellStr(row as unknown[], COL.INGRESOS_1T),
