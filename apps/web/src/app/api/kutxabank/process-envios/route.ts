@@ -174,11 +174,25 @@ async function resolveDealContext(excelDealId: number): Promise<DealContext | nu
     }
   }
 
-  // Maybe excelDealId IS the bank deal — check if it's in a bank pipeline
-  // Bank deals don't have Bank 1–5 fields. Return with bankDealId = excelDealId
-  // and generalDealId unknown (we'll try to find the submission by bank_deal_id)
+  // No Kutxabank in Bank 1–5 → this might BE the bank deal itself.
+  // Detect by title containing "Kutxabank" or pipeline_id = 6 (Bayteca_BankArea)
+  const title = String(deal.title ?? '').toLowerCase()
+  const pipelineId = deal.pipeline_id as number | undefined
+  const isBankDeal = title.includes('kutxabank') || pipelineId === 6
+
+  if (isBankDeal) {
+    // excelDealId IS the bank deal — we don't know the general deal from here
+    return {
+      generalDealId: excelDealId, // will be overridden by submission lookup if found
+      bankDealId: excelDealId,
+      nombreCliente,
+      plan,
+      driveFolderId,
+    }
+  }
+
   return {
-    generalDealId: excelDealId, // fallback, may be overridden by submission lookup
+    generalDealId: excelDealId,
     bankDealId: null,
     nombreCliente,
     plan,

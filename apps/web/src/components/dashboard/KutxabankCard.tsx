@@ -48,7 +48,8 @@ export default function KutxabankCard({ submission: sub, onSent }: Props) {
   const [leaving, setLeaving] = useState(false)
   const [dismissing, setDismissing] = useState(false)
 
-  const canSend = sub.rastreator_status === 'approved' && !!sub.zip_file_id && !!sub.bank_deal_id
+  // Email Sender resolves bank_deal_id + searches ZIP in Drive dynamically
+  const canSend = sub.rastreator_status === 'approved'
 
   async function doDismiss() {
     if (!confirm('¿Eliminar esta tarjeta? Se ocultará de la lista.')) return
@@ -220,10 +221,6 @@ export default function KutxabankCard({ submission: sub, onSent }: Props) {
                 >
                   Enviar a Kutxabank
                 </button>
-              ) : sub.rastreator_status === 'approved' && (!sub.zip_file_id || !sub.bank_deal_id) ? (
-                <p className="text-xs text-red-600">
-                  No se puede enviar: falta {!sub.zip_file_id ? 'ZIP' : ''}{!sub.zip_file_id && !sub.bank_deal_id ? ' y ' : ''}{!sub.bank_deal_id ? 'deal bancario' : ''}
-                </p>
               ) : sub.rastreator_status === 'pending' ? (
                 <p className="text-xs text-amber-600">
                   Esperando aprobación Rastreator para habilitar envío
