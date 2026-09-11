@@ -170,20 +170,28 @@ export async function POST(req: Request) {
       .single()
 
     if (respuesta === 'Enviar') {
-      // Mark as approved
-      if (sub) {
-        await supabase
-          .from('kutxabank_submissions')
-          .update({ rastreator_status: 'approved' })
-          .eq('deal_id', dealId)
-      }
+      // Mark as approved — upsert so it works even if n8n ZIP Creator didn't run
+      const { data: upserted } = await supabase
+        .from('kutxabank_submissions')
+        .upsert(
+          {
+            deal_id: dealId,
+            dni: dni || null,
+            rastreator_status: 'approved',
+            ...(sub ? {} : { missing_docs: [] }),
+          },
+          { onConflict: 'deal_id' }
+        )
+        .select('bank_deal_id')
+        .single()
+
       rowsForSync.push({ deal_id: dealIdStr, dni, respuesta: 'Enviar' })
       results.push({
         deal_id: dealIdStr,
         dni,
         respuesta,
         status: 'approved',
-        bank_deal_id: sub?.bank_deal_id ?? null,
+        bank_deal_id: upserted?.bank_deal_id ?? sub?.bank_deal_id ?? null,
       })
     } else {
       // "No enviar" → mark rejected + mark Pipedrive deal as lost
@@ -200,12 +208,17 @@ export async function POST(req: Request) {
         }
       }
 
-      if (sub) {
-        await supabase
-          .from('kutxabank_submissions')
-          .update({ rastreator_status: 'rejected' })
-          .eq('deal_id', dealId)
-      }
+      await supabase
+        .from('kutxabank_submissions')
+        .upsert(
+          {
+            deal_id: dealId,
+            dni: dni || null,
+            rastreator_status: 'rejected',
+            ...(sub ? {} : { missing_docs: [] }),
+          },
+          { onConflict: 'deal_id' }
+        )
 
       rowsForSync.push({ deal_id: dealIdStr, dni, respuesta: 'No enviar' })
       results.push({
