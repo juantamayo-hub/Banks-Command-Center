@@ -168,23 +168,25 @@ function doPost(e) {
 
       var synced = 0, skipped = 0;
       for (var i = 0; i < rows.length; i++) {
-        var rowData   = rows[i];
-        var dealId    = String(rowData.deal_id || '').trim();
-        var dni       = String(rowData.dni || '').trim();
-        var respuesta = String(rowData.respuesta || 'Enviar').trim();
+        var rowData     = rows[i];
+        var dealId      = String(rowData.deal_id || '').trim();      // general deal
+        var excelDealId = String(rowData.excel_deal_id || dealId).trim(); // raw Excel value (may be bank deal)
+        var dni         = String(rowData.dni || '').trim();
+        var respuesta   = String(rowData.respuesta || 'Enviar').trim();
 
         if (!dealId) continue;
 
         if (respuesta === 'Enviar') {
-          // Dedup: skip if already in Ops. Enviadas
-          if (existingOpsIds[dealId]) {
-            Logger.log('[KUTXA_SYNC_ENVIOS] SKIP duplicate Ops. Enviadas dealId=' + dealId);
+          // Dedup: skip if general OR excel deal already in Ops. Enviadas
+          if (existingOpsIds[dealId] || existingOpsIds[excelDealId]) {
+            Logger.log('[KUTXA_SYNC_ENVIOS] SKIP duplicate Ops. Enviadas dealId=' + dealId + ' excelDealId=' + excelDealId);
             skipped++;
           } else if (opsSheet) {
             var newRow = opsSheet.getLastRow() + 1;
-            opsSheet.getRange(newRow, 1).setValue(dealId);
+            opsSheet.getRange(newRow, 1).setValue(dealId);  // always write general deal
             opsSheet.getRange(newRow, 2).setValue(dni);
-            existingOpsIds[dealId] = true; // prevent re-add within same batch
+            existingOpsIds[dealId] = true;      // prevent re-add within same batch
+            existingOpsIds[excelDealId] = true;  // also mark excel ID as seen
             Logger.log('[KUTXA_SYNC_ENVIOS] Appended Ops. Enviadas row=' + newRow + ' dealId=' + dealId);
           }
         }
@@ -193,9 +195,14 @@ function doPost(e) {
         if (filtroSheet) {
           var label = (respuesta === 'Enviar') ? 'Enviado' : 'No enviar';
           for (var r = 1; r < filtroData.length; r++) {
-            if (String(filtroData[r][0]).trim() === dealId) {
+            var cellVal = String(filtroData[r][0]).trim();
+            if (cellVal === excelDealId || cellVal === dealId) {
               filtroSheet.getRange(r + 1, 9).setValue(label);
-              Logger.log('[KUTXA_SYNC_ENVIOS] Marked 1 Filtro row=' + (r + 1) + ' dealId=' + dealId + ' label=' + label);
+              // Normalize col A to general deal if it contained a bank deal
+              if (cellVal !== dealId) {
+                filtroSheet.getRange(r + 1, 1).setValue(Number(dealId));
+              }
+              Logger.log('[KUTXA_SYNC_ENVIOS] Marked 1 Filtro row=' + (r + 1) + ' dealId=' + dealId + ' excelDealId=' + excelDealId + ' label=' + label);
               break;
             }
           }

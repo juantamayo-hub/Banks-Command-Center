@@ -139,6 +139,22 @@ async function fetchDeal(dealId: number): Promise<Record<string, unknown> | null
   }
 }
 
+/** Find the general deal for a person (not in bank pipeline 6) */
+async function findGeneralDeal(personId: number): Promise<Record<string, unknown> | null> {
+  try {
+    const res = await fetch(
+      `${PIPEDRIVE_BASE}/persons/${personId}/deals?api_token=${PIPEDRIVE_TOKEN}&status=all_not_deleted`
+    )
+    if (!res.ok) return null
+    const json = await res.json()
+    const deals = (json?.data ?? []) as Record<string, unknown>[]
+    // Find a deal NOT in pipeline 6 (Bayteca_BankArea)
+    return deals.find((d) => d.pipeline_id !== 6) ?? null
+  } catch {
+    return null
+  }
+}
+
 /** Resolve general deal ID, bank deal ID, and client info from Pipedrive */
 async function resolveDealContext(excelDealId: number): Promise<DealContext | null> {
   const deal = await fetchDeal(excelDealId)
@@ -181,9 +197,25 @@ async function resolveDealContext(excelDealId: number): Promise<DealContext | nu
   const isBankDeal = title.includes('kutxabank') || pipelineId === 6
 
   if (isBankDeal) {
-    // excelDealId IS the bank deal — we don't know the general deal from here
+    // excelDealId IS the bank deal — find the general deal via person_id
+    const personId = deal.person_id as number | undefined
+    if (personId) {
+      const generalDeal = await findGeneralDeal(personId)
+      if (generalDeal) {
+        const genDriveUrl = String(generalDeal[DRIVE_FOLDER_FIELD] ?? '')
+        const genFolderId = parseDriveFolderId(genDriveUrl)
+        return {
+          generalDealId: generalDeal.id as number,
+          bankDealId: excelDealId,
+          nombreCliente: (generalDeal.person_name as string) || nombreCliente,
+          plan: (generalDeal['b5d36c005e38a4cd72d831be655996a3d6b34dc1'] as string) || plan,
+          driveFolderId: genFolderId || driveFolderId,
+        }
+      }
+    }
+    // Fallback: couldn't find general deal, use bank deal data
     return {
-      generalDealId: excelDealId, // will be overridden by submission lookup if found
+      generalDealId: excelDealId,
       bankDealId: excelDealId,
       nombreCliente,
       plan,
@@ -233,7 +265,7 @@ async function addPipedriveNote(dealId: number, content: string): Promise<void> 
 
 // ── Apps Script sync ──────────────────────────────────────────────────────────
 
-async function syncToSheet(rows: Array<{ deal_id: string; dni: string; respuesta: string }>): Promise<void> {
+async function syncToSheet(rows: Array<{ deal_id: string; excel_deal_id: string; dni: string; respuesta: string }>): Promise<void> {
   const url    = process.env.APPS_SCRIPT_WEB_APP_URL
   const secret = process.env.APPS_SCRIPT_RELAUNCH_SECRET
   if (!url || !secret) return
@@ -243,6 +275,7 @@ async function syncToSheet(rows: Array<{ deal_id: string; dni: string; respuesta
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         secret,
+        bank_slug: 'kutxabank',
         action: 'KUTXA_SYNC_ENVIOS',
         rows,
       }),
@@ -269,7 +302,7 @@ export async function POST(req: Request) {
 
   const supabase = await createAdminClient()
   const results: RowResult[] = []
-  const rowsForSync: Array<{ deal_id: string; dni: string; respuesta: string }> = []
+  const rowsForSync: Array<{ deal_id: string; excel_deal_id: string; dni: string; respuesta: string }> = []
 
   for (const row of rows) {
     const dealIdStr  = String(row.deal_id ?? '').trim()
@@ -338,7 +371,7 @@ export async function POST(req: Request) {
         .select('bank_deal_id')
         .single()
 
-      rowsForSync.push({ deal_id: dealIdStr, dni, respuesta: 'Enviar' })
+      rowsForSync.push({ deal_id: String(generalDealId), excel_deal_id: dealIdStr, dni, respuesta: 'Enviar' })
       results.push({
         deal_id: dealIdStr,
         dni,
@@ -377,7 +410,7 @@ export async function POST(req: Request) {
           { onConflict: 'deal_id' }
         )
 
-      rowsForSync.push({ deal_id: dealIdStr, dni, respuesta: 'No enviar' })
+      rowsForSync.push({ deal_id: String(generalDealId), excel_deal_id: dealIdStr, dni, respuesta: 'No enviar' })
       results.push({
         deal_id: dealIdStr,
         dni,
