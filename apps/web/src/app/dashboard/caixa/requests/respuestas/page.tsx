@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useCallback } from 'react'
+import PageHeader from '@/components/ui/PageHeader'
 import * as XLSX from 'xlsx'
 import type { ParsedRequestRow } from '@/app/api/caixa/requests/process/route'
 
@@ -136,22 +137,18 @@ export default function CaixaRequestsRespuestasPage() {
   }, [])
 
   return (
-    <div className="p-8 max-w-5xl">
+    <div className="p-6 max-w-5xl">
       {/* Header */}
       <div className="mb-8">
-        <div className="flex items-center gap-2 mb-1">
-          <a href="/dashboard/caixa/requests" className="text-sm text-gray-400 hover:text-gray-600">
-            Requests
-          </a>
-          <span className="text-gray-300">/</span>
-          <span className="text-sm text-gray-700">Procesar respuestas</span>
-        </div>
-        <h1 className="text-2xl font-bold text-gray-900">Respuestas CaixaBank</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Sube el archivo de consultas con las respuestas de CaixaBank. Se añadirá
-          una nota en cada deal de Pipedrive con la oportunidad, tipo de incidencia
-          y respuesta recibida.
-        </p>
+        <PageHeader
+          title="Respuestas CaixaBank"
+          subtitle="Sube el archivo de consultas con las respuestas de CaixaBank. Se añadirá una nota en cada deal de Pipedrive con la oportunidad, tipo de incidencia y respuesta recibida."
+          breadcrumbs={[
+            { label: 'Dashboard', href: '/dashboard' },
+            { label: 'CaixaBank', href: '/dashboard/caixa/respuestas' },
+            { label: 'Requests', href: '/dashboard/caixa/requests' },
+          ]}
+        />
       </div>
 
       {/* Drop zone */}
@@ -161,11 +158,13 @@ export default function CaixaRequestsRespuestasPage() {
           onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
           onDragLeave={() => setDragOver(false)}
           onClick={() => fileInputRef.current?.click()}
-          className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-12 transition-colors ${
+          className={`flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-12 transition-colors ${
             dragOver ? 'border-blue-400 bg-blue-50' : 'border-gray-300 bg-gray-50 hover:border-gray-400'
           }`}
         >
-          <span className="mb-3 text-4xl">📄</span>
+          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-lg bg-blue-50">
+            <svg className="h-6 w-6 text-blue-500" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
+          </div>
           <p className="text-sm font-medium text-gray-700">
             Arrastra aquí el archivo o haz clic para seleccionarlo
           </p>
@@ -176,7 +175,7 @@ export default function CaixaRequestsRespuestasPage() {
 
       {/* Preview */}
       {stage === 'previewing' && (
-        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
           <h2 className="mb-4 text-base font-semibold text-gray-900">Vista previa</h2>
           <div className="mb-5 grid grid-cols-2 gap-4 text-center">
             <div className="rounded-lg bg-gray-50 p-4">
@@ -237,7 +236,7 @@ export default function CaixaRequestsRespuestasPage() {
 
       {/* Processing */}
       {stage === 'processing' && (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-gray-200 bg-white p-12 shadow-sm">
+        <div className="flex flex-col items-center justify-center rounded-lg border border-gray-200 bg-white p-12 shadow-sm">
           <div className="mb-4 h-10 w-10 animate-spin rounded-full border-4 border-blue-200 border-t-blue-600" />
           <p className="text-sm font-medium text-gray-700">Procesando {parsedRows.length} filas…</p>
           <p className="mt-1 text-xs text-gray-400">Añadiendo notas en Pipedrive.</p>
@@ -248,7 +247,7 @@ export default function CaixaRequestsRespuestasPage() {
       {stage === 'done' && response && (
         <div className="space-y-6">
           {/* Summary */}
-          <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
             <h2 className="mb-4 text-base font-semibold text-gray-900">Resultado</h2>
             <div className="grid grid-cols-4 gap-4 text-center">
               <div className="rounded-lg bg-gray-50 p-4">
@@ -275,7 +274,7 @@ export default function CaixaRequestsRespuestasPage() {
 
           {/* Results table */}
           {response.results.length > 0 && (
-            <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+            <div className="rounded-lg border border-gray-200 bg-white shadow-sm overflow-hidden">
               <table className="min-w-full divide-y divide-gray-200 text-sm">
                 <thead className="bg-gray-50">
                   <tr>

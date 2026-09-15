@@ -1,4 +1,5 @@
 import StatusBadge from '@/components/ui/StatusBadge'
+import EmptyState from '@/components/ui/EmptyState'
 import RelaunchButton from '@/components/dashboard/RelaunchButton'
 import NotesCell from '@/components/dashboard/NotesCell'
 import DiscardButton from '@/components/dashboard/DiscardButton'
@@ -93,7 +94,7 @@ function PipedriveLink({ id, label }: { id: number; label?: string }) {
       href={`https://mdsl.pipedrive.com/deal/${id}`}
       target="_blank"
       rel="noopener noreferrer"
-      className="hover:text-indigo-600 underline decoration-dotted"
+      className="hover:text-blue-600 underline decoration-dotted"
     >
       {label ?? id}
     </a>
@@ -112,11 +113,7 @@ export default function SubmissionsTable({
   void _totalCount
 
   if (rows.length === 0) {
-    return (
-      <div className="rounded-lg border border-gray-200 bg-white p-12 text-center text-gray-500">
-        No hay envíos para mostrar con los filtros actuales.
-      </div>
-    )
+    return <EmptyState title="No hay envíos para mostrar con los filtros actuales." />
   }
 
   const rowOffset = (currentPage - 1) * pageSize
@@ -190,9 +187,9 @@ export default function SubmissionsTable({
                           target="_blank"
                           rel="noopener noreferrer"
                           title="Dossier Google Drive"
-                          className="hover:text-indigo-600"
+                          className="hover:text-blue-600"
                         >
-                          📁
+                          <svg className="inline h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" /></svg>
                         </a>
                       </>
                     ) : null}

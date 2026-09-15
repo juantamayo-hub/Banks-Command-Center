@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import NotesCell from '@/components/dashboard/NotesCell'
-import { BANK_COLOR, type PlatformBankName } from '@/lib/platformDispatch'
+import { BANK_COLOR, BANK_BRAND, BANK_ICON, type PlatformBankName } from '@/lib/platformDispatch'
+import Image from 'next/image'
 import type { SantanderInfo } from '@/app/api/platform-dispatches/route'
 
 interface BankItem {
@@ -130,20 +131,24 @@ export default function PlatformDispatchCard({
 
   const pendingCount = banks.filter((b) => b.phase !== 'done').length
 
+  // Use the first pending bank's brand for the card accent
+  const firstPending = banks.find((b) => b.phase !== 'done')
+  const brand = firstPending ? BANK_BRAND[firstPending.name] : null
+
   return (
     <div
-      className={`rounded-xl border bg-white shadow-sm transition-all duration-500 ${
-        leaving ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
-      }`}
+      className={`rounded-lg border bg-white shadow-sm transition-all duration-500 border-l-4 ${
+        brand ? brand.border : 'border-l-gray-200'
+      } ${leaving ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}
     >
       {/* Card header */}
-      <div className="flex items-start justify-between gap-4 px-5 py-4 border-b border-gray-100">
+      <div className={`flex items-start justify-between gap-4 px-5 py-4 border-b border-gray-100 ${brand ? brand.bg : ''}`}>
         <div className="min-w-0">
           <a
             href={`https://mdsl.pipedrive.com/deal/${dealId}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="block text-sm font-semibold text-gray-900 hover:text-indigo-700 truncate underline decoration-dotted"
+            className="block text-sm font-semibold text-gray-900 hover:text-blue-700 truncate underline decoration-dotted"
           >
             {dealTitle}
           </a>
@@ -185,10 +190,17 @@ export default function PlatformDispatchCard({
 
             {/* Bank name badge */}
             <span
-              className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${BANK_COLOR[bank.name]} ${
+              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium ${BANK_COLOR[bank.name]} ${
                 bank.phase === 'done' ? 'opacity-50' : ''
               }`}
             >
+              <Image
+                src={BANK_ICON[bank.name]}
+                alt={bank.name}
+                width={14}
+                height={14}
+                className="rounded-sm"
+              />
               {bank.name}
             </span>
             {/* Hipoteca Joven badge — only for Santander when conditions are met */}
@@ -214,7 +226,7 @@ export default function PlatformDispatchCard({
               {bank.phase === 'idle' && (
                 <button
                   onClick={() => startConfirm(bank.name)}
-                  className="rounded px-2.5 py-1 text-xs font-medium bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
+                  className="rounded px-2.5 py-1 text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
                 >
                   Marcar enviado
                 </button>

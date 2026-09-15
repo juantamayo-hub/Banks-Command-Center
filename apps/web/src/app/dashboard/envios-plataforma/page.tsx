@@ -4,7 +4,9 @@ import { useEffect, useState, useCallback } from 'react'
 import PlatformDispatchCard from '@/components/dashboard/PlatformDispatchCard'
 import KutxabankCard from '@/components/dashboard/KutxabankCard'
 import type { PlatformDealItem } from '@/app/api/platform-dispatches/route'
-import { PLATFORM_BANKS, BANK_COLOR, type PlatformBankName } from '@/lib/platformDispatch'
+import { PLATFORM_BANKS, BANK_COLOR, BANK_ICON, type PlatformBankName } from '@/lib/platformDispatch'
+import PageHeader from '@/components/ui/PageHeader'
+import EmptyState from '@/components/ui/EmptyState'
 
 interface KutxabankSubmission {
   id: string
@@ -103,56 +105,53 @@ export default function EnviosPlataformaPage() {
       : deals.filter((d) => d.banks.some((b) => b.name === bankFilter))
 
   return (
-    <div className="flex flex-col gap-8 p-6">
+    <div className="flex flex-col gap-6 p-6">
       {/* ── Header ──────────────────────────────────────────────────────────── */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-xl font-semibold" style={{ color: 'var(--bayteca-green)' }}>
-            Envíos por plataforma
-          </h1>
-          <p className="mt-1 text-sm text-gray-500">
-            Deals en <span className="font-medium">Doc. Completed</span> con bancos de envío manual.
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5">
-            <span className="text-xs text-gray-500 whitespace-nowrap">Desde</span>
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              className="text-sm text-gray-700 border-none outline-none bg-transparent"
-            />
-          </div>
-          <div className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5">
-            <span className="text-xs text-gray-500 whitespace-nowrap">Hasta</span>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="text-sm text-gray-700 border-none outline-none bg-transparent"
-            />
-          </div>
-          {(dateFrom || dateTo) && (
+      <PageHeader
+        title="Envíos por plataforma"
+        subtitle="Deals en Doc. Completed con bancos de envío manual."
+        breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }]}
+        actions={
+          <>
+            <div className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5">
+              <span className="text-xs text-gray-500 whitespace-nowrap">Desde</span>
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="text-sm text-gray-700 border-none outline-none bg-transparent"
+              />
+            </div>
+            <div className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5">
+              <span className="text-xs text-gray-500 whitespace-nowrap">Hasta</span>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="text-sm text-gray-700 border-none outline-none bg-transparent"
+              />
+            </div>
+            {(dateFrom || dateTo) && (
+              <button
+                onClick={() => { setDateFrom(''); setDateTo('') }}
+                className="text-xs text-gray-400 hover:text-gray-600 underline"
+              >
+                Limpiar
+              </button>
+            )}
             <button
-              onClick={() => { setDateFrom(''); setDateTo('') }}
-              className="text-xs text-gray-400 hover:text-gray-600 underline"
+              onClick={() => {
+                void fetchDeals(dateFrom || undefined, dateTo || undefined)
+                void fetchKutxa()
+              }}
+              disabled={loading}
+              className="shrink-0 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
             >
-              Limpiar
+              {loading ? 'Cargando…' : '↻ Actualizar'}
             </button>
-          )}
-          <button
-            onClick={() => {
-              void fetchDeals(dateFrom || undefined, dateTo || undefined)
-              void fetchKutxa()
-            }}
-            disabled={loading}
-            className="shrink-0 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
-          >
-            {loading ? 'Cargando…' : '↻ Actualizar'}
-          </button>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {/* ── Section: CaixaBank, Abanca, Bankinter, Santander ─────────────────── */}
       <section className="flex flex-col gap-4">
@@ -183,12 +182,13 @@ export default function EnviosPlataformaPage() {
                 <button
                   key={bank}
                   onClick={() => setBankFilter(bankFilter === bank ? 'Todos' : bank)}
-                  className={`rounded-full px-3 py-1 text-xs font-medium border transition-colors ${
+                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium border transition-colors ${
                     bankFilter === bank
                       ? BANK_COLOR[bank] + ' border-current'
                       : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
                   }`}
                 >
+                  <img src={BANK_ICON[bank]} alt={bank} width={14} height={14} className="rounded-sm" />
                   {bank} ({count})
                 </button>
               )
@@ -197,16 +197,16 @@ export default function EnviosPlataformaPage() {
         )}
 
         {loading && (
-          <div className="flex items-center justify-center rounded-xl border border-gray-200 bg-white py-14">
+          <div className="flex items-center justify-center rounded-lg border border-gray-200 bg-white py-14">
             <div className="text-center">
-              <div className="mx-auto mb-3 h-7 w-7 animate-spin rounded-full border-2 border-gray-200 border-t-indigo-600" />
+              <div className="mx-auto mb-3 h-7 w-7 animate-spin rounded-full border-2 border-gray-200 border-t-gray-600" />
               <p className="text-sm text-gray-400">Consultando Pipedrive…</p>
             </div>
           </div>
         )}
 
         {!loading && error && (
-          <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center">
+          <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-center">
             <p className="text-sm text-red-700">{error}</p>
             <button
               onClick={() => void fetchDeals(dateFrom || undefined, dateTo || undefined)}
@@ -218,12 +218,9 @@ export default function EnviosPlataformaPage() {
         )}
 
         {!loading && !error && filtered.length === 0 && (
-          <div className="rounded-xl border border-gray-200 bg-white py-12 text-center">
-            <p className="text-xl mb-2">✅</p>
-            <p className="text-sm font-medium text-gray-700">
-              {bankFilter === 'Todos' ? 'No hay envíos pendientes' : `Sin pendientes para ${bankFilter}`}
-            </p>
-          </div>
+          <EmptyState
+            title={bankFilter === 'Todos' ? 'No hay envíos pendientes' : `Sin pendientes para ${bankFilter}`}
+          />
         )}
 
         {!loading && !error && filtered.length > 0 && (
@@ -246,7 +243,10 @@ export default function EnviosPlataformaPage() {
       {/* ── Section: Kutxabank ────────────────────────────────────────────────── */}
       <section className="flex flex-col gap-4">
         <div className="flex items-center gap-3">
-          <h2 className="text-sm font-semibold text-gray-700">Kutxabank</h2>
+          <span className="flex items-center gap-1.5 text-sm font-semibold text-gray-700">
+            <img src="/banks/kutxabank.png" alt="Kutxabank" width={16} height={16} className="rounded-sm" />
+            Kutxabank
+          </span>
           <span className="text-xs text-gray-400">
             {kutxaSubs.length > 0 ? `${kutxaSubs.length} caso${kutxaSubs.length !== 1 ? 's' : ''}` : ''}
           </span>
@@ -256,16 +256,16 @@ export default function EnviosPlataformaPage() {
         </div>
 
         {kutxaLoading && (
-          <div className="flex items-center justify-center rounded-xl border border-gray-200 bg-white py-14">
+          <div className="flex items-center justify-center rounded-lg border border-gray-200 bg-white py-14">
             <div className="text-center">
-              <div className="mx-auto mb-3 h-7 w-7 animate-spin rounded-full border-2 border-gray-200 border-t-teal-600" />
+              <div className="mx-auto mb-3 h-7 w-7 animate-spin rounded-full border-2 border-gray-200 border-t-gray-600" />
               <p className="text-sm text-gray-400">Cargando Kutxabank…</p>
             </div>
           </div>
         )}
 
         {!kutxaLoading && kutxaError && (
-          <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-center">
+          <div className="rounded-lg border border-red-200 bg-red-50 p-5 text-center">
             <p className="text-sm text-red-700">{kutxaError}</p>
             <button
               onClick={fetchKutxa}
@@ -277,10 +277,7 @@ export default function EnviosPlataformaPage() {
         )}
 
         {!kutxaLoading && !kutxaError && kutxaSubs.length === 0 && (
-          <div className="rounded-xl border border-gray-200 bg-white py-12 text-center">
-            <p className="text-xl mb-2">✅</p>
-            <p className="text-sm font-medium text-gray-700">No hay casos Kutxabank pendientes</p>
-          </div>
+          <EmptyState title="No hay casos Kutxabank pendientes" />
         )}
 
         {!kutxaLoading && !kutxaError && kutxaSubs.length > 0 && (

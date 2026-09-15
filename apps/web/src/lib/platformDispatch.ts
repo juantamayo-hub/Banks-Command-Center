@@ -88,9 +88,28 @@ export const KUTXABANK_OPTION_IDS = [2633, 2651, 2669, 2687, 2705] as const
 
 // Badge color per bank
 export const BANK_COLOR: Record<PlatformBankName, string> = {
-  CaixaBank: 'bg-blue-50 text-blue-700 border-blue-200',
+  CaixaBank: 'bg-sky-50 text-sky-700 border-sky-200',
   Abanca:    'bg-emerald-50 text-emerald-700 border-emerald-200',
   Bankinter: 'bg-orange-50 text-orange-700 border-orange-200',
   Santander: 'bg-red-50 text-red-700 border-red-200',
-  Sabadell:  'bg-purple-50 text-purple-700 border-purple-200',
+  Sabadell:  'bg-blue-50 text-blue-700 border-blue-200',
+}
+
+// Brand accent for card borders / header tints (real brand colors)
+export const BANK_BRAND: Record<PlatformBankName, { border: string; bg: string; accent: string }> = {
+  CaixaBank: { border: 'border-l-sky-400',    bg: 'bg-sky-50/40',    accent: '#007EAE' },
+  Abanca:    { border: 'border-l-emerald-400', bg: 'bg-emerald-50/40', accent: '#00A551' },
+  Bankinter: { border: 'border-l-orange-400',  bg: 'bg-orange-50/40',  accent: '#FF6600' },
+  Santander: { border: 'border-l-red-400',     bg: 'bg-red-50/40',     accent: '#EC0000' },
+  Sabadell:  { border: 'border-l-blue-400',    bg: 'bg-blue-50/40',    accent: '#0063BE' },
+}
+
+// Favicon path per bank
+export const BANK_ICON: Record<PlatformBankName | 'Kutxabank', string> = {
+  CaixaBank:  '/banks/caixabank.png',
+  Abanca:     '/banks/abanca.png',
+  Bankinter:  '/banks/bankinter.png',
+  Santander:  '/banks/santander.png',
+  Sabadell:   '/banks/sabadell.png',
+  Kutxabank:  '/banks/kutxabank.png',
 }

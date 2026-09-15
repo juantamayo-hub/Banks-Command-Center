@@ -5,6 +5,8 @@ import SubmissionsTable from '@/components/dashboard/SubmissionsTable'
 import Pagination from '@/components/dashboard/Pagination'
 import { Suspense } from 'react'
 import { fetchGDriveLinks } from '@/lib/pipedrive'
+import PageHeader from '@/components/ui/PageHeader'
+import Toolbar from '@/components/ui/Toolbar'
 
 const PAGE_SIZE = 50
 
@@ -118,11 +120,13 @@ export default async function BankPage({ params, searchParams }: BankPageProps) 
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      {/* Header */}
-      <div>
-        <p className="text-xs text-gray-400 uppercase tracking-wide">Banco</p>
-        <h1 className="text-xl font-semibold text-gray-900">{bank.name}</h1>
-      </div>
+      <PageHeader
+        title={bank.name}
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Bancos', href: '/dashboard/metricas' },
+        ]}
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
@@ -176,15 +180,37 @@ export default async function BankPage({ params, searchParams }: BankPageProps) 
         </div>
       )}
 
-      {/* Filter label */}
-      <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-3">
-        <span className="text-sm font-medium text-gray-900">
-          {sp.status ? sp.status : 'Todos los envios'}
-        </span>
+      {/* Status filter pills */}
+      <Toolbar>
+        <div className="flex flex-wrap items-center gap-2">
+          {[
+            { label: 'Todos', status: '', count: totalCount ?? 0 },
+            { label: 'Enviados', status: 'sent', count: sentCount ?? 0 },
+            { label: 'Pendientes', status: 'pending_ready', count: pendingCount ?? 0 },
+            { label: 'Bloqueados', status: 'blocked_red_flag,blocked_missing_docs,blocked_validation', count: blockedCount ?? 0 },
+            { label: 'Fallidos', status: 'failed', count: failedCount ?? 0 },
+            { label: 'Ofertas', status: 'offer_received', count: offerCount ?? 0 },
+          ].map((pill) => {
+            const isActive = (sp.status ?? '') === pill.status
+            return (
+              <a
+                key={pill.label}
+                href={pill.status ? `${base}?status=${pill.status}` : base}
+                className={`rounded-full px-3 py-1 text-xs font-medium border transition-colors ${
+                  isActive
+                    ? 'bg-gray-800 text-white border-gray-800'
+                    : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
+                }`}
+              >
+                {pill.label} ({(pill.count ?? 0).toLocaleString('es-ES')})
+              </a>
+            )
+          })}
+        </div>
         <span className="text-sm text-gray-400">
-          ({tableTotal.toLocaleString('es-ES')} resultados)
+          {tableTotal.toLocaleString('es-ES')} resultados
         </span>
-      </div>
+      </Toolbar>
 
       {/* Table */}
       <SubmissionsTable

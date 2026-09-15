@@ -24,7 +24,7 @@ export default function DashboardError({ error, reset }: ErrorProps) {
       </div>
       <button
         onClick={reset}
-        className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-medium text-white hover:bg-indigo-700 transition-colors"
+        className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
       >
         Reintentar
       </button>

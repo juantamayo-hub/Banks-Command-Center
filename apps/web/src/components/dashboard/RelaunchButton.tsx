@@ -219,7 +219,7 @@ export default function RelaunchButton({
 
     const btnColor = isAutorizacion || needsForce
       ? 'bg-amber-600 hover:bg-amber-700'
-      : 'bg-indigo-600 hover:bg-indigo-700'
+      : 'bg-blue-600 hover:bg-blue-700'
 
     return (
       <span className="flex flex-wrap items-center gap-1.5">
@@ -246,7 +246,7 @@ export default function RelaunchButton({
       <button
         onClick={() => handleAction('ENVIAR')}
         title="Autorizar envío del dossier al banco (primer envío)"
-        className="rounded px-2 py-0.5 text-xs font-medium bg-green-50 text-green-700 hover:bg-green-100 transition-colors"
+        className="rounded px-2 py-0.5 text-xs font-medium bg-green-50 text-green-700 hover:bg-green-100 transition-colors focus:outline-none focus:ring-1 focus:ring-gray-300"
       >
         Autorizar envío
       </button>
@@ -258,14 +258,14 @@ export default function RelaunchButton({
       <button
         onClick={() => handleAction('ENVIAR')}
         title="Reintenta el envío normal (Enviar=Yes)"
-        className="rounded px-2 py-0.5 text-xs font-medium bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors"
+        className="rounded px-2 py-0.5 text-xs font-medium bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors focus:outline-none focus:ring-1 focus:ring-gray-300"
       >
         {needsForce ? '↺ Verificar' : 'Verificar'}
       </button>
       <button
         onClick={() => handleAction('AUTORIZACION')}
         title="Autoriza el envío a pesar de red flags o docs faltantes (Autorización=Yes)"
-        className="rounded px-2 py-0.5 text-xs font-medium bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors"
+        className="rounded px-2 py-0.5 text-xs font-medium bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors focus:outline-none focus:ring-1 focus:ring-gray-300"
       >
         {needsForce ? '↺ Autorizar' : 'Autorizar'}
       </button>
