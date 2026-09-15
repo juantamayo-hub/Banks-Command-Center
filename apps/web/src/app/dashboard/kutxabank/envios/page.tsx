@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useCallback } from 'react'
+import PageHeader from '@/components/ui/PageHeader'
 import * as XLSX from 'xlsx'
 import type { ParsedEnviosRow } from '@/app/api/kutxabank/process-envios/route'
 
@@ -169,14 +170,16 @@ export default function KutxabankEnviosPage() {
   const toReject = parsedRows.filter((r) => r.respuesta === 'No enviar').length
 
   return (
-    <div className="p-8 max-w-5xl">
-      {/* Header */}
+    <div className="p-6 max-w-5xl">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Kutxabank — Procesar Envíos (1 Filtro)</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Sube el Excel "1 Filtro" de Rastreator. Las filas con "Enviar" se aprueban;
-          las de "No enviar" se marcan como perdidas en Pipedrive.
-        </p>
+        <PageHeader
+          title="Procesar Envíos (1 Filtro)"
+          subtitle={'Sube el Excel "1 Filtro" de Rastreator. Las filas con "Enviar" se aprueban; las de "No enviar" se marcan como perdidas en Pipedrive.'}
+          breadcrumbs={[
+            { label: 'Dashboard', href: '/dashboard' },
+            { label: 'Kutxabank', href: '/dashboard/kutxabank/envios' },
+          ]}
+        />
       </div>
 
       {/* Drop zone */}
@@ -186,11 +189,13 @@ export default function KutxabankEnviosPage() {
           onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
           onDragLeave={() => setDragOver(false)}
           onClick={() => fileInputRef.current?.click()}
-          className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-12 transition-colors ${
+          className={`flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-12 transition-colors ${
             dragOver ? 'border-teal-400 bg-teal-50' : 'border-gray-300 bg-gray-50 hover:border-gray-400'
           }`}
         >
-          <span className="mb-3 text-4xl">📤</span>
+          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-lg bg-teal-50">
+            <svg className="h-6 w-6 text-teal-500" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" /></svg>
+          </div>
           <p className="text-sm font-medium text-gray-700">
             Arrastra aquí el Excel "1 Filtro" o haz clic para seleccionarlo
           </p>
@@ -207,7 +212,7 @@ export default function KutxabankEnviosPage() {
 
       {/* Preview */}
       {stage === 'previewing' && (
-        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
           <h2 className="mb-4 text-base font-semibold text-gray-900">Vista previa</h2>
           <div className="mb-5 grid grid-cols-4 gap-4 text-center">
             <div className="rounded-lg bg-gray-50 p-4">
@@ -246,7 +251,7 @@ export default function KutxabankEnviosPage() {
 
       {/* Processing spinner */}
       {stage === 'processing' && (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-gray-200 bg-white p-12 shadow-sm">
+        <div className="flex flex-col items-center justify-center rounded-lg border border-gray-200 bg-white p-12 shadow-sm">
           <div className="mb-4 h-10 w-10 animate-spin rounded-full border-4 border-teal-200 border-t-teal-600" />
           <p className="text-sm font-medium text-gray-700">Procesando filas…</p>
         </div>
@@ -255,7 +260,7 @@ export default function KutxabankEnviosPage() {
       {/* Done */}
       {stage === 'done' && response && (
         <div className="space-y-6">
-          <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
             <h2 className="mb-4 text-base font-semibold text-gray-900">Resultado</h2>
             <div className="grid grid-cols-5 gap-3 text-center">
               <div className="rounded-lg bg-gray-50 p-3">
@@ -290,7 +295,7 @@ export default function KutxabankEnviosPage() {
           </div>
 
           {response.results.length > 0 && (
-            <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+            <div className="rounded-lg border border-gray-200 bg-white shadow-sm overflow-hidden">
               <table className="min-w-full divide-y divide-gray-200 text-sm">
                 <thead className="bg-gray-50">
                   <tr>
@@ -327,7 +332,7 @@ export default function KutxabankEnviosPage() {
                             href={`https://mdsl.pipedrive.com/deal/${r.bank_deal_id}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="ml-2 text-indigo-600 hover:underline"
+                            className="ml-2 text-blue-600 hover:underline"
                           >
                             Bank #{r.bank_deal_id}
                           </a>

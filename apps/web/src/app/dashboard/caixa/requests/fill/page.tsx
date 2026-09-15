@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import PageHeader from '@/components/ui/PageHeader'
 
 export default function CaixaRequestsFillPage() {
   const today = new Date().toISOString().slice(0, 10)
@@ -40,26 +41,21 @@ export default function CaixaRequestsFillPage() {
   }
 
   return (
-    <div className="p-8 max-w-2xl">
+    <div className="p-6 max-w-2xl">
       {/* Breadcrumb */}
-      <div className="flex items-center gap-2 mb-1">
-        <a href="/dashboard/caixa/requests" className="text-sm text-gray-400 hover:text-gray-600">
-          Requests
-        </a>
-        <span className="text-gray-300">/</span>
-        <span className="text-sm text-gray-700">Rellenar formulario</span>
-      </div>
-
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Rellenar formulario CaixaBank</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Genera el Excel de consultas para enviar a CaixaBank con los tickets
-          abiertos del día seleccionado. Se rellena automáticamente el External ID
-          de Pipedrive y las notas del ticket.
-        </p>
+        <PageHeader
+          title="Rellenar formulario CaixaBank"
+          subtitle="Genera el Excel de consultas para enviar a CaixaBank con los tickets abiertos del día seleccionado. Se rellena automáticamente el External ID de Pipedrive y las notas del ticket."
+          breadcrumbs={[
+            { label: 'Dashboard', href: '/dashboard' },
+            { label: 'CaixaBank', href: '/dashboard/caixa/respuestas' },
+            { label: 'Requests', href: '/dashboard/caixa/requests' },
+          ]}
+        />
       </div>
 
-      <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+      <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
         {/* Date range */}
         <div className="mb-5 flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-2">

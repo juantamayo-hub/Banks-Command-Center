@@ -9,6 +9,9 @@ import { Suspense } from 'react'
 import { ACTIVE_BANKS } from '@/lib/banks'
 import { fetchGDriveLinks } from '@/lib/pipedrive'
 import DocCompletedWidget from '@/components/dashboard/DocCompletedWidget'
+import PageHeader from '@/components/ui/PageHeader'
+import Tabs from '@/components/ui/Tabs'
+import Toolbar from '@/components/ui/Toolbar'
 
 const PAGE_SIZE = 50
 
@@ -179,18 +182,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      {/* Page header */}
-      <div>
-        <h1 className="text-xl font-semibold" style={{ color: 'var(--bayteca-green)' }}>
-          Dashboard de envíos
-        </h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Visión general del estado de los envíos bancarios.
-        </p>
-      </div>
+      <PageHeader
+        title="Dashboard de envíos"
+        subtitle="Visión general del estado de los envíos bancarios."
+      />
 
-      {/* Stats — just two cards */}
-      <div className="grid grid-cols-2 gap-3 max-w-xs">
+      {/* Stats */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatsCard
           label="Pendientes"
           value={pendingCount ?? 0}
@@ -205,37 +203,29 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         />
       </div>
 
-      {/* Doc Completados Widget */}
+      {/* Doc Completados */}
       <DocCompletedWidget />
 
       {/* Tabs */}
-      <div className="flex border-b border-gray-200">
-        <a
-          href={`/dashboard?tab=pendientes${bankParam}${qParam}${dateFromParam}${dateToParam}`}
-          className={`px-5 py-2.5 text-sm font-medium transition-colors ${
-            tab === 'pendientes'
-              ? 'border-b-2 border-indigo-600 text-indigo-700'
-              : 'text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          Pendientes&nbsp;
-          <span className="text-xs tabular-nums">({(pendingCount ?? 0).toLocaleString('es-ES')})</span>
-        </a>
-        <a
-          href={`/dashboard?tab=enviados${bankParam}${qParam}${dateFromParam}${dateToParam}`}
-          className={`px-5 py-2.5 text-sm font-medium transition-colors ${
-            tab === 'enviados'
-              ? 'border-b-2 border-indigo-600 text-indigo-700'
-              : 'text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          Enviados&nbsp;
-          <span className="text-xs tabular-nums">({(sentCount ?? 0).toLocaleString('es-ES')})</span>
-        </a>
-      </div>
+      <Tabs
+        tabs={[
+          {
+            label: 'Pendientes',
+            href: `/dashboard?tab=pendientes${bankParam}${qParam}${dateFromParam}${dateToParam}`,
+            count: pendingCount ?? 0,
+            active: tab === 'pendientes',
+          },
+          {
+            label: 'Enviados',
+            href: `/dashboard?tab=enviados${bankParam}${qParam}${dateFromParam}${dateToParam}`,
+            count: sentCount ?? 0,
+            active: tab === 'enviados',
+          },
+        ]}
+      />
 
       {/* Filter bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3">
+      <Toolbar>
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-gray-900">
             {tab === 'pendientes' ? 'Pendientes' : 'Enviados'}
@@ -270,7 +260,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             </a>
           )}
         </div>
-      </div>
+      </Toolbar>
 
       {/* Table */}
       <SubmissionsTable

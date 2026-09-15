@@ -43,17 +43,18 @@ export default function DocCompletedWidget() {
         <div className="flex items-center gap-2">
           <h2 className="text-sm font-semibold text-gray-700">Doc. Completados</h2>
           {!loading && !error && (
-            <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700">
+            <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
               {deals.length}
             </span>
           )}
         </div>
         <button
           onClick={() => setShowModal(true)}
-          className="text-xs text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+          className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
           title="Ver todos"
         >
-          🔍 Ver todos
+          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" /></svg>
+          Ver todos
         </button>
       </div>
 
@@ -70,7 +71,7 @@ export default function DocCompletedWidget() {
                 href={`https://mdsl.pipedrive.com/deal/${d.deal_id}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="truncate text-sm text-gray-700 hover:text-indigo-600 hover:underline"
+                className="truncate text-sm text-gray-700 hover:text-blue-600 hover:underline"
               >
                 {d.deal_title}
               </a>
@@ -89,7 +90,7 @@ export default function DocCompletedWidget() {
           onClick={() => setShowModal(false)}
         >
           <div
-            className="bg-white rounded-xl shadow-xl max-w-2xl w-full mx-4 overflow-hidden"
+            className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
@@ -121,7 +122,7 @@ export default function DocCompletedWidget() {
                           href={`https://mdsl.pipedrive.com/deal/${d.deal_id}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="hover:text-indigo-600 underline"
+                          className="hover:text-blue-600 underline"
                         >
                           {d.deal_id}
                         </a>

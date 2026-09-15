@@ -63,7 +63,7 @@ export default function NoteHistory({ notes, sheetNote }: NoteHistoryProps) {
               )}
               <button
                 onClick={() => setExpanded((p) => !p)}
-                className="self-start text-[10px] text-indigo-500 hover:text-indigo-700 font-medium"
+                className="self-start text-[10px] text-blue-500 hover:text-blue-700 font-medium"
               >
                 {expanded ? 'Ver menos' : `Ver ${notes.length - 1} más`}
               </button>

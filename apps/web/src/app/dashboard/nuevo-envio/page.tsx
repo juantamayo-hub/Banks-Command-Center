@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import PageHeader from '@/components/ui/PageHeader'
 
 type Phase =
   | 'idle'
@@ -123,16 +124,17 @@ export default function NuevoEnvioPage() {
   const isLoading = phase === 'verifying' || phase === 'creating'
 
   return (
-    <div className="p-8 max-w-xl">
-      <h1 className="text-xl font-semibold mb-1" style={{ color: 'var(--bayteca-green)' }}>
-        Nuevo envío
-      </h1>
-      <p className="text-sm text-gray-500 mb-6">
-        Genera una fila en la hoja del banco. Solo necesitas el ID del deal bancario (pipeline 7).
-      </p>
+    <div className="p-6 max-w-xl">
+      <div className="mb-6">
+        <PageHeader
+          title="Nuevo envío"
+          subtitle="Genera una fila en la hoja del banco. Solo necesitas el ID del deal bancario (pipeline 7)."
+          breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }]}
+        />
+      </div>
 
       {/* ── Step 1: Bank Deal ID ── */}
-      <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+      <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
         <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">
           Paso 1 — Deal bancario
         </p>
@@ -148,7 +150,7 @@ export default function NuevoEnvioPage() {
               value={bankDealId}
               onChange={(e) => { setBankDealId(e.target.value); if (phase !== 'idle') setPhase('idle') }}
               placeholder="ej. 415230"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               disabled={isLoading}
             />
           </div>
@@ -156,7 +158,7 @@ export default function NuevoEnvioPage() {
           <button
             onClick={handleVerify}
             disabled={isLoading || !bankDealId}
-            className="w-full rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+            className="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
           >
             {phase === 'verifying' ? 'Buscando en Pipedrive…' : 'Verificar'}
           </button>
@@ -172,7 +174,7 @@ export default function NuevoEnvioPage() {
 
       {/* ── Bank not found ── */}
       {phase === 'bank_not_found' && (
-        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-6 shadow-sm">
+        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-6 shadow-sm">
           <p className="text-sm font-medium text-amber-800">
             Banco no reconocido: &quot;{bankNotFoundName}&quot;
           </p>
@@ -189,7 +191,7 @@ export default function NuevoEnvioPage() {
 
       {/* ── Step 2: Confirmation (only when match) ── */}
       {(phase === 'match' || phase === 'creating') && verifyResult && (
-        <div className="mt-4 rounded-xl border border-green-200 bg-white p-6 shadow-sm">
+        <div className="mt-4 rounded-lg border border-green-200 bg-white p-6 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">
             Paso 2 — Confirmar y autorizar
           </p>
@@ -235,8 +237,10 @@ export default function NuevoEnvioPage() {
 
       {/* ── Success ── */}
       {phase === 'success' && verifyResult && (
-        <div className="mt-4 rounded-xl border border-green-300 bg-green-50 p-6 text-center shadow-sm">
-          <p className="text-2xl mb-2">✅</p>
+        <div className="mt-4 rounded-lg border border-green-300 bg-green-50 p-6 text-center shadow-sm">
+          <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-green-100">
+            <svg className="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+          </div>
           <p className="text-sm font-semibold text-green-800">
             Fila generada en {verifyResult.bank_name}
           </p>

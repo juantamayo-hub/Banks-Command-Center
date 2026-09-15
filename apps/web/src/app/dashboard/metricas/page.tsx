@@ -1,6 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { CLUSTERS, CLUSTER_BY_SLUG } from '@/lib/redFlagClusters'
+import PageHeader from '@/components/ui/PageHeader'
+import DataTable from '@/components/ui/DataTable'
 
 export default async function MetricasPage() {
   const supabase = await createClient()
@@ -60,69 +62,66 @@ export default async function MetricasPage() {
   const maxCluster = allClusterEntries[0]?.count ?? 1
 
   return (
-    <div className="flex flex-col gap-8 p-6">
-      <div>
-        <h1 className="text-xl font-semibold text-gray-900">Métricas generales</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Actividad por banco, clustering de red flags y distribución de bloqueos.
-        </p>
-      </div>
+    <div className="flex flex-col gap-6 p-6">
+      <PageHeader
+        title="Métricas generales"
+        subtitle="Actividad por banco, clustering de red flags y distribución de bloqueos."
+        breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }]}
+      />
 
       {/* ── Per-bank stats (from bank_stats() RPC) ──────────────────────── */}
       <section>
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">
           Actividad por banco
         </h2>
-        <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                {['Banco', 'Total', 'Enviados', 'Bloqueados', 'Pendientes', 'Fallidos', 'Ofertas', 'Volumen'].map((h) => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    {h}
-                  </th>
-                ))}
+        <DataTable
+          columns={[
+            { label: 'Banco' },
+            { label: 'Total', align: 'right' },
+            { label: 'Enviados', align: 'right' },
+            { label: 'Bloqueados', align: 'right' },
+            { label: 'Pendientes', align: 'right' },
+            { label: 'Fallidos', align: 'right' },
+            { label: 'Ofertas', align: 'right' },
+            { label: 'Volumen' },
+          ]}
+        >
+          {sortedBanks.map((b) => {
+            const barWidth = Math.round((Number(b.total) / maxTotal) * 100)
+            const sentPct = Number(b.total) > 0 ? Math.round((Number(b.sent) / Number(b.total)) * 100) : 0
+            return (
+              <tr key={b.slug} className="hover:bg-gray-50 transition-colors">
+                <td className="px-4 py-3">
+                  <Link href={`/dashboard/bancos/${b.slug}`} className="text-sm font-medium text-blue-600 hover:underline">
+                    {b.name}
+                  </Link>
+                </td>
+                <td className="px-4 py-3 text-right text-sm tabular-nums text-gray-900">{Number(b.total).toLocaleString('es-ES')}</td>
+                <td className="px-4 py-3 text-right text-sm tabular-nums text-green-700">{Number(b.sent).toLocaleString('es-ES')}</td>
+                <td className="px-4 py-3 text-right text-sm tabular-nums text-orange-600">
+                  {Number(b.blocked) > 0 ? Number(b.blocked).toLocaleString('es-ES') : <span className="text-gray-300">—</span>}
+                </td>
+                <td className="px-4 py-3 text-right text-sm tabular-nums text-blue-600">
+                  {Number(b.pending) > 0 ? Number(b.pending).toLocaleString('es-ES') : <span className="text-gray-300">—</span>}
+                </td>
+                <td className="px-4 py-3 text-right text-sm tabular-nums text-red-600">
+                  {Number(b.failed) > 0 ? Number(b.failed).toLocaleString('es-ES') : <span className="text-gray-300">—</span>}
+                </td>
+                <td className="px-4 py-3 text-right text-sm tabular-nums text-emerald-600">
+                  {Number(b.offers) > 0 ? Number(b.offers).toLocaleString('es-ES') : <span className="text-gray-300">—</span>}
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 w-24 overflow-hidden rounded-full bg-gray-100">
+                      <div className="h-full rounded-full bg-green-500" style={{ width: `${barWidth}%` }} />
+                    </div>
+                    <span className="text-xs tabular-nums text-gray-400">{sentPct}%</span>
+                  </div>
+                </td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 bg-white">
-              {sortedBanks.map((b) => {
-                const barWidth = Math.round((Number(b.total) / maxTotal) * 100)
-                const sentPct = Number(b.total) > 0 ? Math.round((Number(b.sent) / Number(b.total)) * 100) : 0
-                return (
-                  <tr key={b.slug} className="hover:bg-gray-50">
-                    <td className="px-4 py-3">
-                      <Link href={`/dashboard/bancos/${b.slug}`} className="text-sm font-medium text-blue-600 hover:underline">
-                        {b.name}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3 text-right text-sm tabular-nums text-gray-900">{Number(b.total).toLocaleString('es-ES')}</td>
-                    <td className="px-4 py-3 text-right text-sm tabular-nums text-green-700">{Number(b.sent).toLocaleString('es-ES')}</td>
-                    <td className="px-4 py-3 text-right text-sm tabular-nums text-orange-600">
-                      {Number(b.blocked) > 0 ? Number(b.blocked).toLocaleString('es-ES') : <span className="text-gray-300">—</span>}
-                    </td>
-                    <td className="px-4 py-3 text-right text-sm tabular-nums text-blue-600">
-                      {Number(b.pending) > 0 ? Number(b.pending).toLocaleString('es-ES') : <span className="text-gray-300">—</span>}
-                    </td>
-                    <td className="px-4 py-3 text-right text-sm tabular-nums text-red-600">
-                      {Number(b.failed) > 0 ? Number(b.failed).toLocaleString('es-ES') : <span className="text-gray-300">—</span>}
-                    </td>
-                    <td className="px-4 py-3 text-right text-sm tabular-nums text-emerald-600">
-                      {Number(b.offers) > 0 ? Number(b.offers).toLocaleString('es-ES') : <span className="text-gray-300">—</span>}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <div className="h-2 w-24 overflow-hidden rounded-full bg-gray-100">
-                          <div className="h-full rounded-full bg-green-500" style={{ width: `${barWidth}%` }} />
-                        </div>
-                        <span className="text-xs tabular-nums text-gray-400">{sentPct}%</span>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+            )
+          })}
+        </DataTable>
       </section>
 
       {/* ── Red flag clusters ────────────────────────────────────────────── */}

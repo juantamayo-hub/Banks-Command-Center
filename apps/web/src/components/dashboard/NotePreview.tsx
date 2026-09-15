@@ -29,7 +29,7 @@ export default function NotePreview({ text }: NotePreviewProps) {
           <span className="whitespace-pre-wrap">{trimmed}</span>
           <button
             onClick={() => setExpanded(false)}
-            className="ml-1.5 text-indigo-500 hover:text-indigo-700 font-medium whitespace-nowrap"
+            className="ml-1.5 text-blue-500 hover:text-blue-700 font-medium whitespace-nowrap"
           >
             Ver menos
           </button>
@@ -42,7 +42,7 @@ export default function NotePreview({ text }: NotePreviewProps) {
           </span>
           <button
             onClick={() => setExpanded(true)}
-            className="ml-1.5 text-indigo-500 hover:text-indigo-700 font-medium whitespace-nowrap"
+            className="ml-1.5 text-blue-500 hover:text-blue-700 font-medium whitespace-nowrap"
           >
             Ver más
           </button>

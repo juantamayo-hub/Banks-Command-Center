@@ -35,14 +35,14 @@ export default function DateRangeFilter({
         type="date"
         defaultValue={dateFrom ?? ''}
         onChange={(e) => update('date_from', e.target.value)}
-        className="rounded border border-gray-300 px-2 py-1 text-xs focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+        className="rounded border border-gray-300 px-2 py-1 text-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
       />
       <span className="text-xs text-gray-500">Hasta</span>
       <input
         type="date"
         defaultValue={dateTo ?? ''}
         onChange={(e) => update('date_to', e.target.value)}
-        className="rounded border border-gray-300 px-2 py-1 text-xs focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+        className="rounded border border-gray-300 px-2 py-1 text-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
       />
     </div>
   )

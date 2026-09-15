@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useCallback } from 'react'
+import PageHeader from '@/components/ui/PageHeader'
 import * as XLSX from 'xlsx'
 import type { ParsedCaixaRow } from '@/app/api/caixa/process/route'
 
@@ -186,14 +187,16 @@ export default function CaixaRespuestasPage() {
   }).length
 
   return (
-    <div className="p-8 max-w-5xl">
-      {/* Header */}
+    <div className="p-6 max-w-5xl">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Respuestas de Caixa</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Sube el Excel diario. Se añadirán notas en Pipedrive y se marcarán los
-          deals cerrados como perdidos con el motivo correcto.
-        </p>
+        <PageHeader
+          title="Respuestas de Caixa"
+          subtitle="Sube el Excel diario. Se añadirán notas en Pipedrive y se marcarán los deals cerrados como perdidos con el motivo correcto."
+          breadcrumbs={[
+            { label: 'Dashboard', href: '/dashboard' },
+            { label: 'CaixaBank', href: '/dashboard/caixa/respuestas' },
+          ]}
+        />
       </div>
 
       {/* Date filter */}
@@ -218,11 +221,13 @@ export default function CaixaRespuestasPage() {
           onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
           onDragLeave={() => setDragOver(false)}
           onClick={() => fileInputRef.current?.click()}
-          className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-12 transition-colors ${
+          className={`flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-12 transition-colors ${
             dragOver ? 'border-blue-400 bg-blue-50' : 'border-gray-300 bg-gray-50 hover:border-gray-400'
           }`}
         >
-          <span className="mb-3 text-4xl">📄</span>
+          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-lg bg-blue-50">
+            <svg className="h-6 w-6 text-blue-500" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
+          </div>
           <p className="text-sm font-medium text-gray-700">
             Arrastra aquí el Excel o haz clic para seleccionarlo
           </p>
@@ -239,7 +244,7 @@ export default function CaixaRespuestasPage() {
 
       {/* Preview */}
       {stage === 'previewing' && (
-        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
           <h2 className="mb-4 text-base font-semibold text-gray-900">Vista previa</h2>
           <div className="mb-5 grid grid-cols-3 gap-4 text-center">
             <div className="rounded-lg bg-gray-50 p-4">
@@ -277,7 +282,7 @@ export default function CaixaRespuestasPage() {
 
       {/* Processing spinner */}
       {stage === 'processing' && (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-gray-200 bg-white p-12 shadow-sm">
+        <div className="flex flex-col items-center justify-center rounded-lg border border-gray-200 bg-white p-12 shadow-sm">
           <div className="mb-4 h-10 w-10 animate-spin rounded-full border-4 border-blue-200 border-t-blue-600" />
           <p className="text-sm font-medium text-gray-700">
             Procesando {filteredCount} filas...
@@ -292,7 +297,7 @@ export default function CaixaRespuestasPage() {
       {stage === 'done' && response && (
         <div className="space-y-6">
           {/* Summary banner */}
-          <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
             <h2 className="mb-4 text-base font-semibold text-gray-900">Resultado</h2>
             <div className="grid grid-cols-4 gap-4 text-center">
               <div className="rounded-lg bg-gray-50 p-4">
@@ -324,7 +329,7 @@ export default function CaixaRespuestasPage() {
 
           {/* Results table */}
           {response.results.length > 0 && (
-            <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+            <div className="rounded-lg border border-gray-200 bg-white shadow-sm overflow-hidden">
               <table className="min-w-full divide-y divide-gray-200 text-sm">
                 <thead className="bg-gray-50">
                   <tr>

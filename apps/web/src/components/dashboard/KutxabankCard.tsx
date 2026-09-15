@@ -107,15 +107,16 @@ export default function KutxabankCard({ submission: sub, onSent }: Props) {
 
   return (
     <div
-      className={`rounded-xl border bg-white shadow-sm transition-all duration-500 ${
+      className={`rounded-lg border border-l-4 border-l-teal-400 bg-white shadow-sm transition-all duration-500 ${
         leaving ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
       }`}
     >
       {/* Header */}
-      <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-gray-100">
+      <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-gray-100 bg-teal-50/40">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-bold tracking-wider text-teal-700 bg-teal-50 border border-teal-200 rounded-full px-2.5 py-0.5">
+            <span className="inline-flex items-center gap-1.5 text-xs font-bold tracking-wider text-teal-700 bg-teal-50 border border-teal-200 rounded-full px-2.5 py-0.5">
+              <img src="/banks/kutxabank.png" alt="Kutxabank" width={14} height={14} className="rounded-sm" />
               Kutxabank
             </span>
           </div>
@@ -127,7 +128,7 @@ export default function KutxabankCard({ submission: sub, onSent }: Props) {
               href={`https://mdsl.pipedrive.com/deal/${sub.deal_id}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="hover:text-indigo-600 underline"
+              className="hover:text-blue-600 underline"
             >
               Deal #{sub.deal_id}
             </a>
@@ -136,7 +137,7 @@ export default function KutxabankCard({ submission: sub, onSent }: Props) {
                 href={`https://mdsl.pipedrive.com/deal/${sub.bank_deal_id}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="hover:text-indigo-600 underline"
+                className="hover:text-blue-600 underline"
               >
                 Bank #{sub.bank_deal_id}
               </a>
@@ -170,7 +171,7 @@ export default function KutxabankCard({ submission: sub, onSent }: Props) {
             href={sub.zip_drive_link}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1.5 text-sm text-indigo-600 hover:text-indigo-800 hover:underline"
+            className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 hover:underline"
           >
             <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round"
@@ -186,7 +187,8 @@ export default function KutxabankCard({ submission: sub, onSent }: Props) {
         {sub.missing_docs.length > 0 && (
           <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5">
             <p className="text-xs font-semibold text-red-700 mb-1.5">
-              ⚠️ Documentos faltantes ({sub.missing_docs.length})
+              <svg className="inline h-3.5 w-3.5 mr-0.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
+              Documentos faltantes ({sub.missing_docs.length})
             </p>
             <ul className="flex flex-col gap-0.5">
               {sub.missing_docs.map((code) => (
@@ -201,7 +203,10 @@ export default function KutxabankCard({ submission: sub, onSent }: Props) {
         )}
 
         {sub.missing_docs.length === 0 && sub.zip_drive_link && (
-          <p className="text-xs text-green-600">✓ Todos los documentos encontrados</p>
+          <p className="text-xs text-green-600 flex items-center gap-1">
+            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+            Todos los documentos encontrados
+          </p>
         )}
 
         {/* Send action */}

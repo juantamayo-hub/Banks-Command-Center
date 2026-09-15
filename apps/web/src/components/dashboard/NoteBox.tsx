@@ -68,13 +68,13 @@ export default function NoteBox({ dealId, sheetRowId, platformDispatchId, onSave
         onChange={(e) => setNote(e.target.value)}
         disabled={phase === 'loading'}
         placeholder="Añadir nota..."
-        className="w-full min-w-[180px] rounded border border-gray-200 px-2 py-1 text-xs text-gray-800 placeholder-gray-400 focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-300 disabled:bg-gray-50 resize-none"
+        className="w-full min-w-[180px] rounded border border-gray-200 px-2 py-1 text-xs text-gray-800 placeholder-gray-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-300 disabled:bg-gray-50 resize-none"
       />
       <div className="flex items-center gap-2">
         <button
           onClick={handleSubmit}
           disabled={phase === 'loading' || note.trim().length === 0}
-          className="rounded px-2 py-0.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 disabled:cursor-not-allowed transition-colors"
+          className="rounded px-2 py-0.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed transition-colors"
         >
           {phase === 'loading' ? 'Guardando…' : 'Guardar nota'}
         </button>
