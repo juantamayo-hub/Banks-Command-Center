@@ -24,20 +24,34 @@ export async function POST(req: NextRequest) {
 
   const supabase = await createAdminClient()
 
-  // Fetch rows that need clustering
-  let query = supabase
-    .from('red_flag_events')
-    .select('id, raw_text')
+  // When force=true, paginate through ALL events to ensure complete re-clustering
+  let allEvents: { id: string; raw_text: string }[] = []
 
-  if (!force) {
-    query = query.is('normalized_reason', null)
+  if (force) {
+    let offset = 0
+    const PAGE = 1000
+    while (offset < MAX_ROWS) {
+      const { data: page, error: pageErr } = await supabase
+        .from('red_flag_events')
+        .select('id, raw_text')
+        .range(offset, offset + PAGE - 1)
+      if (pageErr) return NextResponse.json({ error: pageErr.message }, { status: 500 })
+      if (!page || page.length === 0) break
+      allEvents.push(...page)
+      if (page.length < PAGE) break
+      offset += PAGE
+    }
+  } else {
+    const { data: page, error: pageErr } = await supabase
+      .from('red_flag_events')
+      .select('id, raw_text')
+      .is('normalized_reason', null)
+      .limit(MAX_ROWS)
+    if (pageErr) return NextResponse.json({ error: pageErr.message }, { status: 500 })
+    allEvents = page ?? []
   }
 
-  const { data: events, error } = await query.limit(MAX_ROWS)
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
+  const events = allEvents
 
   if (!events || events.length === 0) {
     return NextResponse.json({ ok: true, updated: 0, message: 'Nada que actualizar.' })

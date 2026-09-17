@@ -12,28 +12,16 @@ export interface ClusterDef {
 
 export const CLUSTERS: ClusterDef[] = [
   {
+    slug: 'tasacion_ltv',
+    label: 'Financiación / LTV',
+    description: 'Porcentaje de financiación o LTV por encima del límite del banco.',
+    color: 'bg-purple-100 text-purple-800',
+  },
+  {
     slug: 'edad_plazo',
     label: 'Edad / Plazo',
     description: 'Edad máxima excedida o plazo hipotecario fuera de límite.',
     color: 'bg-orange-100 text-orange-800',
-  },
-  {
-    slug: 'deuda_cirbe',
-    label: 'Deuda / CIRBE',
-    description: 'Ratio de endeudamiento o CIRBE elevado.',
-    color: 'bg-red-100 text-red-800',
-  },
-  {
-    slug: 'importe_limite',
-    label: 'Importe límite',
-    description: 'Importe inferior al mínimo o superior al máximo del banco.',
-    color: 'bg-yellow-100 text-yellow-800',
-  },
-  {
-    slug: 'historial_credito',
-    label: 'Historial crediticio',
-    description: 'ASNEF, RAI, morosidad u otras incidencias de crédito.',
-    color: 'bg-red-200 text-red-900',
   },
   {
     slug: 'ingresos',
@@ -42,10 +30,10 @@ export const CLUSTERS: ClusterDef[] = [
     color: 'bg-amber-100 text-amber-800',
   },
   {
-    slug: 'tasacion_ltv',
-    label: 'Tasación / LTV',
-    description: 'Porcentaje de financiación o LTV por encima del límite.',
-    color: 'bg-purple-100 text-purple-800',
+    slug: 'importe_limite',
+    label: 'Importe límite',
+    description: 'Importe inferior al mínimo o superior al máximo del banco.',
+    color: 'bg-yellow-100 text-yellow-800',
   },
   {
     slug: 'documentos',
@@ -54,16 +42,34 @@ export const CLUSTERS: ClusterDef[] = [
     color: 'bg-blue-100 text-blue-800',
   },
   {
-    slug: 'residencia',
-    label: 'Residencia fiscal',
-    description: 'Titular no es residente fiscal en España.',
-    color: 'bg-indigo-100 text-indigo-800',
+    slug: 'deuda_cirbe',
+    label: 'Deuda / CIRBE',
+    description: 'Ratio de endeudamiento o CIRBE elevado.',
+    color: 'bg-red-100 text-red-800',
+  },
+  {
+    slug: 'historial_credito',
+    label: 'Historial crediticio',
+    description: 'ASNEF, RAI, morosidad u otras incidencias de crédito.',
+    color: 'bg-red-200 text-red-900',
+  },
+  {
+    slug: 'antiguedad_laboral',
+    label: 'Antigüedad laboral',
+    description: 'Antigüedad laboral insuficiente para el banco.',
+    color: 'bg-lime-100 text-lime-800',
   },
   {
     slug: 'actividad_laboral',
     label: 'Actividad laboral',
     description: 'Autónomo, RETA o actividad empresarial no aceptada.',
     color: 'bg-teal-100 text-teal-800',
+  },
+  {
+    slug: 'residencia',
+    label: 'Residencia fiscal',
+    description: 'Titular no es residente fiscal en España.',
+    color: 'bg-indigo-100 text-indigo-800',
   },
   {
     slug: 'tipo_vivienda',
@@ -96,6 +102,12 @@ export const CLUSTERS: ClusterDef[] = [
     color: 'bg-fuchsia-100 text-fuchsia-800',
   },
   {
+    slug: 'no_red_flag',
+    label: 'Sin red flag',
+    description: 'Falsos positivos: validación OK, sin flags reales.',
+    color: 'bg-emerald-100 text-emerald-700',
+  },
+  {
     slug: 'otro',
     label: 'Otros',
     description: 'Red flags que no encajan en ninguna categoría conocida.',
@@ -107,44 +119,100 @@ export const CLUSTER_BY_SLUG: Record<string, ClusterDef> = Object.fromEntries(
   CLUSTERS.map((c) => [c.slug, c])
 )
 
-/** JS-side normalization — mirrors normalize_red_flag() SQL function. */
+/**
+ * JS-side normalization — mirrors normalize_red_flag() SQL function.
+ *
+ * Steps:
+ * 1. Strip "Red flags found:" prefix (very common in structured flags)
+ * 2. Remove accents, lowercase, collapse whitespace
+ * 3. Match against patterns (most specific first)
+ */
 export function normalizeRedFlag(raw: string): string {
   if (!raw || !raw.trim()) return 'otro'
 
-  // Normalize: remove accents (basic), lowercase
-  const s = raw
+  // Step 1: Strip common prefixes
+  let cleaned = raw.trim()
+  cleaned = cleaned.replace(/^red flags? found:\s*/i, '')
+  cleaned = cleaned.trim()
+
+  if (!cleaned) return 'otro'
+
+  // Step 2: Normalize — remove accents, lowercase, collapse whitespace
+  const s = cleaned
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // strip combining diacritics
+    .replace(/[\u0300-\u036f]/g, '')
     .replace(/\s+/g, ' ')
     .trim()
 
-  if (/(simultan|multiple.*banco|ya (enviado|cursado|tramitad).*(otro|otro banco)|varios banco)/.test(s))
-    return 'simultaneidad'
-  if (/(edad|plazo.*(excede|supera|limite|edad)|anos.*(maxim|limite)|jubilaci)/.test(s))
-    return 'edad_plazo'
-  if (/(cirbe|ratio.*(endeud|deuda)|endeudamiento|deuda.*(elevad|alta|alto|superior|excesiv)|nivel.*deuda)/.test(s))
-    return 'deuda_cirbe'
-  if (/(importe.*(minim|maxim|inferior|bajo|limite|supera)|minimo.*(importe|capital)|cantidad.*(minim|maxim)|por debajo.*minim|capital.*minim)/.test(s))
-    return 'importe_limite'
-  if (/(asnef|rai|morosidad|impagad|fichero.*(morosos?|impago|deudores?)|incidencia.*(credito|pago)|deuda.*(pendiente|impagad)|siniestralidad)/.test(s))
-    return 'historial_credito'
-  if (/(ingreso.*(insufic|bajo|minim|no justif)|sueldo.*(bajo|insufic)|sin (nomina|ingresos)|nomina.*(no|insufic)|renta.*(insufic|baj))/.test(s))
-    return 'ingresos'
+  // ── False positives (not real red flags) ──
+  if (/^(yes|si|ok|no)$/i.test(s)) return 'no_red_flag'
+  if (/validacion completada|no red flags? detected|sin (red )?flags?/.test(s)) return 'no_red_flag'
+  if (/^en revision$/.test(s)) return 'no_red_flag'
+
+  // ── Antigüedad laboral (MUST come before edad_plazo — "antigüedad" contains "edad") ──
+  if (/antiguedad laboral/.test(s)) return 'antiguedad_laboral'
+  if (/antiguedad.*(insufic|minim|baj)/.test(s)) return 'antiguedad_laboral'
+
+  // ── Financiación / LTV (structured: "% financiación XX% > YY%") ──
+  if (/% financiacion|% financ\.|porcentaje.*financ|financiacion.*>/.test(s)) return 'tasacion_ltv'
   if (/(ltv|loan.to.value|tasacion|valoracion|porcentaje.*(finan|hipotec)|financiacion.*(maxim|superior|limite)|superacion.*financiacion|excede.*financiacion)/.test(s))
     return 'tasacion_ltv'
+
+  // ── Edad / Plazo (structured: "Edad XX + plazo YY = ZZ > NN") ──
+  if (/edad \d+.*plazo \d+/.test(s)) return 'edad_plazo'
+  if (/plazo \d+ anos? > maximo/.test(s)) return 'edad_plazo'
+  if (/(edad|plazo.*(excede|supera|limite|edad)|anos.*(maxim|limite)|jubilaci)/.test(s))
+    return 'edad_plazo'
+
+  // ── Importe límite (structured: "Importe hipoteca XXXX€ < mínimo YYYY€") ──
+  if (/importe hipoteca.*<.*minimo/.test(s)) return 'importe_limite'
+  if (/(importe.*(minim|maxim|inferior|bajo|limite|supera)|minimo.*(importe|capital)|cantidad.*(minim|maxim)|por debajo.*minim|capital.*minim)/.test(s))
+    return 'importe_limite'
+
+  // ── Ingresos (structured: "Ingresos 1T XXX€ < mínimo YYYY€") ──
+  if (/ingresos \d+t.*<.*minimo/.test(s)) return 'ingresos'
+  if (/(ingreso.*(insufic|bajo|minim|no justif)|sueldo.*(bajo|insufic)|sin (nomina|ingresos)|nomina.*(no|insufic)|renta.*(insufic|baj))/.test(s))
+    return 'ingresos'
+
+  // ── Documentos (structured: "Falta documento XXXX") ──
+  if (/falta documento/.test(s)) return 'documentos'
   if (/(document|falta.*(irpf|informe|certif|doc|declar)|sin document|documentacion.*(incomplet|faltante|pendiente)|pendiente.*document)/.test(s))
     return 'documentos'
+
+  // ── Simultaneidad ──
+  if (/(simultan|multiple.*banco|ya (enviado|cursado|tramitad).*(otro|otro banco)|varios banco)/.test(s))
+    return 'simultaneidad'
+
+  // ── Deuda / CIRBE ──
+  if (/(cirbe|ratio.*(endeud|deuda)|endeudamiento|deuda.*(elevad|alta|alto|superior|excesiv)|nivel.*deuda)/.test(s))
+    return 'deuda_cirbe'
+
+  // ── Historial crediticio ──
+  if (/(asnef|rai|morosidad|impagad|fichero.*(morosos?|impago|deudores?)|incidencia.*(credito|pago)|deuda.*(pendiente|impagad)|siniestralidad)/.test(s))
+    return 'historial_credito'
+
+  // ── Residencia ──
   if (/(no residente|residente.*fiscal|residencia.*(extranjero|fuera|fiscal)|fiscalmente.*extranjero|no.*reside en)/.test(s))
     return 'residencia'
+
+  // ── Actividad laboral ──
   if (/(autonomo|reta|cuenta propia|actividad.*(empresa|profesional|irregul)|empresari|trabajador.*independiente)/.test(s))
     return 'actividad_laboral'
+
+  // ── Tipo de vivienda ──
   if (/(segunda vivienda|no habitual|vacacional|no.*primera vivienda|vivienda.*(no.*habitual|segunda|vacacional))/.test(s))
     return 'tipo_vivienda'
+
+  // ── Garantías ──
   if (/(avalista|garantia|fiador|aval )/.test(s))
     return 'garantias'
+
+  // ── Nacionalidad / NIE ──
   if (/(nie |nif.*(no valid|extran|incorr)|nacionalidad|pasaporte|sin nie|sin nif)/.test(s))
     return 'nacionalidad'
+
+  // ── Tipo de operación ──
   if (/(reunificacion|subrogacion|no aplica.*(operacion|tipo)|solo obra nueva|no.*suelo|tipo.*operacion)/.test(s))
     return 'tipo_operacion'
 
