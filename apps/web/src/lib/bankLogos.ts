@@ -15,7 +15,7 @@ const BANK_LOGOS: Record<string, string> = {
   cr_del_sur: '/banks/cr_del_sur.png',
   cr_extremadura: '/banks/cr_extremadura.png',
   cr_granada: '/banks/cr_granada.png',
-  cr_teruel: '/banks/cr_teruel.png',
+  // cr_teruel: no accessible logo — uses letter avatar
   deutsche_bank: '/banks/deutsche_bank.png',
   eurocajarural: '/banks/eurocajarural.png',
   globalcaja: '/banks/globalcaja.png',
