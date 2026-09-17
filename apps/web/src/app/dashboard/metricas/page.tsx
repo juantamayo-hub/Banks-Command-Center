@@ -258,7 +258,7 @@ export default async function MetricasPage({ searchParams }: MetricasPageProps) 
     .slice(0, 5)
 
   const topOfferConversion = [...banksWithRates]
-    .filter((b) => b.sent >= 3)
+    .filter((b) => b.sent >= 3 && b.offerRate > 0)
     .sort((a, b) => b.offerRate - a.offerRate)
     .slice(0, 5)
 
