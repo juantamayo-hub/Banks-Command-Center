@@ -11,7 +11,6 @@ interface NavItem {
 }
 
 const TOP_NAV: NavItem[] = [
-  { label: 'Dashboard', href: '/dashboard' },
   { label: 'Pendientes', href: '/dashboard?tab=pendientes' },
   { label: 'Enviados', href: '/dashboard?tab=enviados' },
   { label: 'Envíos por plataforma', href: '/dashboard/envios-plataforma' },
@@ -30,9 +29,6 @@ function isActive(href: string, pathname: string, tab: string | null): boolean {
   }
   if (href === '/dashboard?tab=enviados') {
     return pathname === '/dashboard' && tab === 'enviados'
-  }
-  if (href === '/dashboard') {
-    return pathname === '/dashboard'
   }
   return false
 }
