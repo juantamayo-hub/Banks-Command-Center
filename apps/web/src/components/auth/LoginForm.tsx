@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
 const GOOGLE_ICON = (
@@ -36,89 +36,36 @@ const STARS = [
   { cx: 200, cy: 48, r: 1.1, dur: '2.9s', delay: '2.1s' },
 ]
 
-declare global {
-  interface Window {
-    google?: {
-      accounts: {
-        id: {
-          initialize: (config: Record<string, unknown>) => void
-          renderButton: (element: HTMLElement, config: Record<string, unknown>) => void
-          prompt: () => void
-        }
-      }
-    }
-  }
-}
-
 export default function LoginForm() {
-  const router = useRouter()
   const searchParams = useSearchParams()
   const [loading, setLoading] = useState(false)
-  const [gsiReady, setGsiReady] = useState(false)
-  const googleBtnRef = useRef<HTMLDivElement>(null)
+
+  const errorParam = searchParams.get('error')
   const [error, setError] = useState<string | null>(
-    searchParams.get('error') === 'domain_not_allowed'
+    errorParam === 'domain_not_allowed'
       ? 'Solo se permiten cuentas @huspy.io y @bayteca.com'
-      : null
+      : errorParam === 'auth_failed'
+        ? 'Error de autenticación. Inténtalo de nuevo.'
+        : null
   )
 
-  useEffect(() => {
-    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
-    if (!clientId) return
+  async function handleLogin() {
+    setLoading(true)
+    setError(null)
 
-    async function handleCredentialResponse(response: { credential: string }) {
-      setLoading(true)
-      setError(null)
-      try {
-        const supabase = createClient()
-        const { error: authError } = await supabase.auth.signInWithIdToken({
-          provider: 'google',
-          token: response.credential,
-        })
-        if (authError) {
-          console.error('Supabase auth error:', authError.message)
-          setError('Error al iniciar sesión. Inténtalo de nuevo.')
-          setLoading(false)
-          return
-        }
-        router.push('/dashboard')
-        router.refresh()
-      } catch {
-        setError('Error al iniciar sesión. Inténtalo de nuevo.')
-        setLoading(false)
-      }
+    const supabase = createClient()
+    const { error: authError } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+        queryParams: { hd: 'huspy.io' },
+      },
+    })
+
+    if (authError) {
+      setError('Error al conectar con Google. Inténtalo de nuevo.')
+      setLoading(false)
     }
-
-    function initGsi() {
-      if (!window.google?.accounts?.id) return false
-      window.google.accounts.id.initialize({
-        client_id: clientId,
-        callback: handleCredentialResponse,
-        auto_select: false,
-        cancel_on_tap_outside: true,
-      })
-      if (googleBtnRef.current) {
-        window.google.accounts.id.renderButton(googleBtnRef.current, {
-          type: 'standard',
-          size: 'large',
-          width: 400,
-          theme: 'filled_black',
-        })
-      }
-      setGsiReady(true)
-      return true
-    }
-
-    if (initGsi()) return
-    const interval = setInterval(() => {
-      if (initGsi()) clearInterval(interval)
-    }, 200)
-    return () => clearInterval(interval)
-  }, [router])
-
-  function handleClick() {
-    const btn = googleBtnRef.current?.querySelector('div[role="button"]') as HTMLElement | null
-    if (btn) btn.click()
   }
 
   return (
@@ -158,7 +105,7 @@ export default function LoginForm() {
         <div className="flex justify-center mb-4">
           <svg viewBox="0 0 240 175" className="w-56 h-44" fill="none" xmlns="http://www.w3.org/2000/svg">
 
-            {/* ── Stars ── */}
+            {/* Stars */}
             {STARS.map((s, i) => (
               <circle key={`star-${i}`} cx={s.cx} cy={s.cy} r={s.r}
                 fill="rgba(255,255,255,0.5)"
@@ -166,36 +113,35 @@ export default function LoginForm() {
               />
             ))}
 
-            {/* ── Roof ── */}
+            {/* Roof */}
             <path d="M30,78 L120,16 L210,78"
               stroke="rgba(255,255,255,0.4)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
               className="login-draw" style={{ '--len': 220 } as React.CSSProperties}
             />
 
-            {/* ── Left wall ── */}
+            {/* Left wall */}
             <line x1="42" y1="78" x2="42" y2="160"
               stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" strokeLinecap="round"
               className="login-draw" style={{ '--len': 82, animationDelay: '0.1s' } as React.CSSProperties}
             />
 
-            {/* ── Right wall ── */}
+            {/* Right wall */}
             <line x1="198" y1="78" x2="198" y2="160"
               stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" strokeLinecap="round"
               className="login-draw" style={{ '--len': 82, animationDelay: '0.15s' } as React.CSSProperties}
             />
 
-            {/* ── Ground ── */}
+            {/* Ground */}
             <line x1="28" y1="160" x2="212" y2="160"
               stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" strokeLinecap="round"
               className="login-draw" style={{ '--len': 184, animationDelay: '0.2s' } as React.CSSProperties}
             />
 
-            {/* ── Left window frame ── */}
+            {/* Left window frame */}
             <rect x="56" y="92" width="32" height="28" rx="2"
               stroke="rgba(255,255,255,0.2)" strokeWidth="1"
               className="login-draw" style={{ '--len': 120, animationDelay: '0.3s' } as React.CSSProperties}
             />
-            {/* Left window crossbars */}
             <line x1="72" y1="92" x2="72" y2="120"
               stroke="rgba(255,255,255,0.12)" strokeWidth="0.8"
               className="login-draw" style={{ '--len': 28, animationDelay: '0.4s' } as React.CSSProperties}
@@ -210,12 +156,11 @@ export default function LoginForm() {
               style={{ animation: 'window-light 1s ease-out 1.7s both' }}
             />
 
-            {/* ── Right window frame ── */}
+            {/* Right window frame */}
             <rect x="152" y="92" width="32" height="28" rx="2"
               stroke="rgba(255,255,255,0.2)" strokeWidth="1"
               className="login-draw" style={{ '--len': 120, animationDelay: '0.35s' } as React.CSSProperties}
             />
-            {/* Right window crossbars */}
             <line x1="168" y1="92" x2="168" y2="120"
               stroke="rgba(255,255,255,0.12)" strokeWidth="0.8"
               className="login-draw" style={{ '--len': 28, animationDelay: '0.45s' } as React.CSSProperties}
@@ -230,13 +175,13 @@ export default function LoginForm() {
               style={{ animation: 'window-light 1s ease-out 1.8s both' }}
             />
 
-            {/* ── Door ── */}
+            {/* Door */}
             <path d="M104,160 L104,122 Q104,108 120,108 Q136,108 136,122 L136,160"
               stroke="rgba(255,255,255,0.3)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
               className="login-draw" style={{ '--len': 120, animationDelay: '0.4s' } as React.CSSProperties}
             />
 
-            {/* ── Keyhole ── */}
+            {/* Keyhole */}
             <circle cx="120" cy="136" r="5"
               stroke="rgba(255,255,255,0.4)" strokeWidth="1.5"
               className="login-draw" style={{ '--len': 32, animationDelay: '0.5s' } as React.CSSProperties}
@@ -246,22 +191,19 @@ export default function LoginForm() {
               className="login-draw" style={{ '--len': 9, animationDelay: '0.55s' } as React.CSSProperties}
             />
 
-            {/* ── Key (slides in from right, then turns clockwise) ── */}
+            {/* Key (slides in from right, then turns clockwise) */}
             <g style={{
               transformOrigin: '120px 136px',
               animation: 'key-enter-turn 1.4s ease-in-out 0.7s both',
             }}>
-              {/* Key bow (double ring) */}
               <circle cx="88" cy="136" r="9" stroke="#52976e" strokeWidth="1.5" />
               <circle cx="88" cy="136" r="4" stroke="#52976e" strokeWidth="1" />
-              {/* Shaft */}
               <line x1="97" y1="136" x2="120" y2="136" stroke="#52976e" strokeWidth="1.5" />
-              {/* Bits */}
               <line x1="113" y1="136" x2="113" y2="142" stroke="#52976e" strokeWidth="1.5" strokeLinecap="round" />
               <line x1="117" y1="136" x2="117" y2="141" stroke="#52976e" strokeWidth="1.5" strokeLinecap="round" />
             </g>
 
-            {/* ── Light rays from keyhole ── */}
+            {/* Light rays from keyhole */}
             {RAYS.map((ray, i) => (
               <line key={`ray-${i}`} x1="120" y1="136" x2={ray.x2} y2={ray.y2}
                 stroke="#52976e" strokeWidth="1" strokeLinecap="round"
@@ -270,12 +212,12 @@ export default function LoginForm() {
               />
             ))}
 
-            {/* ── Keyhole glow ── */}
+            {/* Keyhole glow */}
             <circle cx="120" cy="136" r="4" fill="#52976e"
               style={{ animation: 'door-glow 1.2s ease-out 1.6s both' }}
             />
 
-            {/* ── Small tree left ── */}
+            {/* Small tree left */}
             <line x1="18" y1="160" x2="18" y2="145"
               stroke="rgba(255,255,255,0.15)" strokeWidth="1" strokeLinecap="round"
               className="login-draw" style={{ '--len': 15, animationDelay: '0.55s' } as React.CSSProperties}
@@ -285,7 +227,7 @@ export default function LoginForm() {
               className="login-draw" style={{ '--len': 46, animationDelay: '0.6s' } as React.CSSProperties}
             />
 
-            {/* ── Small tree right ── */}
+            {/* Small tree right */}
             <line x1="222" y1="160" x2="222" y2="142"
               stroke="rgba(255,255,255,0.15)" strokeWidth="1" strokeLinecap="round"
               className="login-draw" style={{ '--len': 18, animationDelay: '0.58s' } as React.CSSProperties}
@@ -298,7 +240,7 @@ export default function LoginForm() {
           </svg>
         </div>
 
-        {/* ═══ FORM CONTENT (fades in after house animation) ═══ */}
+        {/* ═══ FORM CONTENT ═══ */}
 
         {/* Logo */}
         <div className="animate-fade-up flex justify-center mb-5"
@@ -329,13 +271,10 @@ export default function LoginForm() {
           </div>
         )}
 
-        {/* Hidden Google rendered button */}
-        <div ref={googleBtnRef} className="absolute -left-[9999px] opacity-0 pointer-events-none" aria-hidden="true" />
-
-        {/* Custom visible button */}
+        {/* Google login button */}
         <button
-          onClick={handleClick}
-          disabled={loading || !gsiReady}
+          onClick={handleLogin}
+          disabled={loading}
           className="animate-fade-up flex w-full items-center justify-center gap-3 rounded-xl border border-white/[0.15] bg-white/[0.1] px-6 py-3.5 text-sm font-medium text-white transition-all duration-200 hover:bg-white/[0.18] hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(82,151,110,0.3)] disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
           style={{ animationDelay: '2.55s' }}
         >

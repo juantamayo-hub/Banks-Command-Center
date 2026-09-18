@@ -48,6 +48,6 @@ export const config = {
      * - /banks/* (bank logo assets)
      * - Static files (favicon, images, SVGs, etc.)
      */
-    '/((?!api|_next/static|_next/image|banks|favicon\\.ico|icon\\.png|bayteca-logo\\.svg|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
+    '/((?!api|auth|_next/static|_next/image|banks|favicon\\.ico|icon\\.png|bayteca-logo\\.svg|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
   ],
 }
