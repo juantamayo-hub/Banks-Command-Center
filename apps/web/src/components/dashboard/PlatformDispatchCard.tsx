@@ -208,8 +208,8 @@ export default function PlatformDispatchCard({
               const info = santander_info
               if (!info) return null
               const jovenAge =
-                (info.edad_1t !== null && !isNaN(info.edad_1t) && info.edad_1t <= 35) ||
-                (info.edad_2t !== null && !isNaN(info.edad_2t) && info.edad_2t <= 35)
+                (info.edad_1t !== null && !isNaN(info.edad_1t) && info.edad_1t > 0 && info.edad_1t <= 35) ||
+                (info.edad_2t !== null && !isNaN(info.edad_2t) && info.edad_2t > 0 && info.edad_2t <= 35)
               // pct_hipoteca is stored as decimal (e.g. 0.9 = 90%)
               const jovenPct =
                 info.pct_hipoteca !== null && !isNaN(info.pct_hipoteca) && info.pct_hipoteca > 0.9
