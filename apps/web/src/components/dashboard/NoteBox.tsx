@@ -8,10 +8,11 @@ interface NoteBoxProps {
   dealId: number | null
   sheetRowId?: string
   platformDispatchId?: string
+  kutxabankSubmissionId?: string
   onSaved?: (content: string) => void
 }
 
-export default function NoteBox({ dealId, sheetRowId, platformDispatchId, onSaved }: NoteBoxProps) {
+export default function NoteBox({ dealId, sheetRowId, platformDispatchId, kutxabankSubmissionId, onSaved }: NoteBoxProps) {
   const [note, setNote] = useState('')
   const [phase, setPhase] = useState<Phase>('idle')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
@@ -33,6 +34,7 @@ export default function NoteBox({ dealId, sheetRowId, platformDispatchId, onSave
           deal_id: dealId,
           ...(sheetRowId ? { sheet_row_id: sheetRowId } : {}),
           ...(platformDispatchId ? { platform_dispatch_id: platformDispatchId } : {}),
+          ...(kutxabankSubmissionId ? { kutxabank_submission_id: kutxabankSubmissionId } : {}),
           note: trimmed,
         }),
       })

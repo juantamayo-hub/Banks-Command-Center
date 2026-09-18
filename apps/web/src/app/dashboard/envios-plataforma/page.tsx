@@ -21,6 +21,7 @@ interface KutxabankSubmission {
   rastreator_status: 'pending' | 'approved' | 'rejected' | 'sent'
   sent_at: string | null
   created_at: string
+  notes?: { content: string; created_at: string }[]
 }
 
 type BankFilter = PlatformBankName | 'Kutxabank' | 'Todos'

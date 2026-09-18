@@ -36,7 +36,33 @@ export async function GET() {
     console.error('[kutxabank/submissions GET]', error)
     return NextResponse.json({ error: 'DB error' }, { status: 500 })
   }
-  return NextResponse.json({ submissions: data ?? [] })
+
+  // Fetch notes for each submission
+  const submissions = data ?? []
+  const subIds = submissions.map((s) => s.id as string)
+  const notesMap = new Map<string, { content: string; created_at: string }[]>()
+
+  if (subIds.length > 0) {
+    const { data: notes } = await supabase
+      .from('kutxabank_submission_notes')
+      .select('kutxabank_submission_id, content, created_at')
+      .in('kutxabank_submission_id', subIds)
+      .order('created_at', { ascending: false })
+
+    for (const note of notes ?? []) {
+      const subId = note.kutxabank_submission_id as string
+      const arr = notesMap.get(subId) ?? []
+      arr.push({ content: note.content as string, created_at: note.created_at as string })
+      notesMap.set(subId, arr)
+    }
+  }
+
+  const enriched = submissions.map((s) => ({
+    ...s,
+    notes: notesMap.get(s.id as string) ?? [],
+  }))
+
+  return NextResponse.json({ submissions: enriched })
 }
 
 // ── POST — create/upsert submission after ZIP creation ────────────────────────

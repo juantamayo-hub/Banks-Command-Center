@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import NotesCell from '@/components/dashboard/NotesCell'
 
 interface KutxabankSubmission {
   id: string
@@ -15,6 +16,7 @@ interface KutxabankSubmission {
   rastreator_status: 'pending' | 'approved' | 'rejected' | 'sent'
   sent_at: string | null
   created_at: string
+  notes?: { content: string; created_at: string }[]
 }
 
 interface Props {
@@ -268,6 +270,16 @@ export default function KutxabankCard({ submission: sub, onSent }: Props) {
             </>
           )}
         </div>
+
+        {/* Notes — write to banking deal in Pipedrive */}
+        {sub.bank_deal_id && (
+          <NotesCell
+            dealId={sub.bank_deal_id}
+            sheetRowId=""
+            kutxabankSubmissionId={sub.id}
+            initialNotes={sub.notes ?? []}
+          />
+        )}
 
         {/* Meta */}
         <p className="text-xs text-gray-300 tabular-nums">

@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'El body debe ser un objeto JSON' }, { status: 400 })
   }
 
-  const { deal_id, sheet_row_id, platform_dispatch_id, note } = body as Record<string, unknown>
+  const { deal_id, sheet_row_id, platform_dispatch_id, kutxabank_submission_id, note } = body as Record<string, unknown>
 
   if (typeof deal_id !== 'number' || !Number.isInteger(deal_id) || deal_id <= 0) {
     return NextResponse.json({ error: '`deal_id` debe ser un entero positivo' }, { status: 400 })
@@ -39,6 +39,10 @@ export async function POST(req: NextRequest) {
 
   if (platform_dispatch_id !== undefined && (typeof platform_dispatch_id !== 'string' || !UUID_RE.test(platform_dispatch_id))) {
     return NextResponse.json({ error: '`platform_dispatch_id` debe ser un UUID válido' }, { status: 400 })
+  }
+
+  if (kutxabank_submission_id !== undefined && (typeof kutxabank_submission_id !== 'string' || !UUID_RE.test(kutxabank_submission_id))) {
+    return NextResponse.json({ error: '`kutxabank_submission_id` debe ser un UUID válido' }, { status: 400 })
   }
 
   if (typeof note !== 'string' || note.trim().length === 0) {
@@ -148,6 +152,19 @@ export async function POST(req: NextRequest) {
         .insert({ platform_dispatch_id, content: noteContent })
       if (dbError) {
         console.error('[pipedrive/note] Supabase platform_dispatch_notes error:', dbError.message)
+      } else {
+        dbSaved = true
+      }
+    } catch (err) {
+      console.error('[pipedrive/note] Supabase unexpected error:', err)
+    }
+  } else if (kutxabank_submission_id && typeof kutxabank_submission_id === 'string') {
+    try {
+      const { error: dbError } = await supabase
+        .from('kutxabank_submission_notes')
+        .insert({ kutxabank_submission_id, content: noteContent })
+      if (dbError) {
+        console.error('[pipedrive/note] Supabase kutxabank_submission_notes error:', dbError.message)
       } else {
         dbSaved = true
       }
