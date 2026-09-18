@@ -201,7 +201,7 @@ export async function GET(req: Request) {
           person_name: d.person_name,
           bank_deal_id: d.bank_deal_id,
         })),
-        { onConflict: 'deal_id,bank_name', ignoreDuplicates: false }
+        { onConflict: 'deal_id,bank_name', ignoreDuplicates: true }
       )
 
     if (upsertError) {
