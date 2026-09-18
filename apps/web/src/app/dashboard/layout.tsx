@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Suspense } from 'react'
 import SidebarNav from '@/components/dashboard/SidebarNav'
+import SmartInsights from '@/components/dashboard/SmartInsights'
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
@@ -30,6 +31,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       <main className="flex flex-1 flex-col overflow-y-auto bg-gray-50">
         {children}
       </main>
+
+      {/* Non-intrusive insight toasts */}
+      <SmartInsights />
     </div>
   )
 }
