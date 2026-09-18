@@ -43,8 +43,14 @@ interface MetricasPageProps {
 export default async function MetricasPage({ searchParams }: MetricasPageProps) {
   const params = await searchParams
   const filterBank = params.bank ?? ''
-  const dateFrom = /^\d{4}-\d{2}-\d{2}$/.test(params.date_from ?? '') ? params.date_from! : undefined
-  const dateTo = /^\d{4}-\d{2}-\d{2}$/.test(params.date_to ?? '') ? params.date_to! : undefined
+
+  // YTD defaults: Jan 1 of current year → today
+  const now = new Date()
+  const ytdFrom = `${now.getFullYear()}-01-01`
+  const ytdTo = now.toISOString().slice(0, 10)
+
+  const dateFrom = /^\d{4}-\d{2}-\d{2}$/.test(params.date_from ?? '') ? params.date_from! : ytdFrom
+  const dateTo = /^\d{4}-\d{2}-\d{2}$/.test(params.date_to ?? '') ? params.date_to! : ytdTo
 
   const supabase = await createClient()
 
@@ -445,33 +451,39 @@ export default async function MetricasPage({ searchParams }: MetricasPageProps) 
         <BankPerformanceChart banks={banksWithRates} />
       </Card>
 
-      {/* ── 4. Efficiency rankings ───────────────────────────────────────── */}
-      <section className="grid gap-6 lg:grid-cols-2">
-        <SuccessRateRanking
-          title="Bancos con más bloqueos"
-          subtitle="Mayor % de operaciones bloqueadas"
-          banks={topBlocked.map((b) => ({
-            slug: b.slug,
-            name: b.name,
-            rate: b.blockRate,
-            total: b.blocked,
-            color: '#f97316',
-          }))}
-          metric="bloqueados"
-        />
-        <SuccessRateRanking
-          title="Mejor conversión a oferta"
-          subtitle="Mayor % de ofertas sobre enviados (min. 3 enviados)"
-          banks={topOfferConversion.map((b) => ({
-            slug: b.slug,
-            name: b.name,
-            rate: b.offerRate,
-            total: b.offers,
-            color: '#10b981',
-          }))}
-          metric="ofertas"
-        />
-      </section>
+      {/* ── 4. Efficiency rankings (hidden when empty) ──────────────────── */}
+      {(topBlocked.length > 0 || topOfferConversion.length > 0) && (
+        <section className="grid gap-6 lg:grid-cols-2">
+          {topBlocked.length > 0 && (
+            <SuccessRateRanking
+              title="Bancos con más bloqueos"
+              subtitle="Mayor % de operaciones bloqueadas"
+              banks={topBlocked.map((b) => ({
+                slug: b.slug,
+                name: b.name,
+                rate: b.blockRate,
+                total: b.blocked,
+                color: '#f97316',
+              }))}
+              metric="bloqueados"
+            />
+          )}
+          {topOfferConversion.length > 0 && (
+            <SuccessRateRanking
+              title="Mejor conversión a oferta"
+              subtitle="Mayor % de ofertas sobre enviados (min. 3 enviados)"
+              banks={topOfferConversion.map((b) => ({
+                slug: b.slug,
+                name: b.name,
+                rate: b.offerRate,
+                total: b.offers,
+                color: '#10b981',
+              }))}
+              metric="ofertas"
+            />
+          )}
+        </section>
+      )}
 
       {/* ── 5. Red flag analysis ─────────────────────────────────────────── */}
       {visibleClusterEntries.length > 0 && (

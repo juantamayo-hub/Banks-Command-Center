@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import PlatformDispatchCard from '@/components/dashboard/PlatformDispatchCard'
 import KutxabankCard from '@/components/dashboard/KutxabankCard'
 import type { PlatformDealItem } from '@/app/api/platform-dispatches/route'
@@ -40,6 +40,13 @@ export default function EnviosPlataformaPage() {
   const [kutxaSubs, setKutxaSubs] = useState<KutxabankSubmission[]>([])
   const [kutxaLoading, setKutxaLoading] = useState(true)
   const [kutxaError, setKutxaError] = useState<string | null>(null)
+
+  // Skip auto-refresh while user is typing a note
+  const containerRef = useRef<HTMLDivElement>(null)
+  const isUserTyping = useCallback(
+    () => containerRef.current?.querySelector('textarea:focus') !== null,
+    []
+  )
 
   const fetchDeals = useCallback(async (from?: string, to?: string) => {
     setLoading(true)
@@ -83,18 +90,19 @@ export default function EnviosPlataformaPage() {
 
   useEffect(() => {
     fetchDeals(dateFrom || undefined, dateTo || undefined)
-    const interval = setInterval(
-      () => fetchDeals(dateFrom || undefined, dateTo || undefined),
-      2 * 60 * 1000
-    )
+    const interval = setInterval(() => {
+      if (!isUserTyping()) fetchDeals(dateFrom || undefined, dateTo || undefined)
+    }, 2 * 60 * 1000)
     return () => clearInterval(interval)
-  }, [fetchDeals, dateFrom, dateTo])
+  }, [fetchDeals, dateFrom, dateTo, isUserTyping])
 
   useEffect(() => {
     fetchKutxa()
-    const interval = setInterval(fetchKutxa, 2 * 60 * 1000)
+    const interval = setInterval(() => {
+      if (!isUserTyping()) fetchKutxa()
+    }, 2 * 60 * 1000)
     return () => clearInterval(interval)
-  }, [fetchKutxa])
+  }, [fetchKutxa, isUserTyping])
 
   function removeDeal(dealId: number) {
     setDeals((prev) => prev.filter((d) => d.deal_id !== dealId))
@@ -126,7 +134,7 @@ export default function EnviosPlataformaPage() {
   const totalFiltered = filteredDeals.length + filteredKutxa.length
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div ref={containerRef} className="flex flex-col gap-6 p-6">
       {/* ── Header ──────────────────────────────────────────────────────────── */}
       <PageHeader
         title="Envíos por plataforma"

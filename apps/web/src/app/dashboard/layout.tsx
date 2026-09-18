@@ -9,11 +9,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       <aside className="flex w-60 flex-shrink-0 flex-col bg-bayteca-green border-r border-bayteca-green-dark">
         {/* Wordmark */}
         <div className="flex h-16 items-center px-5 border-b border-bayteca-green-dark">
-          <span
-            className="text-base font-semibold leading-tight text-white tracking-tight font-serif"
-          >
-            bayteca<sup className="text-[9px] opacity-60 ml-0.5">™</sup>
-          </span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/bayteca-logo.svg" alt="Bayteca" className="h-5" />
         </div>
 
         {/* Navigation — client component for active state */}
