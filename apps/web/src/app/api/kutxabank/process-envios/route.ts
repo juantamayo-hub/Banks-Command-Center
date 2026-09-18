@@ -22,6 +22,7 @@
 
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
+import { requireAuth } from '@/lib/auth/requireAuth'
 
 const PIPEDRIVE_TOKEN = process.env.PIPEDRIVE_API_TOKEN!
 const PIPEDRIVE_BASE  = 'https://api.pipedrive.com/v1'
@@ -288,6 +289,9 @@ async function syncToSheet(rows: Array<{ deal_id: string; excel_deal_id: string;
 // ── Handler ────────────────────────────────────────────────────────────────────
 
 export async function POST(req: Request) {
+  const auth = await requireAuth()
+  if (!auth.ok) return auth.response
+
   let body: { rows?: ParsedEnviosRow[] }
   try {
     body = await req.json()

@@ -11,8 +11,12 @@
 
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
+import { requireAuth } from '@/lib/auth/requireAuth'
 
 export async function POST(req: Request) {
+  const auth = await requireAuth()
+  if (!auth.ok) return auth.response
+
   let body: { submission_id?: string }
   try {
     body = await req.json()
@@ -32,23 +36,34 @@ export async function POST(req: Request) {
 
   const supabase = await createAdminClient()
 
-  // Fetch submission
-  const { data: sub, error: fetchErr } = await supabase
+  // Atomically claim: only succeeds if status is still 'approved'.
+  // This prevents double-sends from concurrent requests (e.g. double-click).
+  const { data: claimed, error: claimErr } = await supabase
     .from('kutxabank_submissions')
-    .select('*')
+    .update({ rastreator_status: 'sending' })
     .eq('id', submission_id)
+    .eq('rastreator_status', 'approved')
+    .select('*')
     .single()
 
-  if (fetchErr || !sub) {
-    return NextResponse.json({ error: 'Submission no encontrada' }, { status: 404 })
-  }
+  if (claimErr || !claimed) {
+    // Either not found, or already claimed by another request
+    const { data: sub } = await supabase
+      .from('kutxabank_submissions')
+      .select('rastreator_status')
+      .eq('id', submission_id)
+      .single()
 
-  if (sub.rastreator_status !== 'approved') {
+    if (!sub) {
+      return NextResponse.json({ error: 'Submission no encontrada' }, { status: 404 })
+    }
     return NextResponse.json(
       { error: `No se puede enviar: estado actual = ${sub.rastreator_status}` },
       { status: 409 }
     )
   }
+
+  const sub = claimed
 
   // deal_id is the only hard requirement — Email Sender resolves bank_deal_id + searches ZIP in Drive
   if (!sub.deal_id) {
@@ -80,6 +95,8 @@ export async function POST(req: Request) {
     if (!n8nRes.ok) {
       const text = await n8nRes.text().catch(() => '')
       console.error('[kutxabank/send] n8n error:', n8nRes.status, text)
+      // Revert to approved so the user can retry
+      await supabase.from('kutxabank_submissions').update({ rastreator_status: 'approved' }).eq('id', submission_id)
       return NextResponse.json(
         { error: `n8n devolvió ${n8nRes.status}` },
         { status: 502 }
@@ -87,6 +104,8 @@ export async function POST(req: Request) {
     }
   } catch (err) {
     console.error('[kutxabank/send] n8n network error:', err)
+    // Revert to approved so the user can retry
+    await supabase.from('kutxabank_submissions').update({ rastreator_status: 'approved' }).eq('id', submission_id)
     return NextResponse.json({ error: 'Error de red con n8n' }, { status: 502 })
   }
 

@@ -20,6 +20,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import ExcelJS from 'exceljs'
 import { createClient } from '@supabase/supabase-js'
 import path from 'path'
+import { requireAuth } from '@/lib/auth/requireAuth'
 
 // ── Supabase (Request Hub DB) ─────────────────────────────────────────────────
 
@@ -55,6 +56,9 @@ async function pipedriveFetchExternalId(dealId: string): Promise<string> {
 // ── Route handler ─────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
+  const auth = await requireAuth()
+  if (!auth.ok) return auth.response
+
   let body: { date_from?: unknown; date_to?: unknown }
   try {
     body = await req.json()

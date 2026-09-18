@@ -16,6 +16,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { ACTIVE_BANKS } from '@/lib/banks'
+import { requireAuth } from '@/lib/auth/requireAuth'
 
 // Field on banking deal (pipeline 7) that holds the bank name
 const BANK_NAME_FIELD    = 'c3a445b9bf0422b9db09abc776cf2dc281b7e975'
@@ -69,6 +70,9 @@ function resolveBankSlug(pdBankName: string): string | null {
 }
 
 export async function GET(req: NextRequest) {
+  const auth = await requireAuth()
+  if (!auth.ok) return auth.response
+
   const token = process.env.PIPEDRIVE_API_TOKEN
   if (!token) return NextResponse.json({ error: 'PIPEDRIVE_API_TOKEN no configurado' }, { status: 500 })
 

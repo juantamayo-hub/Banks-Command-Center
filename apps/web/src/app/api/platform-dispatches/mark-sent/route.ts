@@ -11,6 +11,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
+import { requireAuth } from '@/lib/auth/requireAuth'
 import {
   PLATFORM_BANKS,
   BANK_SUBMISSION_STAGE_ID,
@@ -19,6 +20,9 @@ import {
 } from '@/lib/platformDispatch'
 
 export async function POST(req: NextRequest) {
+  const auth = await requireAuth()
+  if (!auth.ok) return auth.response
+
   const token = process.env.PIPEDRIVE_API_TOKEN
   if (!token) return NextResponse.json({ error: 'PIPEDRIVE_API_TOKEN no configurado' }, { status: 500 })
 

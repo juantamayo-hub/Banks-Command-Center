@@ -25,6 +25,7 @@
 
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
+import { requireAuth } from '@/lib/auth/requireAuth'
 
 const PIPEDRIVE_TOKEN = process.env.PIPEDRIVE_API_TOKEN!
 const PIPEDRIVE_BASE  = 'https://api.pipedrive.com/v1'
@@ -114,6 +115,9 @@ async function addPipedriveNote(dealId: number, content: string): Promise<boolea
 // ── Handler ────────────────────────────────────────────────────────────────────
 
 export async function POST(req: Request) {
+  const auth = await requireAuth()
+  if (!auth.ok) return auth.response
+
   let body: { rows?: ParsedEstadosRow[] }
   try {
     body = await req.json()

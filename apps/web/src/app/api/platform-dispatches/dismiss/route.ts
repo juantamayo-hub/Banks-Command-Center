@@ -9,9 +9,13 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
+import { requireAuth } from '@/lib/auth/requireAuth'
 import { PLATFORM_BANKS, type PlatformBankName } from '@/lib/platformDispatch'
 
 export async function POST(req: NextRequest) {
+  const auth = await requireAuth()
+  if (!auth.ok) return auth.response
+
   let body: unknown
   try {
     body = await req.json()

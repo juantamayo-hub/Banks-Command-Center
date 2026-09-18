@@ -13,12 +13,16 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
+import { requireAuth } from '@/lib/auth/requireAuth'
 import { normalizeRedFlag } from '@/lib/redFlagClusters'
 
 const BATCH_SIZE = 200
 const MAX_ROWS = 10_000 // safety cap — increase if dataset grows beyond this
 
 export async function POST(req: NextRequest) {
+  const auth = await requireAuth()
+  if (!auth.ok) return auth.response
+
   const { searchParams } = new URL(req.url)
   const force = searchParams.get('force') === 'true'
 

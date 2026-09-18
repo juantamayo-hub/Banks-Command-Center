@@ -258,6 +258,23 @@ function syncBankSheet_(sheet, bankSlug, bankId, key) {
   });
   var rowsUnique = Object.keys(rowMap).map(function (k) { return rowMap[k]; });
 
+  // También deduplicar por (bank_id, uid) para evitar violar idx_sheet_rows_bank_uid.
+  // Si dos opportunity_ids distintos comparten el mismo uid en un banco, mantenemos
+  // solo el último (el más reciente del sheet).
+  var uidMap = {};
+  rowsUnique.forEach(function (r) {
+    if (r.uid) { uidMap[r.bank_id + '|' + r.uid] = r; }
+  });
+  var uidKeep = {};
+  Object.keys(uidMap).forEach(function (k) {
+    var r = uidMap[k];
+    uidKeep[r.bank_id + '|' + r.opportunity_id] = true;
+  });
+  rowsUnique = rowsUnique.filter(function (r) {
+    if (!r.uid) return true; // rows without uid pass through
+    return uidKeep[r.bank_id + '|' + r.opportunity_id];
+  });
+
   // Upsert sheet_rows en lotes
   if (rowsUnique.length > 0) {
     var rowErrors = batchUpsert_(
