@@ -7,13 +7,10 @@
  */
 
 import { NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth/requireAuth'
 
 const STAGE_ID = 62
 
 export async function GET() {
-  const auth = await requireAuth()
-  if (!auth.ok) return auth.response
 
   const token = process.env.PIPEDRIVE_API_TOKEN
   if (!token) {

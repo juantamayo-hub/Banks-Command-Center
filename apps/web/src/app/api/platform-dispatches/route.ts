@@ -10,7 +10,6 @@
 
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
-import { requireAuth } from '@/lib/auth/requireAuth'
 import {
   BANK_FIELD_IDS,
   BANK_ID_FIELD_IDS,
@@ -67,8 +66,6 @@ function parseBankDealId(raw: unknown): number | null {
 }
 
 export async function GET(req: Request) {
-  const auth = await requireAuth()
-  if (!auth.ok) return auth.response
 
   const token = process.env.PIPEDRIVE_API_TOKEN
   if (!token) return NextResponse.json({ error: 'PIPEDRIVE_API_TOKEN no configurado' }, { status: 500 })

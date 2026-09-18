@@ -16,7 +16,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createAdminClient } from '@/lib/supabase/server'
-import { requireAuth } from '@/lib/auth/requireAuth'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -442,8 +441,6 @@ async function pipedriveUpdateStage(dealId: string, stageId: number, markWon: bo
 // ── Route handler ─────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
-  const auth = await requireAuth()
-  if (!auth.ok) return auth.response
 
   let body: { rows?: unknown; date_from?: unknown; date_to?: unknown }
   try {

@@ -15,13 +15,10 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { ACTIVE_BANKS } from '@/lib/banks'
-import { requireAuth } from '@/lib/auth/requireAuth'
 
 const VALID_SLUGS: Set<string> = new Set(ACTIVE_BANKS.map((b) => b.slug))
 
 export async function POST(req: NextRequest) {
-  const auth = await requireAuth()
-  if (!auth.ok) return auth.response
 
   const webAppUrl = process.env.APPS_SCRIPT_WEB_APP_URL
   const secret    = process.env.APPS_SCRIPT_RELAUNCH_SECRET

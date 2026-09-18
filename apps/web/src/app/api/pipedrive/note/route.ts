@@ -11,14 +11,11 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
-import { requireAuth } from '@/lib/auth/requireAuth'
 
 const MAX_NOTE_LENGTH = 5000
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export async function POST(req: NextRequest) {
-  const auth = await requireAuth()
-  if (!auth.ok) return auth.response
 
   let body: unknown
   try {

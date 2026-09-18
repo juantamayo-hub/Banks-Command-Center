@@ -7,7 +7,6 @@
 
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
-import { requireAuth } from '@/lib/auth/requireAuth'
 
 interface Insight {
   text: string
@@ -15,8 +14,6 @@ interface Insight {
 }
 
 export async function GET() {
-  const auth = await requireAuth()
-  if (!auth.ok) return auth.response
 
   const supabase = await createAdminClient()
   const insights: Insight[] = []

@@ -7,13 +7,10 @@
 
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
-import { requireAuth } from '@/lib/auth/requireAuth'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export async function POST(req: Request) {
-  const auth = await requireAuth()
-  if (!auth.ok) return auth.response
 
   let body: { submission_id?: string }
   try {

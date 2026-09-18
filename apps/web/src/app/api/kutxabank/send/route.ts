@@ -11,11 +11,8 @@
 
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
-import { requireAuth } from '@/lib/auth/requireAuth'
 
 export async function POST(req: Request) {
-  const auth = await requireAuth()
-  if (!auth.ok) return auth.response
 
   let body: { submission_id?: string }
   try {

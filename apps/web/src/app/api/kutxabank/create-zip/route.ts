@@ -11,7 +11,6 @@
  */
 
 import { createRequire } from 'node:module'
-import { requireAuth } from '@/lib/auth/requireAuth'
 
 // createRequire bypasses webpack/turbopack bundling entirely —
 // loads archiver directly from node_modules at runtime
@@ -37,8 +36,6 @@ function getArchiver() {
 }
 
 export async function POST(req: Request) {
-  const auth = await requireAuth()
-  if (!auth.ok) return auth.response
 
   let body: { files?: ZipFile[]; dni?: string; zipFilename?: string }
   try {

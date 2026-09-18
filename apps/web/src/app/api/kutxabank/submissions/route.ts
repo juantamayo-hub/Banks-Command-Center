@@ -15,7 +15,6 @@
 
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
-import { requireAuth } from '@/lib/auth/requireAuth'
 
 function validateSecret(req: Request): boolean {
   const secret = process.env.KUTXABANK_API_SECRET
@@ -25,8 +24,6 @@ function validateSecret(req: Request): boolean {
 
 // ── GET ──────────────────────────────────────────────────────────────────────
 export async function GET() {
-  const auth = await requireAuth()
-  if (!auth.ok) return auth.response
 
   const supabase = await createAdminClient()
   const { data, error } = await supabase
