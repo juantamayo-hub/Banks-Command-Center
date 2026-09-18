@@ -187,8 +187,8 @@ export default function CaixaRespuestasPage() {
   }).length
 
   return (
-    <div className="p-6 max-w-5xl">
-      <div className="mb-8">
+    <div className="p-6 md:p-8 min-h-full flex flex-col items-center max-w-3xl mx-auto w-full">
+      <div className="mb-8 w-full">
         <PageHeader
           title="Respuestas de Caixa"
           subtitle="Sube el Excel diario. Se añadirán notas en Pipedrive y se marcarán los deals cerrados como perdidos con el motivo correcto."
@@ -200,7 +200,7 @@ export default function CaixaRespuestasPage() {
       </div>
 
       {/* Date filter */}
-      <div className="mb-6 flex items-center gap-2">
+      <div className="mb-6 flex items-center gap-2 w-full">
         <label className="text-sm font-medium text-gray-700" htmlFor="date-from">
           Desde:
         </label>
@@ -216,29 +216,55 @@ export default function CaixaRespuestasPage() {
 
       {/* Drop zone — only when idle */}
       {stage === 'idle' && (
+        <div className="w-full space-y-5">
         <div
           onDrop={onDrop}
           onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
           onDragLeave={() => setDragOver(false)}
           onClick={() => fileInputRef.current?.click()}
-          className={`flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-12 transition-colors ${
-            dragOver ? 'border-blue-400 bg-blue-50' : 'border-gray-300 bg-gray-50 hover:border-gray-400'
+          className={`group relative flex cursor-pointer flex-col items-center justify-center overflow-hidden rounded-xl border-2 border-dashed px-8 py-14 transition-all duration-200 ${
+            dragOver
+              ? 'border-sky-400 bg-sky-50 shadow-lg shadow-sky-100/50 scale-[1.01]'
+              : 'border-sky-200 bg-gradient-to-b from-white to-sky-50/30 hover:border-sky-300 hover:bg-sky-50/30 hover:shadow-md'
           }`}
         >
-          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-lg bg-blue-50">
-            <svg className="h-6 w-6 text-blue-500" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
+          <div className="pointer-events-none absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, currentColor 1px, transparent 0)', backgroundSize: '24px 24px' }} />
+          <div className={`relative mb-5 flex h-16 w-16 items-center justify-center rounded-2xl border transition-all duration-200 ${
+            dragOver ? 'border-sky-200 bg-sky-100 shadow-md' : 'border-sky-100 bg-white shadow-sm group-hover:border-sky-200 group-hover:shadow-md'
+          }`}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/banks/caixabank.png" alt="CaixaBank" className="h-10 w-10 rounded-lg object-contain" />
           </div>
-          <p className="text-sm font-medium text-gray-700">
-            Arrastra aquí el Excel o haz clic para seleccionarlo
-          </p>
-          <p className="mt-1 text-xs text-gray-400">Formatos: .xlsx, .xls, .csv</p>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".xlsx,.xls,.csv"
-            className="hidden"
-            onChange={onFileChange}
-          />
+          <svg className={`mb-3 h-8 w-8 transition-colors ${dragOver ? 'text-sky-500' : 'text-sky-300 group-hover:text-sky-400'}`} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.338-2.32 3.75 3.75 0 013.467 5.159A4.502 4.502 0 0117.25 19.5H6.75z" /></svg>
+          <p className="text-sm font-semibold text-gray-800">{dragOver ? 'Suelta el archivo aquí' : 'Arrastra el Excel diario de CaixaBank'}</p>
+          <p className="mt-1 text-xs text-gray-400">o haz clic para seleccionar un archivo</p>
+          <div className="mt-4 flex items-center gap-2">
+            {['.xlsx', '.xls', '.csv'].map((f) => <span key={f} className="rounded-full bg-sky-50 px-2.5 py-0.5 text-[11px] font-medium text-sky-600 ring-1 ring-inset ring-sky-200">{f}</span>)}
+          </div>
+          <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={onFileChange} />
+        </div>
+
+        {/* Workflow info */}
+        <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">Qué hace este proceso</p>
+          <div className="grid grid-cols-3 gap-4">
+            <div className="flex flex-col items-center text-center gap-2">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-50"><svg className="h-4 w-4 text-sky-600" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg></div>
+              <p className="text-xs font-medium text-gray-700">Subir Excel</p>
+              <p className="text-[11px] text-gray-400 leading-tight">Dossier diario de respuestas</p>
+            </div>
+            <div className="flex flex-col items-center text-center gap-2">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-50"><svg className="h-4 w-4 text-sky-600" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" /></svg></div>
+              <p className="text-xs font-medium text-gray-700">Analizar filas</p>
+              <p className="text-[11px] text-gray-400 leading-tight">Notas en PD + marcar perdidos</p>
+            </div>
+            <div className="flex flex-col items-center text-center gap-2">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-50"><svg className="h-4 w-4 text-sky-600" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>
+              <p className="text-xs font-medium text-gray-700">Resultado</p>
+              <p className="text-[11px] text-gray-400 leading-tight">Resumen detallado por fila</p>
+            </div>
+          </div>
+        </div>
         </div>
       )}
 
