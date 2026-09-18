@@ -38,7 +38,7 @@ export default function SidebarNav() {
   const searchParams = useSearchParams()
   const tab = searchParams.get('tab')
   const [bankSearch, setBankSearch] = useState('')
-  const [bancosOpen, setBancosOpen] = useState(true)
+  const [bancosOpen, setBancosOpen] = useState(false)
 
   const filteredBanks = bankSearch
     ? ACTIVE_BANKS.filter((b) =>

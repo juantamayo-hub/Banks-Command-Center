@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Suspense } from 'react'
 import SidebarNav from '@/components/dashboard/SidebarNav'
 import SmartInsights from '@/components/dashboard/SmartInsights'
+import UserMenu from '@/components/auth/UserMenu'
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
@@ -19,11 +20,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           <SidebarNav />
         </Suspense>
 
-        {/* Footer */}
-        <div className="px-5 py-3 border-t border-bayteca-green-dark">
-          <p className="text-xs text-bayteca-green-light">
-            Banks Command Center
-          </p>
+        {/* Footer — user info + sign out */}
+        <div className="px-4 py-3 border-t border-bayteca-green-dark">
+          <UserMenu />
         </div>
       </aside>
 

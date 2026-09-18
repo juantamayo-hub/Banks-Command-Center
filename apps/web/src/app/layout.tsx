@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Fraunces, Inter } from 'next/font/google'
 import { Geist_Mono } from 'next/font/google'
+import GoogleOAuthWrapper from '@/components/auth/GoogleOAuthWrapper'
 import './globals.css'
 
 const fraunces = Fraunces({
@@ -35,7 +36,9 @@ export default function RootLayout({
       lang="es"
       className={`${fraunces.variable} ${inter.variable} ${geistMono.variable} h-full`}
     >
-      <body className="min-h-full flex flex-col antialiased">{children}</body>
+      <body className="min-h-full flex flex-col antialiased">
+        <GoogleOAuthWrapper>{children}</GoogleOAuthWrapper>
+      </body>
     </html>
   )
 }
