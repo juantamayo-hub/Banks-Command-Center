@@ -21,6 +21,7 @@
  */
 
 import { createServerClient } from '@supabase/ssr'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 
 /**
@@ -60,27 +61,22 @@ export async function createClient() {
  * WARNING: This client bypasses ALL Row Level Security policies.
  * Only call this from server-side API routes after validating the request.
  * Never expose this client or its key to the browser under any circumstances.
+ *
+ * IMPORTANT: Uses createClient (not createServerClient) to avoid reading
+ * browser cookies. When createServerClient picks up a user's auth session
+ * from cookies, the user's JWT overrides the Authorization header and the
+ * effective role becomes 'authenticated' (SELECT-only) instead of
+ * 'service_role'. This caused all writes (UPDATE, INSERT) to silently
+ * fail with 0 rows affected.
  */
 export async function createAdminClient() {
-  const cookieStore = await cookies()
-
-  return createServerClient(
+  return createSupabaseClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll()
-        },
-        setAll(cookiesToSet) {
-          try {
-            cookiesToSet.forEach(({ name, value, options }) => {
-              cookieStore.set(name, value, options)
-            })
-          } catch {
-            // Same as above — safe to ignore in Server Components.
-          }
-        },
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
       },
     }
   )
