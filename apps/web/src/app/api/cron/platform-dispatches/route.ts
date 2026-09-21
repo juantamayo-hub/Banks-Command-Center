@@ -68,26 +68,45 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Upsert into Supabase (ignore duplicates)
+  // Insert ONLY truly new dispatches (never touch sent/dismissed rows)
   const supabase = await createAdminClient()
-  let upserted = 0
+  let inserted = 0
 
   if (discovered.length > 0) {
-    const { error } = await supabase
+    const dealIds = [...new Set(discovered.map((d) => d.deal_id))]
+
+    const { data: existingRows } = await supabase
       .from('platform_dispatches')
-      .upsert(
-        discovered.map((d) => ({
-          deal_id:     d.deal_id,
-          bank_name:   d.bank_name,
-          deal_title:  d.deal_title,
-          person_name: d.person_name,
-        })),
-        { onConflict: 'deal_id,bank_name', ignoreDuplicates: true }
-      )
-    if (error) console.error('[cron/platform-dispatches] Supabase upsert error:', error)
-    else upserted = discovered.length
+      .select('deal_id, bank_name')
+      .in('deal_id', dealIds)
+
+    const existingSet = new Set(
+      (existingRows ?? []).map((r) => `${r.deal_id}|${r.bank_name}`)
+    )
+
+    const newDispatches = discovered.filter(
+      (d) => !existingSet.has(`${d.deal_id}|${d.bank_name}`)
+    )
+
+    if (newDispatches.length > 0) {
+      const { error } = await supabase
+        .from('platform_dispatches')
+        .insert(
+          newDispatches.map((d) => ({
+            deal_id:     d.deal_id,
+            bank_name:   d.bank_name,
+            deal_title:  d.deal_title,
+            person_name: d.person_name,
+          }))
+        )
+      if (error && error.code !== '23505') {
+        console.error('[cron/platform-dispatches] Supabase insert error:', error)
+      } else {
+        inserted = newDispatches.length
+      }
+    }
   }
 
-  console.log(`[cron/platform-dispatches] deals=${allDeals.length} discovered=${discovered.length} upserted=${upserted}`)
+  console.log(`[cron/platform-dispatches] deals=${allDeals.length} discovered=${discovered.length} inserted=${inserted}`)
   return NextResponse.json({ ok: true, deals_in_stage: allDeals.length, discovered: discovered.length })
 }

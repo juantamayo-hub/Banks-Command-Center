@@ -184,26 +184,49 @@ export async function GET(req: Request) {
     })
   )
 
-  // ── 3. Upsert discovered entries (ON CONFLICT DO NOTHING) ─────────────────
+  // ── 3. Insert ONLY truly new dispatches (never touch existing rows) ────────
+  // Previous approach used upsert with ignoreDuplicates which could still
+  // interfere with sent_at/dismissed_at on existing rows. Instead, we first
+  // query which (deal_id, bank_name) pairs already exist, then INSERT only
+  // the new ones. This guarantees sent/dismissed rows are never part of any
+  // write operation.
   const supabase = await createAdminClient()
 
   if (discovered.length > 0) {
-    const { error: upsertError } = await supabase
-      .from('platform_dispatches')
-      .upsert(
-        discovered.map((d) => ({
-          deal_id: d.deal_id,
-          bank_name: d.bank_name,
-          deal_title: d.deal_title,
-          person_name: d.person_name,
-          bank_deal_id: d.bank_deal_id,
-        })),
-        { onConflict: 'deal_id,bank_name', ignoreDuplicates: true }
-      )
+    const dealIds = [...new Set(discovered.map((d) => d.deal_id))]
 
-    if (upsertError) {
-      console.error('[platform-dispatches] Supabase upsert error:', upsertError)
-      // Non-fatal: continue to return pending data even if upsert failed
+    // Fetch ALL existing pairs (regardless of sent/dismissed status)
+    const { data: existingRows } = await supabase
+      .from('platform_dispatches')
+      .select('deal_id, bank_name')
+      .in('deal_id', dealIds)
+
+    const existingSet = new Set(
+      (existingRows ?? []).map((r) => `${r.deal_id}|${r.bank_name}`)
+    )
+
+    const newDispatches = discovered.filter(
+      (d) => !existingSet.has(`${d.deal_id}|${d.bank_name}`)
+    )
+
+    if (newDispatches.length > 0) {
+      const { error: insertError } = await supabase
+        .from('platform_dispatches')
+        .insert(
+          newDispatches.map((d) => ({
+            deal_id: d.deal_id,
+            bank_name: d.bank_name,
+            deal_title: d.deal_title,
+            person_name: d.person_name,
+            bank_deal_id: d.bank_deal_id,
+          }))
+        )
+
+      // 23505 = unique_violation (race condition safety net — another process
+      // inserted the same row between our SELECT and INSERT). This is non-fatal.
+      if (insertError && insertError.code !== '23505') {
+        console.error('[platform-dispatches] Supabase insert error:', insertError)
+      }
     }
   }
 

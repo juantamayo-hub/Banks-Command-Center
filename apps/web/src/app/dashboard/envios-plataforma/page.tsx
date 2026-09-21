@@ -41,10 +41,16 @@ export default function EnviosPlataformaPage() {
   const [kutxaLoading, setKutxaLoading] = useState(true)
   const [kutxaError, setKutxaError] = useState<string | null>(null)
 
-  // Skip auto-refresh while user is typing a note
+  // Skip auto-refresh while user is typing a note or right after a send/dismiss
   const containerRef = useRef<HTMLDivElement>(null)
+  const lastActionRef = useRef<number>(0)
   const isUserTyping = useCallback(
     () => containerRef.current?.querySelector('textarea:focus') !== null,
+    []
+  )
+  // Cooldown: skip auto-refresh for 30s after marking sent or dismissing
+  const isInCooldown = useCallback(
+    () => Date.now() - lastActionRef.current < 30_000,
     []
   )
 
@@ -91,24 +97,26 @@ export default function EnviosPlataformaPage() {
   useEffect(() => {
     fetchDeals(dateFrom || undefined, dateTo || undefined)
     const interval = setInterval(() => {
-      if (!isUserTyping()) fetchDeals(dateFrom || undefined, dateTo || undefined)
+      if (!isUserTyping() && !isInCooldown()) fetchDeals(dateFrom || undefined, dateTo || undefined)
     }, 2 * 60 * 1000)
     return () => clearInterval(interval)
-  }, [fetchDeals, dateFrom, dateTo, isUserTyping])
+  }, [fetchDeals, dateFrom, dateTo, isUserTyping, isInCooldown])
 
   useEffect(() => {
     fetchKutxa()
     const interval = setInterval(() => {
-      if (!isUserTyping()) fetchKutxa()
+      if (!isUserTyping() && !isInCooldown()) fetchKutxa()
     }, 2 * 60 * 1000)
     return () => clearInterval(interval)
-  }, [fetchKutxa, isUserTyping])
+  }, [fetchKutxa, isUserTyping, isInCooldown])
 
   function removeDeal(dealId: number) {
+    lastActionRef.current = Date.now()
     setDeals((prev) => prev.filter((d) => d.deal_id !== dealId))
   }
 
   function removeKutxa(id: string) {
+    lastActionRef.current = Date.now()
     setKutxaSubs((prev) => prev.filter((s) => s.id !== id))
   }
 

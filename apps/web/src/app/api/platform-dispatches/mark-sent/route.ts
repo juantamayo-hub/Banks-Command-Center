@@ -64,16 +64,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Error al leer base de datos' }, { status: 500 })
   }
 
-  const { error: updateError } = await supabase
+  const { data: updatedRow, error: updateError } = await supabase
     .from('platform_dispatches')
     .update({ sent_at: new Date().toISOString(), sent_by: 'platform' })
     .eq('deal_id', deal_id)
     .eq('bank_name', bankName)
     .is('sent_at', null)  // idempotent guard — only update if not already sent
+    .select('id')
+    .maybeSingle()
 
   if (updateError) {
     console.error('[mark-sent] Supabase update error:', updateError)
     return NextResponse.json({ error: 'Error al actualizar base de datos' }, { status: 500 })
+  }
+
+  if (!updatedRow) {
+    // Row was already sent or doesn't exist — idempotent success
+    console.log(`[mark-sent] No pending row for deal=${deal_id} bank=${bankName} (already sent or missing)`)
   }
 
   // The banking deal in pipeline 7 is the target for all Pipedrive writes.
