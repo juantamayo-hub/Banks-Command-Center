@@ -1,99 +1,64 @@
 {
-  "name": "Kutxabank ZIP Creator",
+  "name": "Kutxabank ZIP Creator - ZIPCRYPTO - Retry Auth x3",
   "nodes": [
     {
-      "parameters": {
-        "content": "## 🏦 Kutxabank ZIP Creator\n\n**Trigger:** Pipedrive webhook `deal.updated` → stage 62 + Kutxabank detectado\n\n**Flujo:**\n1. Webhook → validar stage 62 + Kutxabank en Bank 1–5\n2. Buscar archivos C003–C008 / D003–D008 en Google Drive\n3. Descargar cada archivo (filesystem-v2 binary)\n4. moveBinaryData → convierte binary a base64 en JSON\n5. Agregar todos los items en 1 → construir body\n6. HTTP Request a /api/kutxabank/create-zip → devuelve ZIP con contraseña ZipCrypto = DNI\n7. Subir ZIP a la carpeta del cliente en Drive\n8. Escribir fila en Rastreator sheet '1º Filtro'\n9. Guardar en Supabase vía nuestro API\n10. Crear nota en Pipedrive bank deal\n\n⚠️ **Configurar antes de activar:**\n- Credential: `Pipedrive API` → cuenta Hipotecas Bancos\n- Credential: `Google Drive OAuth2` → cuenta con acceso a las carpetas\n- Credential: `Google Sheets OAuth2` → misma cuenta\n- Webhook URL Pipedrive: conectar en Pipedrive > Tools > Webhooks\n\n⚠️ **Sheet Rastreator ID:** `1M-gqoiozJZz7nXgnVSPLtG253tLtgsoLgd7uTm3i_e8`\n⚠️ **Hoja:** `1º Filtro`",
-        "height": 420,
-        "width": 600,
-        "color": 5
-      },
-      "id": "sticky-kutxa-01",
+      "id": "c11d8a7b-e206-4a3b-ab6d-95f3574a5206",
       "name": "Sticky Note",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        0,
-        0
-      ]
+        10352,
+        2080
+      ],
+      "parameters": {
+        "content": "## 🏦 Kutxabank ZIP Creator — ZipCrypto\n\n**Trigger:** Pipedrive webhook → deal en stage 62 + pipeline 6 + Kutxabank detectado\n\n**Flujo:**\n1. Webhook → normalizar dealId\n2. GetDeal → validar stage 62 / pipeline 6\n3. Detectar Kutxabank en Bank 1–5\n4. Buscar C003–C008 / D003–D008 en Google Drive\n   - La autorización Kutxabank se busca hasta **3 veces** en total, esperando 30 min entre intentos.\n   - Si aparece en cualquier intento, el flujo continúa; si no aparece tras el 3º, esa rama termina.\n5. Descargar los archivos como binary\n6. Crear ZIP protegido **directamente en n8n** con contraseña = DNI\n7. Formato: **ZipCrypto + STORE**, sin API externa ni Base64 intermedio\n8. Subir ZIP a la carpeta del cliente en Drive\n9. Escribir fila en Rastreator '1º Filtro'\n10. Guardar submission vía API\n11. Crear nota en Pipedrive bank deal\n\n✅ El ZIP se construye preservando los bytes originales de cada archivo.\n⚠️ ZipCrypto prioriza compatibilidad con extractores estándar; es cifrado legacy y menos fuerte que AES.\n\n**Antes de activar:** probar un deal real y abrir el ZIP con el DNI del cliente.",
+        "height": 470,
+        "width": 620,
+        "color": 5
+      }
     },
     {
+      "id": "96eec5ef-ed57-4515-ac10-418b48f94e5d",
+      "name": "Webhook Pipedrive",
+      "webhookId": "kutxabank-pipedrive-deal-updated",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        11232,
+        2848
+      ],
       "parameters": {
         "httpMethod": "POST",
         "path": "pipedrive-deal-updated",
         "options": {}
-      },
-      "id": "node-webhook",
-      "name": "Webhook Pipedrive",
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2,
-      "position": [
-        640,
-        608
-      ],
-      "webhookId": "kutxabank-pipedrive-deal-updated"
+      }
     },
     {
-      "parameters": {
-        "jsCode": "// Validar que el evento sea un deal.updated con stage_id = 62\n// y que el deal pertenezca al pipeline 6 (Bayteca)\n\nconst body = $input.first().json.body || $input.first().json;\n\n// Pipedrive envía el evento con 'current' y 'previous' data\nconst current = body.current || body;\nconst meta = body.meta || {};\n\nconst stageId = current.stage_id || current.current_stage_id;\nconst pipelineId = current.pipeline_id;\n\nif (stageId !== 62) {\n  return [{ json: { skip: true, reason: `stage_id=${stageId}, expected 62` } }];\n}\n\nif (pipelineId && pipelineId !== 6) {\n  return [{ json: { skip: true, reason: `pipeline_id=${pipelineId}, expected 6` } }];\n}\n\nconst dealId = current.id || body.id;\nif (!dealId) {\n  return [{ json: { skip: true, reason: 'No deal ID found' } }];\n}\n\nreturn [{ json: { dealId, stageId, pipelineId, ok: true } }];\n"
-      },
-      "id": "node-check-stage",
-      "name": "Verificar Stage 62",
+      "id": "992326b2-d89c-4628-b235-1cb692ae6979",
+      "name": "Normalizar Trigger",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        864,
-        480
+        11552,
+        2816
       ],
-      "disabled": true
+      "parameters": {
+        "jsCode": "// Normaliza el webhook para que el resto del flujo reciba siempre { dealId }.\n// Soporta:\n// 1) { body: { dealId: 123 } }\n// 2) payload antiguo con la clave accidental \"dealId \"\n// 3) webhook nativo de Pipedrive con body.current.id\n\nconst input = $input.first().json || {};\nconst body = input.body ?? input;\nconst current = body.current ?? body.data?.current ?? null;\n\nconst candidates = [\n  body.dealId,\n  body['dealId '],\n  body.deal_id,\n  current?.id,\n  body.data?.id,\n];\n\nlet dealId = null;\nfor (const candidate of candidates) {\n  if (candidate === undefined || candidate === null || candidate === '') continue;\n  const parsed = Number.parseInt(String(candidate).trim(), 10);\n  if (Number.isFinite(parsed) && parsed > 0) {\n    dealId = parsed;\n    break;\n  }\n}\n\nif (!dealId) {\n  throw new Error('No se encontró un dealId válido en el webhook. Esperado body.dealId o body.current.id.');\n}\n\nreturn [{\n  json: {\n    dealId,\n    triggerStageId: current?.stage_id ?? null,\n    triggerPipelineId: current?.pipeline_id ?? null,\n  },\n}];\n"
+      }
     },
     {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict",
-            "version": 1
-          },
-          "conditions": [
-            {
-              "id": "cond-skip",
-              "leftValue": "={{ $json.skip }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "equals"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "node-filter-stage",
-      "name": "¿Es Stage 62?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [
-        1088,
-        480
-      ],
-      "disabled": true
-    },
-    {
-      "parameters": {
-        "operation": "get",
-        "dealId": "={{ $json.body['dealId '] }}"
-      },
-      "id": "node-get-deal",
+      "id": "856c773d-4b07-4dac-a2b8-e126dfd7339a",
       "name": "GetDeal",
       "type": "n8n-nodes-base.pipedrive",
       "typeVersion": 1,
       "position": [
-        1312,
-        608
+        11776,
+        2816
       ],
+      "parameters": {
+        "operation": "get",
+        "dealId": "={{ $json.dealId }}"
+      },
       "credentials": {
         "pipedriveApi": {
           "id": "KIihwJJTsYRp3G2m",
@@ -102,19 +67,27 @@
       }
     },
     {
-      "parameters": {
-        "jsCode": "// Detectar si alguno de Bank 1–5 es Kutxabank\n// Kutxabank option IDs: 2633 (B1), 2651 (B2), 2669 (B3), 2687 (B4), 2705 (B5)\n\nconst deal = $input.first().json;\n\nconst KUTXA_OPTION_IDS = [2633, 2651, 2669, 2687, 2705];\n\nconst BANK_FIELD_IDS = [\n  'af536dbfe7d00fd441ae9bd4b144c25bc1d4c725',\n  '8e4b44a3f3973d1f524f8cd0ec6f6babe9e96965',\n  'ed0a30972778ac2c3d29cab53e27a89f5b52a1b2',\n  '9049591570e78d3274a72cfb7a28076789ce0676',\n  '36ff3525fb8a73637e069099967b2afe164e408a',\n];\nconst BANK_ID_FIELD_IDS = [\n  '04d666f12e4d27a3867daa5d7d6b777d76d24eb9',\n  '75d8963d89d47daf37349722c531677263173484',\n  '874add027adde7fa7690874e3bac581489387651',\n  '467feaa56488620159ef39890e6d8f96489bdbac',\n  'b3dfef96dce320a1cfa4605056757f7e79731676',\n];\nconst BANK_LINK_FIELD_IDS = [\n  'fc8312a76b8fe194ba55b60f3e09ac7e7800a5bd',\n  'd78cdb37e370d21facdea787f4bd7a22520ac62d',\n  'b3b1fd8fba90a455d01fb4aa4805569d4b60070a',\n  '9a4d771432722d30f6e4abe8f0cee6a542793475',\n  '963244c4d383295066674c693d813b4abb27ae11',\n];\n\nfunction parseBankDealId(raw) {\n  if (raw == null) return null;\n  const str = String(raw).trim();\n  const n = parseInt(str, 10);\n  if (!isNaN(n) && n > 0) return n;\n  const m = str.match(/\\/deal\\/(\\d+)/);\n  if (m) { const id = parseInt(m[1], 10); if (!isNaN(id) && id > 0) return id; }\n  return null;\n}\n\n// ── Contrato enum maps ────────────────────────────────────────────────────────\nconst contractType1Map = {\n  2613: 'Indefinido', 2614: 'Funcionario', 2615: 'Autónomo', 2616: 'Temporal',\n  2617: 'Interino', 2618: 'Fijo discontínuo', 2619: 'Desempleado',\n  2620: 'Jubilado', 2863: 'Pensionista'\n};\nconst contractType2Map = {\n  2526: 'Indefinido', 2527: 'Funcionario', 2528: 'Autónomo', 2529: 'Temporal',\n  2530: 'Desempleado', 2531: 'Interino', 2532: 'Fijo discontínuo', 2864: 'Pensionista'\n};\n\nfunction resolveEnum(rawValue, map) {\n  if (!rawValue && rawValue !== 0) return '';\n  const key = typeof rawValue === 'object' ? (rawValue.id ?? rawValue.value) : rawValue;\n  return map[Number(key)] || String(rawValue);\n}\n\n// ── Detectar slot Kutxabank ───────────────────────────────────────────────────\nlet kutxaSlot = -1;\nfor (let i = 0; i < BANK_FIELD_IDS.length; i++) {\n  const rawVal = deal[BANK_FIELD_IDS[i]];\n  const numVal = rawVal != null ? parseInt(String(rawVal), 10) : NaN;\n  if (!isNaN(numVal) && KUTXA_OPTION_IDS[i] === numVal) {\n    kutxaSlot = i;\n    break;\n  }\n}\n\nif (kutxaSlot === -1) {\n  return [{ json: { isKutxa: false, reason: 'Kutxabank not in Bank 1–5' } }];\n}\n\nconst bankDealId =\n  parseBankDealId(deal[BANK_ID_FIELD_IDS[kutxaSlot]]) ??\n  parseBankDealId(deal[BANK_LINK_FIELD_IDS[kutxaSlot]]);\n\n// ── Drive folder ──────────────────────────────────────────────────────────────\nconst driveUrl    = deal['c2ea08d72de437ee4957ff3807c48cebe7a1aa3e'] || '';\nconst folderMatch = driveUrl.match(/\\/folders\\/([a-zA-Z0-9_-]+)/);\nconst folderId    = folderMatch ? folderMatch[1].split('?')[0] : null;\n\n// ── Datos cliente ─────────────────────────────────────────────────────────────\nconst dni             = deal['60228dc43313b931378ec9bb3f21f7ad7f5a144c'] || '';\nconst plan            = deal['b5d36c005e38a4cd72d831be655996a3d6b34dc1'] || '';\nconst nombreCliente   = deal.person_name || '';\nconst secondTitular   = deal['209a0da7966a29bf05e96b6a124536222e0318dd'] || '';\n\n// ── Campos financieros (columnas C–H del Rastreator) ─────────────────────────\nconst importeCompraventa = deal['184fc13001dbca74b20c77f0fcfdec161b5cb492'] || '';\nconst importeHipoteca    = deal['b80d8ee37cc14ecdd7d8a640a57d6bd85308d5b9'] || '';\nconst ingresos1T         = deal['8e0e7ac2bd665bc3c0c5eb7d979a1ae1d9bc1300'] || '';\nconst contrato1T         = resolveEnum(deal['5788be4f764dabff9006ab5d685ae8061c7db3d9'], contractType1Map);\nconst ingresos2T         = deal['a52a8dcf3e016ffd7e670c6d888d30b4f08dc895'] || '';\nconst contrato2T         = resolveEnum(deal['9d6bb0a4cffae14651df0370331afa40b101c6e9'], contractType2Map);\n\nreturn [{\n  json: {\n    isKutxa: true,\n    dealId: deal.id,\n    bankDealId,\n    folderId,\n    driveUrl,\n    dni,\n    plan,\n    nombreCliente,\n    hasSecondTitular: !!secondTitular,\n    kutxaSlot,\n    // Campos financieros\n    importeCompraventa,\n    importeHipoteca,\n    ingresos1T,\n    contrato1T,\n    ingresos2T,\n    contrato2T,\n  }\n}];\n"
-      },
-      "id": "node-detect-kutxa",
+      "id": "62abcb74-0a2a-4e8b-b2fa-8289c03ab6f7",
       "name": "Detectar Kutxabank",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1520,
-        608
-      ]
+        12000,
+        2816
+      ],
+      "parameters": {
+        "jsCode": "// Detectar si Bank 1–5 contiene Kutxabank, localizar el bank deal y preparar contexto.\n// Kutxabank option IDs: 2633 (B1), 2651 (B2), 2669 (B3), 2687 (B4), 2705 (B5)\n\nconst deal = $input.first().json;\n\nconst KUTXA_OPTION_IDS = [2633, 2651, 2669, 2687, 2705];\nconst BANK_FIELD_IDS = [\n  'af536dbfe7d00fd441ae9bd4b144c25bc1d4c725',\n  '8e4b44a3f3973d1f524f8cd0ec6f6babe9e96965',\n  'ed0a30972778ac2c3d29cab53e27a89f5b52a1b2',\n  '9049591570e78d3274a72cfb7a28076789ce0676',\n  '36ff3525fb8a73637e069099967b2afe164e408a',\n];\nconst BANK_ID_FIELD_IDS = [\n  '04d666f12e4d27a3867daa5d7d6b777d76d24eb9',\n  '75d8963d89d47daf37349722c531677263173484',\n  '874add027adde7fa7690874e3bac581489387651',\n  '467feaa56488620159ef39890e6d8f96489bdbac',\n  'b3dfef96dce320a1cfa4605056757f7e79731676',\n];\nconst BANK_LINK_FIELD_IDS = [\n  'fc8312a76b8fe194ba55b60f3e09ac7e7800a5bd',\n  'd78cdb37e370d21facdea787f4bd7a22520ac62d',\n  'b3b1fd8fba90a455d01fb4aa4805569d4b60070a',\n  '9a4d771432722d30f6e4abe8f0cee6a542793475',\n  '963244c4d383295066674c693d813b4abb27ae11',\n];\n\nfunction rawScalar(raw) {\n  if (raw === null || raw === undefined) return '';\n  if (typeof raw !== 'object') return raw;\n  return raw.id ?? raw.value ?? raw.label ?? raw.name ?? raw.url ?? '';\n}\n\nfunction parseBankDealId(raw) {\n  if (raw == null) return null;\n  const scalar = rawScalar(raw);\n  const str = String(scalar).trim();\n  if (!str) return null;\n  if (/^\\d+$/.test(str)) {\n    const id = Number.parseInt(str, 10);\n    return id > 0 ? id : null;\n  }\n  const m = str.match(/\\/deal\\/(\\d+)/i) || str.match(/[?&](?:deal_?id|id)=(\\d+)/i);\n  if (!m) return null;\n  const id = Number.parseInt(m[1], 10);\n  return Number.isFinite(id) && id > 0 ? id : null;\n}\n\nfunction parseDriveFolderId(raw) {\n  const str = String(raw ?? '').trim();\n  if (!str) return null;\n  const folderMatch = str.match(/\\/folders\\/([a-zA-Z0-9_-]+)/i);\n  if (folderMatch) return folderMatch[1];\n  const idMatch = str.match(/[?&]id=([a-zA-Z0-9_-]+)/i);\n  if (idMatch) return idMatch[1];\n  if (/^[a-zA-Z0-9_-]{10,}$/.test(str)) return str;\n  return null;\n}\n\nfunction enumId(raw) {\n  const scalar = rawScalar(raw);\n  const n = Number.parseInt(String(scalar).trim(), 10);\n  return Number.isFinite(n) ? n : null;\n}\n\nfunction enumLabel(raw) {\n  if (raw && typeof raw === 'object') {\n    const label = raw.label ?? raw.name ?? raw.value;\n    if (label !== undefined && label !== null && !/^\\d+$/.test(String(label).trim())) return String(label);\n  }\n  const str = String(raw ?? '').trim();\n  return /^\\d+$/.test(str) ? '' : str;\n}\n\nconst contractType1Map = {\n  2613: 'Indefinido', 2614: 'Funcionario', 2615: 'Autónomo', 2616: 'Temporal',\n  2617: 'Interino', 2618: 'Fijo discontínuo', 2619: 'Desempleado',\n  2620: 'Jubilado', 2863: 'Pensionista'\n};\nconst contractType2Map = {\n  2526: 'Indefinido', 2527: 'Funcionario', 2528: 'Autónomo', 2529: 'Temporal',\n  2530: 'Desempleado', 2531: 'Interino', 2532: 'Fijo discontínuo', 2864: 'Pensionista'\n};\nfunction resolveEnum(rawValue, map) {\n  if (rawValue === null || rawValue === undefined || rawValue === '') return '';\n  const id = enumId(rawValue);\n  if (id !== null && map[id]) return map[id];\n  return enumLabel(rawValue) || String(rawScalar(rawValue));\n}\n\nlet kutxaSlot = -1;\nfor (let i = 0; i < BANK_FIELD_IDS.length; i++) {\n  const raw = deal[BANK_FIELD_IDS[i]];\n  const id = enumId(raw);\n  const label = enumLabel(raw).toLowerCase();\n  if (id === KUTXA_OPTION_IDS[i] || label.includes('kutxabank')) {\n    kutxaSlot = i;\n    break;\n  }\n}\n\nif (kutxaSlot === -1) {\n  return [{ json: { isKutxa: false, reason: 'Kutxabank no está en Bank 1–5', dealId: deal.id } }];\n}\n\nconst bankDealId =\n  parseBankDealId(deal[BANK_ID_FIELD_IDS[kutxaSlot]]) ??\n  parseBankDealId(deal[BANK_LINK_FIELD_IDS[kutxaSlot]]);\n\nconst driveUrl = deal['c2ea08d72de437ee4957ff3807c48cebe7a1aa3e'] || '';\nconst folderId = parseDriveFolderId(driveUrl);\nconst dni = String(deal['60228dc43313b931378ec9bb3f21f7ad7f5a144c'] || '').trim();\nconst plan = deal['b5d36c005e38a4cd72d831be655996a3d6b34dc1'] || '';\nconst nombreCliente = deal.person_name || '';\nconst secondTitular = deal['209a0da7966a29bf05e96b6a124536222e0318dd'] || '';\n\nconst requiredMissing = [];\nif (!bankDealId) requiredMissing.push('bankDealId');\nif (!folderId) requiredMissing.push('folderId');\nif (!dni) requiredMissing.push('dni');\nif (requiredMissing.length) {\n  throw new Error(`Kutxabank detectado, pero faltan datos obligatorios: ${requiredMissing.join(', ')}`);\n}\n\nconst importeCompraventa = deal['184fc13001dbca74b20c77f0fcfdec161b5cb492'] || '';\nconst importeHipoteca = deal['b80d8ee37cc14ecdd7d8a640a57d6bd85308d5b9'] || '';\nconst ingresos1T = deal['8e0e7ac2bd665bc3c0c5eb7d979a1ae1d9bc1300'] || '';\nconst contrato1T = resolveEnum(deal['5788be4f764dabff9006ab5d685ae8061c7db3d9'], contractType1Map);\nconst ingresos2T = deal['a52a8dcf3e016ffd7e670c6d888d30b4f08dc895'] || '';\nconst contrato2T = resolveEnum(deal['9d6bb0a4cffae14651df0370331afa40b101c6e9'], contractType2Map);\n\nreturn [{\n  json: {\n    isKutxa: true,\n    dealId: deal.id,\n    bankDealId,\n    folderId,\n    driveUrl,\n    dni,\n    plan,\n    nombreCliente,\n    hasSecondTitular: Boolean(secondTitular),\n    kutxaSlot,\n    importeCompraventa,\n    importeHipoteca,\n    ingresos1T,\n    contrato1T,\n    ingresos2T,\n    contrato2T,\n  }\n}];\n"
+      }
     },
     {
+      "id": "de600aaf-aa0f-4d35-8008-11a833cfceee",
+      "name": "¿Es Kutxabank?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        12224,
+        2816
+      ],
       "parameters": {
         "conditions": {
           "options": {
@@ -137,17 +110,17 @@
           "combinator": "and"
         },
         "options": {}
-      },
-      "id": "node-filter-kutxa",
-      "name": "¿Es Kutxabank?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [
-        1744,
-        608
-      ]
+      }
     },
     {
+      "id": "ec1dbe80-a776-4738-82fc-b9f4e85b9af6",
+      "name": "Listar archivos Drive",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        14016,
+        2784
+      ],
       "parameters": {
         "url": "https://www.googleapis.com/drive/v3/files",
         "authentication": "predefinedCredentialType",
@@ -171,14 +144,6 @@
         },
         "options": {}
       },
-      "id": "node-list-files",
-      "name": "Listar archivos Drive",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        1968,
-        704
-      ],
       "credentials": {
         "googleDriveOAuth2Api": {
           "id": "YgHXlMGu6BPZkHAh",
@@ -187,19 +152,28 @@
       }
     },
     {
-      "parameters": {
-        "jsCode": "// Filtrar los archivos encontrados para C003–C008 y D003–D008\n// y registrar los que faltan\n// Input: HTTP Request → { files: [{ id, name, mimeType }] }\n\nconst info = $('Detectar Kutxabank').item.json;\nconst allFiles = $input.first().json.files || [];\n\nconst DOC_CODES_1T = ['C003', 'C004', 'C005', 'C006', 'C007', 'C008'];\nconst DOC_CODES_2T = ['D003', 'D004', 'D005', 'D006', 'D007', 'D008'];\n\nconst neededCodes = [...DOC_CODES_1T];\nif (info.hasSecondTitular) neededCodes.push(...DOC_CODES_2T);\n\n// Map filename → file\nconst foundFiles = {}; // code → { id, name }\nconst missingDocs = [];\n\nfor (const file of allFiles) {\n  const fileName = file.name || '';\n  for (const code of neededCodes) {\n    if (fileName.includes(code) && !foundFiles[code]) {\n      foundFiles[code] = { id: file.id, name: fileName };\n    }\n  }\n}\n\nfor (const code of neededCodes) {\n  if (!foundFiles[code]) missingDocs.push(code);\n}\n\nconst filesToDownload = Object.values(foundFiles);\n\nif (filesToDownload.length === 0) {\n  return [{\n    json: {\n      ...info,\n      filesToDownload: [],\n      missingDocs,\n      zipFilename: `Kutxabank_${info.bankDealId}_${info.nombreCliente.replace(/\\s+/g, '_')}_${info.dni}.zip`,\n    }\n  }];\n}\n\nreturn filesToDownload.map((f, idx) => ({\n  json: {\n    ...info,\n    fileId: f.id,\n    fileName: f.name,\n    isLastFile: idx === filesToDownload.length - 1,\n    totalFiles: filesToDownload.length,\n    missingDocs,\n    zipFilename: `Kutxabank_${info.bankDealId}_${info.nombreCliente.replace(/\\s+/g, '_')}_${info.dni}.zip`,\n  }\n}));\n"
-      },
-      "id": "node-filter-docs",
+      "id": "9d1cb295-8427-4bd4-bdd2-a1c63b629188",
       "name": "Filtrar documentos C/D",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2192,
-        704
-      ]
+        14688,
+        2736
+      ],
+      "parameters": {
+        "jsCode": "// Selecciona C003–C008, F016, autorizaciones Kutxabank/Bayteca\n// y, si hay segundo titular, también D003–D008.\nconst info = $('Detectar Kutxabank').first().json;\n\n// Archivos de la carpeta del deal\nconst folderFiles = $('Listar archivos Drive').first().json.files || [];\n\n// Autorizaciones buscadas en todo Drive\nfunction getFilesFromExecutedNode(nodeName) {\n  try {\n    return $(nodeName).first().json.files || [];\n  } catch (e) {\n    return [];\n  }\n}\n\n// La autorización Kutxabank puede aparecer en cualquiera de los 3 intentos.\nconst authKutxaFiles = [\n  ...getFilesFromExecutedNode('FindAuthKutxabank'),\n  ...getFilesFromExecutedNode('FindAuthKutxabank Retry 2'),\n  ...getFilesFromExecutedNode('FindAuthKutxabank Retry 3'),\n];\nconst authBaytecaFiles = $('FindAuthBayteca').first().json.files || [];\n\n// Merge all files into one list\nconst allFiles = [...folderFiles, ...authKutxaFiles, ...authBaytecaFiles];\n\nconst DOC_CODES_1T = ['C003', 'C004', 'C005', 'C006', 'C007', 'C008'];\nconst DOC_CODES_2T = ['D003', 'D004', 'D005', 'D006', 'D007', 'D008'];\nconst EXTRA_CODES = ['F016']; // Otros\n\n// Build needed codes: always 1T + F016; add 2T only if second titular exists\nconst neededCodes = [...DOC_CODES_1T, ...EXTRA_CODES];\nif (info.hasSecondTitular) {\n  neededCodes.push(...DOC_CODES_2T);\n}\n// Auth docs tracked separately\nconst AUTH_DOCS = ['AUTH_KUTXABANK', 'AUTH_BAYTECA'];\n\n\n// Ensure filename has proper extension based on mimeType\nfunction ensureExtension(name, mimeType) {\n  // If name already has a common extension, keep it\n  if (/\\.(pdf|jpg|jpeg|png|doc|docx|xls|xlsx|zip|txt|csv|xml)$/i.test(name)) return name;\n  const extMap = {\n    'application/pdf': '.pdf',\n    'image/jpeg': '.jpg',\n    'image/png': '.png',\n    'image/gif': '.gif',\n    'image/webp': '.webp',\n    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',\n    'application/msword': '.doc',\n    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',\n    'application/vnd.ms-excel': '.xls',\n    'text/plain': '.txt',\n    'text/csv': '.csv',\n  };\n  const ext = extMap[mimeType] || '.pdf'; // default to .pdf for docs\n  return name + ext;\n}\n\n// code -> array de archivos. Un mismo código puede tener varios archivos\n// (p.ej. C003 anverso + reverso, varias nóminas): se incluyen TODOS.\nconst foundFiles = {};\nconst seenIds = new Set(); // un archivo que coincide con 2 códigos solo entra una vez\nconst matchedCodes = new Set(); // códigos cubiertos (aunque el archivo ya esté incluido por otro código)\n\n// Orden estable por nombre para que el ZIP sea reproducible\nconst sortedFolderFiles = [...folderFiles].sort((a, b) =>\n  String(a.name || '').localeCompare(String(b.name || '')));\n\n// Match C/D/F codes from folder files\nfor (const file of sortedFolderFiles) {\n  const fileName = String(file.name || '');\n  if (/\\.zip$/i.test(fileName)) continue; // nunca meter un ZIP previo dentro del ZIP\n  const upper = fileName.toUpperCase();\n  for (const code of neededCodes) {\n    const re = new RegExp(`(^|[^A-Z0-9])${code}([^A-Z0-9]|$)`, 'i');\n    if (!re.test(upper)) continue;\n    matchedCodes.add(code);\n    if (!seenIds.has(file.id)) {\n      (foundFiles[code] = foundFiles[code] || []).push({ id: file.id, name: ensureExtension(fileName, file.mimeType || ''), mimeType: file.mimeType || '' });\n      seenIds.add(file.id);\n    }\n  }\n}\n\n// Auth Kutxabank (1 archivo)\nif (authKutxaFiles.length > 0) {\n  const f = authKutxaFiles[0];\n  foundFiles['AUTH_KUTXABANK'] = [{ id: f.id, name: ensureExtension(f.name, f.mimeType || ''), mimeType: f.mimeType || '' }];\n}\n\n// Auth Bayteca (1 archivo)\nif (authBaytecaFiles.length > 0) {\n  const f = authBaytecaFiles[0];\n  foundFiles['AUTH_BAYTECA'] = [{ id: f.id, name: ensureExtension(f.name, f.mimeType || ''), mimeType: f.mimeType || '' }];\n}\n\n// All expected docs\nconst allExpected = [...neededCodes, ...AUTH_DOCS];\nconst missingDocs = allExpected.filter(code => !matchedCodes.has(code) && !(foundFiles[code] && foundFiles[code].length));\nconst filesToDownload = allExpected.flatMap(code => foundFiles[code] || []);\n\nif (filesToDownload.length === 0) {\n  throw new Error(`No se encontró ningún documento para Kutxabank en la carpeta ${info.folderId}. Faltan: ${missingDocs.join(', ')}`);\n}\n\nconst safeClient = String(info.nombreCliente || 'Cliente')\n  .normalize('NFD').replace(/[\\u0300-\\u036f]/g, '')\n  .replace(/[^a-zA-Z0-9_-]+/g, '_')\n  .replace(/^_+|_+$/g, '') || 'Cliente';\nconst safeDni = String(info.dni).replace(/[^a-zA-Z0-9_-]+/g, '');\nconst zipFilename = `Kutxabank_${info.bankDealId}_${safeClient}_${safeDni}.zip`;\n\n// --- Dedup: check if ZIP already exists in folder ---\nconst existingZip = folderFiles.find(f => {\n  const nm = String(f.name || '').toLowerCase();\n  return nm === zipFilename.toLowerCase() || (nm.endsWith('.zip') && nm.includes(String(info.bankDealId)));\n});\nconst zipAlreadyExists = Boolean(existingZip);\nconst existingZipFileId = existingZip ? existingZip.id : '';\nconst existingZipDriveLink = existingZipFileId\n  ? 'https://drive.google.com/file/d/' + existingZipFileId + '/view'\n  : '';\n\nreturn filesToDownload.map((f, idx) => ({\n  json: {\n    ...info,\n    fileId: f.id,\n    fileName: f.name,\n    fileMimeType: f.mimeType,\n    isLastFile: idx === filesToDownload.length - 1,\n    totalFiles: filesToDownload.length,\n    missingDocs,\n    zipFilename,\n    zipAlreadyExists,\n    existingZipFileId,\n    existingZipDriveLink,\n  }\n}));\n"
+      }
     },
     {
+      "id": "076d709e-c941-42fa-b600-69a854a71796",
+      "name": "Descargar archivo",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "retryOnFail": true,
+      "position": [
+        14912,
+        2736
+      ],
       "parameters": {
         "operation": "download",
         "fileId": {
@@ -211,14 +185,6 @@
           "fileName": "={{ $json.fileName }}"
         }
       },
-      "id": "node-download-file",
-      "name": "Descargar archivo",
-      "type": "n8n-nodes-base.googleDrive",
-      "typeVersion": 3,
-      "position": [
-        2400,
-        704
-      ],
       "credentials": {
         "googleDriveOAuth2Api": {
           "id": "YgHXlMGu6BPZkHAh",
@@ -227,77 +193,27 @@
       }
     },
     {
-      "parameters": {
-        "mode": "binaryToJson",
-        "setAllData": false,
-        "sourceKey": "data",
-        "destinationKey": "fileBase64",
-        "encoding": "base64"
-      },
-      "id": "node-extract-b64",
-      "name": "Extraer Base64",
-      "type": "n8n-nodes-base.moveBinaryData",
-      "typeVersion": 1,
-      "position": [
-        2640,
-        704
-      ]
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "// Agregar todos los items (uno por archivo) en un único body\n// para llamar al endpoint /api/kutxabank/create-zip\n//\n// moveBinaryData en n8n 2.37.x puede ignorar encoding:base64 y poner\n// los bytes crudos como string. Re-encodeamos a base64 aquí.\n\nconst items = $input.all();\nif (items.length === 0) {\n  throw new Error('No items to zip');\n}\n\nconst first = items[0].json;\n\nconst files = items.map(item => {\n  const raw = item.json.fileBase64 || '';\n  // Buffer.from(str, 'binary') trata cada char como byte (Latin-1)\n  // Convierte la cadena binaria a base64 real para transporte JSON seguro\n  const data = Buffer.from(raw, 'binary').toString('base64');\n  return { data, fileName: item.json.fileName };\n});\n\nreturn [{\n  json: {\n    files,\n    dni: first.dni,\n    zipFilename: first.zipFilename,\n    folderId: first.folderId,\n    dealId: first.dealId,\n    bankDealId: first.bankDealId,\n    nombreCliente: first.nombreCliente,\n    missingDocs: first.missingDocs || [],\n    fileCount: files.length,\n    // financieros\n    importeCompraventa: first.importeCompraventa,\n    importeHipoteca: first.importeHipoteca,\n    ingresos1T: first.ingresos1T,\n    contrato1T: first.contrato1T,\n    ingresos2T: first.ingresos2T,\n    contrato2T: first.contrato2T,\n  }\n}];\n"
-      },
-      "id": "node-prepare-zip",
-      "name": "Preparar solicitud ZIP",
+      "id": "2221df0c-404d-46b2-a060-a547cbad8d91",
+      "name": "Crear ZIP cifrado (DNI)",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2880,
-        704
-      ]
-    },
-    {
+        15136,
+        2736
+      ],
       "parameters": {
-        "method": "POST",
-        "url": "https://banks-command-center.vercel.app/api/kutxabank/create-zip",
-        "sendBody": true,
-        "contentType": "raw",
-        "rawContentType": "application/json",
-        "body": "={{ JSON.stringify($json) }}",
-        "options": {
-          "response": {
-            "response": {
-              "responseFormat": "file",
-              "outputPropertyName": "data"
-            }
-          }
-        }
-      },
-      "id": "node-zip-api",
-      "name": "Crear ZIP via API",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        3100,
-        704
-      ]
+        "jsCode": "// Crea un ZIP protegido con contraseña = DNI directamente dentro de n8n.\n// --- Dedup: skip ZIP creation if already exists in Drive ---\nconst firstSource = $('Filtrar documentos C/D').first().json;\nif (firstSource.zipAlreadyExists) {\n  const ctx = firstSource;\n  return [{\n    json: {\n      dealId: ctx.dealId,\n      bankDealId: ctx.bankDealId,\n      folderId: ctx.folderId,\n      zipFilename: ctx.zipFilename,\n      nombreCliente: ctx.nombreCliente,\n      dni: ctx.dni,\n      plan: ctx.plan,\n      missingDocs: ctx.missingDocs || [],\n      fileCount: 0,\n      includedFiles: [],\n      totalSourceBytes: 0,\n      zipSizeBytes: 0,\n      zipCreated: false,\n      zipAlreadyExists: true,\n      existingZipFileId: ctx.existingZipFileId,\n      existingZipDriveLink: ctx.existingZipDriveLink,\n      zipEncryption: 'ZipCrypto',\n      zipCompression: 'STORE',\n      importeCompraventa: ctx.importeCompraventa,\n      importeHipoteca: ctx.importeHipoteca,\n      ingresos1T: ctx.ingresos1T,\n      contrato1T: ctx.contrato1T,\n      ingresos2T: ctx.ingresos2T,\n      contrato2T: ctx.contrato2T,\n    },\n    binary: {},\n  }];\n}\n\n// No usa API externa, no convierte los PDFs a Base64 y no requiere módulos npm.\n// Formato: ZIP estándar + ZipCrypto (legacy) + método STORE (sin recomprimir).\n// Motivo de STORE: PDFs/JPGs ya suelen venir comprimidos y así evitamos alterar bytes.\n\nconst inputItems = $input.all();\nif (inputItems.length === 0) {\n  throw new Error('No hay archivos binarios para crear el ZIP.');\n}\n\nconst sourceItems = $('Filtrar documentos C/D').all();\nif (sourceItems.length !== inputItems.length) {\n  throw new Error(`Descuadre de archivos: ${sourceItems.length} esperados y ${inputItems.length} descargados.`);\n}\n\nconst ctx = sourceItems[0].json;\nconst password = String(ctx.dni || '').trim();\nif (!password) throw new Error('No hay DNI. No se puede proteger el ZIP con contraseña.');\nif (!ctx.zipFilename) throw new Error('No se pudo determinar el nombre del ZIP.');\n\n// ---------- CRC32 ----------\nconst CRC_TABLE = (() => {\n  const table = new Uint32Array(256);\n  for (let n = 0; n < 256; n++) {\n    let c = n;\n    for (let k = 0; k < 8; k++) {\n      c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);\n    }\n    table[n] = c >>> 0;\n  }\n  return table;\n})();\n\nfunction crc32Byte(crc, byte) {\n  return ((crc >>> 8) ^ CRC_TABLE[(crc ^ byte) & 0xff]) >>> 0;\n}\n\nfunction crc32(buffer) {\n  let crc = 0xffffffff;\n  for (const byte of buffer) crc = crc32Byte(crc, byte);\n  return (crc ^ 0xffffffff) >>> 0;\n}\n\n// ---------- ZipCrypto ----------\nfunction updateKeys(keys, plainByte) {\n  keys[0] = crc32Byte(keys[0], plainByte);\n  keys[1] = (keys[1] + (keys[0] & 0xff)) >>> 0;\n  keys[1] = (Math.imul(keys[1], 134775813) + 1) >>> 0;\n  keys[2] = crc32Byte(keys[2], (keys[1] >>> 24) & 0xff);\n}\n\nfunction initKeys(passwordBytes) {\n  const keys = [0x12345678 >>> 0, 0x23456789 >>> 0, 0x34567890 >>> 0];\n  for (const byte of passwordBytes) updateKeys(keys, byte);\n  return keys;\n}\n\nfunction decryptByte(keys) {\n  const temp = (keys[2] | 2) >>> 0;\n  return (Math.imul(temp, (temp ^ 1) >>> 0) >>> 8) & 0xff;\n}\n\nfunction encryptZipCrypto(data, passwordBytes, crc) {\n  const keys = initKeys(passwordBytes);\n  const plain = Buffer.alloc(12 + data.length);\n\n  // 11 bytes aleatorios del encryption header.\n  // Math.random es suficiente para la cabecera de ZipCrypto; el algoritmo en sí es legacy.\n  for (let i = 0; i < 11; i++) plain[i] = Math.floor(Math.random() * 256);\n\n  // Como conocemos CRC y no usamos data descriptor, el byte de validación es CRC[31:24].\n  plain[11] = (crc >>> 24) & 0xff;\n  data.copy(plain, 12);\n\n  const encrypted = Buffer.alloc(plain.length);\n  for (let i = 0; i < plain.length; i++) {\n    const p = plain[i];\n    encrypted[i] = p ^ decryptByte(keys);\n    updateKeys(keys, p);\n  }\n  return encrypted;\n}\n\n// ---------- Helpers ZIP ----------\nfunction dosDateTime(date = new Date()) {\n  const year = Math.max(1980, Math.min(2107, date.getFullYear()));\n  const dosTime =\n    ((date.getHours() & 0x1f) << 11) |\n    ((date.getMinutes() & 0x3f) << 5) |\n    (Math.floor(date.getSeconds() / 2) & 0x1f);\n  const dosDate =\n    (((year - 1980) & 0x7f) << 9) |\n    (((date.getMonth() + 1) & 0x0f) << 5) |\n    (date.getDate() & 0x1f);\n  return { dosTime, dosDate };\n}\n\nfunction uniqueFileName(rawName, usedNames) {\n  let name = String(rawName || 'document')\n    .replace(/\\\\/g, '/')\n    .split('/')\n    .pop()\n    .replace(/[\\x00-\\x1f]/g, '_')\n    .trim();\n\n  if (!name) name = 'document';\n\n  const dot = name.lastIndexOf('.');\n  const base = dot > 0 ? name.slice(0, dot) : name;\n  const ext = dot > 0 ? name.slice(dot) : '';\n  let candidate = name;\n  let counter = 2;\n\n  while (usedNames.has(candidate.toLowerCase())) {\n    candidate = `${base}_${counter++}${ext}`;\n  }\n  usedNames.add(candidate.toLowerCase());\n  return candidate;\n}\n\nasync function getDownloadedBuffer(itemIndex, item) {\n  const binaryKeys = Object.keys(item.binary || {});\n  if (binaryKeys.length === 0) {\n    throw new Error(`El archivo ${sourceItems[itemIndex]?.json?.fileName || itemIndex + 1} no contiene binary data.`);\n  }\n  const binaryProperty = item.binary?.data ? 'data' : binaryKeys[0];\n  const buffer = await this.helpers.getBinaryDataBuffer(itemIndex, binaryProperty);\n  if (!buffer || buffer.length === 0) {\n    throw new Error(`El archivo ${sourceItems[itemIndex]?.json?.fileName || itemIndex + 1} está vacío.`);\n  }\n  return Buffer.from(buffer);\n}\n\nconst passwordBytes = Buffer.from(password, 'utf8');\nconst localParts = [];\nconst centralParts = [];\nconst usedNames = new Set();\nconst includedFiles = [];\nlet localOffset = 0;\nlet totalSourceBytes = 0;\n\nfor (let i = 0; i < inputItems.length; i++) {\n  const data = await getDownloadedBuffer.call(this, i, inputItems[i]);\n  const src = sourceItems[i]?.json || inputItems[i].json || {};\n  const fileName = uniqueFileName(src.fileName || `document_${i + 1}`, usedNames);\n  const nameBytes = Buffer.from(fileName, 'utf8');\n\n  if (nameBytes.length > 65535) throw new Error(`Nombre de archivo demasiado largo: ${fileName}`);\n  if (data.length > 0xffffffff - 12) throw new Error(`Archivo demasiado grande para ZIP clásico: ${fileName}`);\n\n  const crc = crc32(data);\n  const encryptedData = encryptZipCrypto(data, passwordBytes, crc);\n  const { dosTime, dosDate } = dosDateTime();\n\n  // Bit 0 = encrypted. Bit 11 = filename UTF-8.\n  const flags = 0x0801;\n  const compressionMethod = 0; // STORE\n\n  // Local file header (30 bytes)\n  const localHeader = Buffer.alloc(30);\n  localHeader.writeUInt32LE(0x04034b50, 0);\n  localHeader.writeUInt16LE(20, 4); // version needed 2.0\n  localHeader.writeUInt16LE(flags, 6);\n  localHeader.writeUInt16LE(compressionMethod, 8);\n  localHeader.writeUInt16LE(dosTime, 10);\n  localHeader.writeUInt16LE(dosDate, 12);\n  localHeader.writeUInt32LE(crc, 14);\n  localHeader.writeUInt32LE(encryptedData.length, 18);\n  localHeader.writeUInt32LE(data.length, 22);\n  localHeader.writeUInt16LE(nameBytes.length, 26);\n  localHeader.writeUInt16LE(0, 28); // extra length\n\n  localParts.push(localHeader, nameBytes, encryptedData);\n\n  // Central directory header (46 bytes)\n  const centralHeader = Buffer.alloc(46);\n  centralHeader.writeUInt32LE(0x02014b50, 0);\n  centralHeader.writeUInt16LE(20, 4); // version made by\n  centralHeader.writeUInt16LE(20, 6); // version needed\n  centralHeader.writeUInt16LE(flags, 8);\n  centralHeader.writeUInt16LE(compressionMethod, 10);\n  centralHeader.writeUInt16LE(dosTime, 12);\n  centralHeader.writeUInt16LE(dosDate, 14);\n  centralHeader.writeUInt32LE(crc, 16);\n  centralHeader.writeUInt32LE(encryptedData.length, 20);\n  centralHeader.writeUInt32LE(data.length, 24);\n  centralHeader.writeUInt16LE(nameBytes.length, 28);\n  centralHeader.writeUInt16LE(0, 30); // extra length\n  centralHeader.writeUInt16LE(0, 32); // comment length\n  centralHeader.writeUInt16LE(0, 34); // disk start\n  centralHeader.writeUInt16LE(0, 36); // internal attrs\n  centralHeader.writeUInt32LE(0, 38); // external attrs\n  centralHeader.writeUInt32LE(localOffset, 42);\n\n  centralParts.push(centralHeader, nameBytes);\n  localOffset += localHeader.length + nameBytes.length + encryptedData.length;\n  totalSourceBytes += data.length;\n  includedFiles.push({ fileName, sizeBytes: data.length, crc32: crc.toString(16).padStart(8, '0') });\n}\n\nif (includedFiles.length > 65535) throw new Error('Demasiados archivos para ZIP clásico.');\n\nconst centralDirectory = Buffer.concat(centralParts);\nif (localOffset > 0xffffffff || centralDirectory.length > 0xffffffff) {\n  throw new Error('ZIP demasiado grande para formato clásico (ZIP64 no está habilitado).');\n}\n\n// End of central directory\nconst eocd = Buffer.alloc(22);\neocd.writeUInt32LE(0x06054b50, 0);\neocd.writeUInt16LE(0, 4);\neocd.writeUInt16LE(0, 6);\neocd.writeUInt16LE(includedFiles.length, 8);\neocd.writeUInt16LE(includedFiles.length, 10);\neocd.writeUInt32LE(centralDirectory.length, 12);\neocd.writeUInt32LE(localOffset, 16);\neocd.writeUInt16LE(0, 20);\n\nconst zipBuffer = Buffer.concat([...localParts, centralDirectory, eocd]);\n\n// Sanity checks antes de entregarlo al siguiente nodo.\nif (zipBuffer.length < 22 || zipBuffer.readUInt32LE(0) !== 0x04034b50) {\n  throw new Error('El ZIP generado no tiene una cabecera ZIP válida.');\n}\nif (zipBuffer.readUInt32LE(zipBuffer.length - 22) !== 0x06054b50) {\n  throw new Error('El ZIP generado no tiene un directorio central válido.');\n}\n\nconst binaryData = await this.helpers.prepareBinaryData(\n  zipBuffer,\n  ctx.zipFilename,\n  'application/zip'\n);\n\nreturn [{\n  json: {\n    dealId: ctx.dealId,\n    bankDealId: ctx.bankDealId,\n    folderId: ctx.folderId,\n    zipFilename: ctx.zipFilename,\n    nombreCliente: ctx.nombreCliente,\n    dni: ctx.dni,\n    plan: ctx.plan,\n    missingDocs: ctx.missingDocs || [],\n    fileCount: includedFiles.length,\n    includedFiles,\n    totalSourceBytes,\n    zipSizeBytes: zipBuffer.length,\n    zipCreated: true,\n    zipEncryption: 'ZipCrypto',\n    zipCompression: 'STORE',\n    importeCompraventa: ctx.importeCompraventa,\n    importeHipoteca: ctx.importeHipoteca,\n    ingresos1T: ctx.ingresos1T,\n    contrato1T: ctx.contrato1T,\n    ingresos2T: ctx.ingresos2T,\n    contrato2T: ctx.contrato2T,\n  },\n  binary: {\n    data: binaryData,\n  },\n}];\n"
+      }
     },
     {
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "// Restaurar contexto JSON + pasar el binario ZIP al nodo de subida.\n// El HTTP Request anterior devolvió el ZIP como binary;\n// este nodo lo combina con el contexto de 'Preparar solicitud ZIP'.\n\nconst ctx = $('Preparar solicitud ZIP').first().json;\n\nreturn [{\n  json: {\n    dealId:          ctx.dealId,\n    bankDealId:      ctx.bankDealId,\n    folderId:        ctx.folderId,\n    zipFilename:     ctx.zipFilename,\n    nombreCliente:   ctx.nombreCliente,\n    dni:             ctx.dni,\n    missingDocs:     ctx.missingDocs || [],\n    fileCount:       ctx.fileCount || 0,\n    zipCreated:      true,\n    importeCompraventa: ctx.importeCompraventa,\n    importeHipoteca:    ctx.importeHipoteca,\n    ingresos1T:         ctx.ingresos1T,\n    contrato1T:         ctx.contrato1T,\n    ingresos2T:         ctx.ingresos2T,\n    contrato2T:         ctx.contrato2T,\n  },\n  binary: $input.first().binary   // referencia filesystem-v2 del ZIP — Drive lo resuelve\n}];\n"
-      },
-      "id": "node-create-zip",
-      "name": "Crear ZIP",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "id": "695b64ab-ad84-4b01-91ae-8aba4d84e2f6",
+      "name": "Subir ZIP a Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
       "position": [
-        3300,
-        704
-      ]
-    },
-    {
+        15584,
+        2640
+      ],
       "parameters": {
         "name": "={{ $json.zipFilename }}",
         "driveId": {
@@ -312,14 +228,6 @@
         },
         "options": {}
       },
-      "id": "node-upload-zip",
-      "name": "Subir ZIP a Drive",
-      "type": "n8n-nodes-base.googleDrive",
-      "typeVersion": 3,
-      "position": [
-        3520,
-        704
-      ],
       "credentials": {
         "googleDriveOAuth2Api": {
           "id": "YgHXlMGu6BPZkHAh",
@@ -328,21 +236,30 @@
       }
     },
     {
-      "parameters": {
-        "jsCode": "// Construir el link de Drive y preparar datos para Supabase y Rastreator\nconst zipInfo = $('Crear ZIP').item.json;\nconst uploadResult = $input.first().json;\n\nconst zipFileId = uploadResult.id || uploadResult.fileId || '';\nconst zipDriveLink = zipFileId\n  ? `https://drive.google.com/file/d/${zipFileId}/view`\n  : '';\n\nreturn [{\n  json: {\n    ...zipInfo,\n    zipFileId,\n    zipDriveLink,\n  }\n}];\n"
-      },
-      "id": "node-prepare-data",
+      "id": "9a1ab787-bd33-47b5-aec4-7ca80cc4f2e8",
       "name": "Preparar datos",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3740,
-        704
-      ]
+        15808,
+        2736
+      ],
+      "parameters": {
+        "jsCode": "// Construir el link de Drive y preparar datos para Supabase y Rastreator\nconst zipInfo = $('Crear ZIP cifrado (DNI)').first().json;\nconst uploadOrExisting = $input.first().json;\n\n// Si se subió un ZIP nuevo, tomar el ID del resultado de upload\n// Si se usó uno existente, tomar el ID existente\nconst zipFileId = uploadOrExisting.id || uploadOrExisting.fileId || zipInfo.existingZipFileId || '';\nconst zipDriveLink = zipInfo.existingZipDriveLink || (zipFileId\n  ? `https://drive.google.com/file/d/${zipFileId}/view`\n  : '');\n\nreturn [{\n  json: {\n    ...zipInfo,\n    zipFileId,\n    zipDriveLink,\n    skippedUpload: uploadOrExisting.skippedUpload || false,\n  }\n}];\n"
+      }
     },
     {
+      "id": "f544fc2f-64b4-4c7d-8ecc-3f6c7f94c92c",
+      "name": "Escribir Rastreator",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "retryOnFail": true,
+      "position": [
+        16256,
+        2736
+      ],
       "parameters": {
-        "operation": "append",
+        "operation": "appendOrUpdate",
         "documentId": {
           "__rl": true,
           "value": "1M-gqoiozJZz7nXgnVSPLtG253tLtgsoLgd7uTm3i_e8",
@@ -356,15 +273,19 @@
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "ID": "={{ $json.dealId }}",
-            "DNI": "={{ $json.dni }}",
-            "Importe compraventa": "={{ $json.importeCompraventa }}",
-            "Importe hipoteca": "={{ $json.importeHipoteca }}",
-            "Ingresos 1T": "={{ $json.ingresos1T }}",
-            "Tipo contrato 1T": "={{ $json.contrato1T }}",
-            "Ingresos 2T": "={{ $json.ingresos2T }}"
+            "ID": "={{ $('Preparar datos').item.json.dealId }}",
+            "Importe compraventa": "={{ $('Preparar datos').item.json.importeCompraventa }}",
+            "Importe hipoteca": "={{ $('Preparar datos').item.json.importeHipoteca }}",
+            "Ingresos 1T": "={{ $('Preparar datos').item.json.ingresos1T }}",
+            "Tipo contrato 1T": "={{ $('Preparar datos').item.json.contrato1T }}",
+            "Ingresos 2T": "={{ $('Preparar datos').item.json.ingresos2T }}",
+            "DNI 1T": "={{ $('Preparar datos').item.json.dni }}",
+            "DNI 2T": "={{ $json.custom_fields['ID Doc / DNI 2T'] }}",
+            "Tipo contrato 2T": "={{ $('Preparar datos').item.json.contrato2T }}"
           },
-          "matchingColumns": [],
+          "matchingColumns": [
+            "ID"
+          ],
           "schema": [
             {
               "id": "ID",
@@ -377,8 +298,18 @@
               "removed": false
             },
             {
-              "id": "DNI",
-              "displayName": "DNI",
+              "id": "DNI 1T",
+              "displayName": "DNI 1T",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "DNI 2T",
+              "displayName": "DNI 2T",
               "required": false,
               "defaultMatch": false,
               "display": true,
@@ -437,6 +368,16 @@
               "removed": false
             },
             {
+              "id": "Tipo contrato 2T",
+              "displayName": "Tipo contrato 2T",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
               "id": "Respuesta Rastreator",
               "displayName": "Respuesta Rastreator",
               "required": false,
@@ -444,7 +385,7 @@
               "display": true,
               "type": "string",
               "canBeUsedToMatch": true,
-              "removed": false
+              "removed": true
             }
           ],
           "attemptToConvertTypes": false,
@@ -452,14 +393,6 @@
         },
         "options": {}
       },
-      "id": "node-write-rastreator",
-      "name": "Escribir Rastreator",
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.5,
-      "position": [
-        3964,
-        704
-      ],
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "eIrQolo2o3XIvmzV",
@@ -468,17 +401,23 @@
       }
     },
     {
+      "id": "c84c5b69-3fed-46e8-9308-afb435669d2c",
+      "name": "Guardar en Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        16480,
+        2736
+      ],
       "parameters": {
         "method": "POST",
-        "url": "=https://{{ $vars['NEXT_PUBLIC_APP_URL'] || 'banks-command-center.vercel.app' }}/api/kutxabank/submissions",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "supabaseApi",
+        "url": "={{ (($vars.NEXT_PUBLIC_APP_URL || 'https://banks-command-center.vercel.app').replace(/\\/+$/, '')) + '/api/kutxabank/submissions' }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "x-kutxabank-secret",
-              "value": "=kutxabankBayteca2026"
+              "value": "={{ $vars.KUTXABANK_SECRET || 'kutxabankBayteca2026' }}"
             },
             {
               "name": "Content-Type",
@@ -528,38 +467,474 @@
           ]
         },
         "options": {}
-      },
-      "id": "node-save-supabase",
-      "name": "Guardar en Supabase",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        4188,
-        704
-      ],
-      "credentials": {
-        "supabaseApi": {
-          "id": "WNDRor6g5gI2YqBe",
-          "name": "Supabase account"
-        }
       }
     },
     {
-      "parameters": {
-        "resource": "note",
-        "content": "=📁 ZIP Kutxabank creado y subido a Drive.\n\nArchivos incluidos: {{ $('Preparar datos').item.json.fileCount }}\nDocs faltantes: {{ $('Preparar datos').item.json.missingDocs.join(', ') || 'Ninguno' }}\n\nLink ZIP: {{ $('Preparar datos').item.json.zipDriveLink }}\n\nPendiente aprobación Rastreator para envío.",
-        "additionalFields": {
-          "deal_id": "={{ $('Preparar datos').item.json.bankDealId }}"
-        }
-      },
-      "id": "node-create-note",
+      "id": "676384c8-23db-448f-82e1-42191037f792",
       "name": "Nota en Pipedrive",
       "type": "n8n-nodes-base.pipedrive",
       "typeVersion": 1,
       "position": [
-        4412,
-        704
+        16704,
+        2736
       ],
+      "parameters": {
+        "resource": "note",
+        "content": "=📁 ZIP Kutxabank creado y subido a Drive.\n\nCifrado: ZipCrypto · contraseña: DNI\nArchivos incluidos: {{ $('Preparar datos').item.json.fileCount }}\nDocs faltantes: {{ $('Preparar datos').item.json.missingDocs.join(', ') || 'Ninguno' }}\n\nLink ZIP: {{ $('Preparar datos').item.json.zipDriveLink }}\n\nPendiente aprobación Rastreator para envío.",
+        "additionalFields": {
+          "deal_id": "={{ $('Preparar datos').item.json.bankDealId }}"
+        }
+      },
+      "credentials": {
+        "pipedriveApi": {
+          "id": "KIihwJJTsYRp3G2m",
+          "name": "Hipotecas Bancos"
+        }
+      }
+    },
+    {
+      "id": "d8fb0230-c087-42bf-98cd-a0bfd190eef5",
+      "name": "FindAuthKutxabank",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        12448,
+        2480
+      ],
+      "parameters": {
+        "url": "https://www.googleapis.com/drive/v3/files",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ \"name contains 'Kutxabank \" + $('Detectar Kutxabank').item.json.dni + \"' and mimeType = 'application/pdf' and trashed=false\" }}"
+            },
+            {
+              "name": "fields",
+              "value": "files(id,name,mimeType)"
+            },
+            {
+              "name": "pageSize",
+              "value": "10"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "YgHXlMGu6BPZkHAh",
+          "name": "Juanjo"
+        }
+      }
+    },
+    {
+      "id": "c83b5121-fed9-495d-ae2d-28b53b7ce947",
+      "name": "FindAuthBayteca",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        14240,
+        2928
+      ],
+      "parameters": {
+        "url": "https://www.googleapis.com/drive/v3/files",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ \"name contains 'Bayteca \" + $('Detectar Kutxabank').item.json.dni + \"' and mimeType = 'application/pdf' and trashed=false\" }}"
+            },
+            {
+              "name": "fields",
+              "value": "files(id,name,mimeType)"
+            },
+            {
+              "name": "pageSize",
+              "value": "10"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "YgHXlMGu6BPZkHAh",
+          "name": "Juanjo"
+        }
+      }
+    },
+    {
+      "id": "1d3f9879-1ee7-4582-a236-1584ed9b18bb",
+      "name": "Merge Drive Results 1",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        14240,
+        2592
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "6d7a9e78-6d07-4414-9dfa-8cb7f40858d0",
+      "name": "Merge Drive Results 2",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        14464,
+        2736
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "417c27c7-a99c-48f5-9e29-080c64991cd0",
+      "name": "¿ZIP nuevo?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        15360,
+        2736
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-zip-new",
+              "leftValue": "={{ $('Filtrar documentos C/D').item.json.zipAlreadyExists }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "e124ee59-b569-4610-84e9-5af9dc81ff45",
+      "name": "Usar ZIP existente",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        15584,
+        2832
+      ],
+      "parameters": {
+        "jsCode": "// ZIP ya existe en Drive — usar el file ID existente en vez de subir de nuevo.\nconst zipInfo = $input.first().json;\nreturn [{\n  json: {\n    ...zipInfo,\n    // Simular la respuesta de \"Subir ZIP a Drive\" para que \"Preparar datos\" funcione\n    id: zipInfo.existingZipFileId,\n    fileId: zipInfo.existingZipFileId,\n    name: zipInfo.zipFilename,\n    skippedUpload: true,\n  }\n}];\n"
+      }
+    },
+    {
+      "id": "d817e268-6fb6-488f-90f4-01ae88548e36",
+      "name": "Webhook Request Hub",
+      "webhookId": "e130daf8-6dc8-43f9-aa3b-8440f6e66a76",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        10880,
+        2640
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "kutxabank-nuevo-envio",
+        "options": {}
+      }
+    },
+    {
+      "id": "7aefab43-0735-4108-8d5d-e3f5c2e18335",
+      "name": "Get a deal",
+      "type": "n8n-nodes-base.pipedrive",
+      "typeVersion": 2,
+      "position": [
+        11104,
+        2640
+      ],
+      "parameters": {
+        "operation": "get",
+        "dealId": "={{ $json.body.dealId }}"
+      },
+      "credentials": {
+        "pipedriveApi": {
+          "id": "KIihwJJTsYRp3G2m",
+          "name": "Hipotecas Bancos"
+        }
+      }
+    },
+    {
+      "id": "ad8fbe38-bcbb-43ef-a8b7-0295f9d22703",
+      "name": "Edit Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        11328,
+        2640
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "acf7da22-1500-45e3-b2f0-8ed0c7047d9f",
+              "name": "body.dealId",
+              "value": "={{ $json.custom_fields['Opportunity ID'] }}",
+              "type": "number"
+            },
+            {
+              "id": "8d31ceb8-2b1d-45ac-8768-01fda51c7f8f",
+              "name": "attempt",
+              "value": 1,
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "61977cfb-49af-478f-9379-9a44c7c80768",
+      "name": "¿Auth Kutxabank encontrada? (1/3)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        12672,
+        2480
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cond-auth-kutxa-attempt-1",
+              "leftValue": "={{ Array.isArray($json.files) && $json.files.length > 0 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d9fce946-d00f-48e9-847c-20ea6e0ff0b6",
+      "name": "Wait 30 min - Retry 2/3",
+      "webhookId": "8e02e955-ddc8-4884-851d-727c9caa1885",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        12896,
+        2400
+      ],
+      "parameters": {
+        "amount": 30,
+        "unit": "minutes"
+      }
+    },
+    {
+      "id": "ac151ff9-e8eb-4f64-9002-41d0c5756f9a",
+      "name": "FindAuthKutxabank Retry 2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        13120,
+        2400
+      ],
+      "parameters": {
+        "url": "https://www.googleapis.com/drive/v3/files",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ \"name contains 'Kutxabank \" + $('Detectar Kutxabank').item.json.dni + \"' and mimeType = 'application/pdf' and trashed=false\" }}"
+            },
+            {
+              "name": "fields",
+              "value": "files(id,name,mimeType)"
+            },
+            {
+              "name": "pageSize",
+              "value": "10"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "YgHXlMGu6BPZkHAh",
+          "name": "Juanjo"
+        }
+      }
+    },
+    {
+      "id": "cbaf4081-ac96-43c4-a3f8-77ca82342e38",
+      "name": "¿Auth Kutxabank encontrada? (2/3)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        13344,
+        2400
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cond-auth-kutxa-attempt-2",
+              "leftValue": "={{ Array.isArray($json.files) && $json.files.length > 0 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b6dd6941-02a1-4907-b3d6-5fab24c331bb",
+      "name": "Wait 30 min - Retry 3/3",
+      "webhookId": "retry-auth-kutxa-wait-webhook-f48ccf018f33",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        13568,
+        2352
+      ],
+      "parameters": {
+        "amount": 30,
+        "unit": "minutes"
+      }
+    },
+    {
+      "id": "a72ae996-d3c9-486c-b471-9ac66bf63962",
+      "name": "FindAuthKutxabank Retry 3",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        13792,
+        2352
+      ],
+      "parameters": {
+        "url": "https://www.googleapis.com/drive/v3/files",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ \"name contains 'Kutxabank \" + $('Detectar Kutxabank').item.json.dni + \"' and mimeType = 'application/pdf' and trashed=false\" }}"
+            },
+            {
+              "name": "fields",
+              "value": "files(id,name,mimeType)"
+            },
+            {
+              "name": "pageSize",
+              "value": "10"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "YgHXlMGu6BPZkHAh",
+          "name": "Juanjo"
+        }
+      }
+    },
+    {
+      "id": "2bc70a90-6269-4c59-b3bd-56dd0881b1b9",
+      "name": "¿Auth Kutxabank encontrada? (3/3)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        14016,
+        2352
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cond-auth-kutxa-attempt-3",
+              "leftValue": "={{ Array.isArray($json.files) && $json.files.length > 0 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "acbb708d-fbb4-454f-9483-acf92b1bcb1d",
+      "name": "Sin autorización Kutxabank tras 3 intentos",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        14240,
+        2304
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "e32f0ae4-a8c6-418e-be29-8849f91939f9",
+      "name": "Get a deal1",
+      "type": "n8n-nodes-base.pipedrive",
+      "typeVersion": 2,
+      "alwaysOutputData": true,
+      "position": [
+        16016,
+        2736
+      ],
+      "parameters": {
+        "operation": "get",
+        "dealId": "={{ $json.dealId }}"
+      },
       "credentials": {
         "pipedriveApi": {
           "id": "KIihwJJTsYRp3G2m",
@@ -573,32 +948,15 @@
       "main": [
         [
           {
-            "node": "Verificar Stage 62",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "GetDeal",
+            "node": "Normalizar Trigger",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Verificar Stage 62": {
+    "Normalizar Trigger": {
       "main": [
-        [
-          {
-            "node": "¿Es Stage 62?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "¿Es Stage 62?": {
-      "main": [
-        [],
         [
           {
             "node": "GetDeal",
@@ -637,16 +995,25 @@
             "node": "Listar archivos Drive",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "FindAuthKutxabank",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "FindAuthBayteca",
+            "type": "main",
+            "index": 0
           }
-        ],
-        []
+        ]
       ]
     },
     "Listar archivos Drive": {
       "main": [
         [
           {
-            "node": "Filtrar documentos C/D",
+            "node": "Merge Drive Results 1",
             "type": "main",
             "index": 0
           }
@@ -668,51 +1035,7 @@
       "main": [
         [
           {
-            "node": "Extraer Base64",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Extraer Base64": {
-      "main": [
-        [
-          {
-            "node": "Preparar solicitud ZIP",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Preparar solicitud ZIP": {
-      "main": [
-        [
-          {
-            "node": "Crear ZIP via API",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Crear ZIP via API": {
-      "main": [
-        [
-          {
-            "node": "Crear ZIP",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Crear ZIP": {
-      "main": [
-        [
-          {
-            "node": "Subir ZIP a Drive",
+            "node": "Crear ZIP cifrado (DNI)",
             "type": "main",
             "index": 0
           }
@@ -734,7 +1057,7 @@
       "main": [
         [
           {
-            "node": "Escribir Rastreator",
+            "node": "Get a deal1",
             "type": "main",
             "index": 0
           }
@@ -762,11 +1085,238 @@
           }
         ]
       ]
+    },
+    "Crear ZIP cifrado (DNI)": {
+      "main": [
+        [
+          {
+            "node": "¿ZIP nuevo?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FindAuthKutxabank": {
+      "main": [
+        [
+          {
+            "node": "¿Auth Kutxabank encontrada? (1/3)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FindAuthBayteca": {
+      "main": [
+        [
+          {
+            "node": "Merge Drive Results 2",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Drive Results 1": {
+      "main": [
+        [
+          {
+            "node": "Merge Drive Results 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Drive Results 2": {
+      "main": [
+        [
+          {
+            "node": "Filtrar documentos C/D",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿ZIP nuevo?": {
+      "main": [
+        [
+          {
+            "node": "Subir ZIP a Drive",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Usar ZIP existente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Usar ZIP existente": {
+      "main": [
+        [
+          {
+            "node": "Preparar datos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Request Hub": {
+      "main": [
+        [
+          {
+            "node": "Get a deal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get a deal": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Normalizar Trigger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Auth Kutxabank encontrada? (1/3)": {
+      "main": [
+        [
+          {
+            "node": "Merge Drive Results 1",
+            "type": "main",
+            "index": 1
+          }
+        ],
+        [
+          {
+            "node": "Wait 30 min - Retry 2/3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 30 min - Retry 2/3": {
+      "main": [
+        [
+          {
+            "node": "FindAuthKutxabank Retry 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FindAuthKutxabank Retry 2": {
+      "main": [
+        [
+          {
+            "node": "¿Auth Kutxabank encontrada? (2/3)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Auth Kutxabank encontrada? (2/3)": {
+      "main": [
+        [
+          {
+            "node": "Merge Drive Results 1",
+            "type": "main",
+            "index": 1
+          }
+        ],
+        [
+          {
+            "node": "Wait 30 min - Retry 3/3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 30 min - Retry 3/3": {
+      "main": [
+        [
+          {
+            "node": "FindAuthKutxabank Retry 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FindAuthKutxabank Retry 3": {
+      "main": [
+        [
+          {
+            "node": "¿Auth Kutxabank encontrada? (3/3)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Auth Kutxabank encontrada? (3/3)": {
+      "main": [
+        [
+          {
+            "node": "Merge Drive Results 1",
+            "type": "main",
+            "index": 1
+          }
+        ],
+        [
+          {
+            "node": "Sin autorización Kutxabank tras 3 intentos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get a deal1": {
+      "main": [
+        [
+          {
+            "node": "Escribir Rastreator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
     "executionOrder": "v1",
-    "binaryMode": "separate"
+    "binaryMode": "separate",
+    "availableInMCP": true
   },
   "meta": null
 }
