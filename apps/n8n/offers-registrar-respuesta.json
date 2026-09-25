@@ -1,0 +1,94 @@
+{
+  "name": "OFFERS · Registrar respuesta (Command Center)",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "0513f9e8-bf23-41fd-b067-221c6f4f6845"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normaliza lo que manda cada workflow bancario al formato de POST /api/bank-responses.\n// Campos mínimos: bank_slug, external_id (Gmail message id). El resto es opcional.\nconst out = [];\nfor (const item of $input.all()) {\n  const j = item.json;\n  out.push({ json: {\n    bank_slug: j.bank_slug,\n    source: j.source || 'email',\n    external_id: String(j.external_id || j.emailId || j.id || ''),\n    thread_id: j.thread_id || j.threadId || null,\n    received_at: j.received_at || null,\n    subject: j.subject || null,\n    from_email: j.from_email || null,\n    general_deal_id: j.general_deal_id || j.generalDealId || null,\n    bank_deal_id: j.bank_deal_id || j.bankDealId || null,\n    client_name: j.client_name || j.clientName || j.personName || null,\n    resolved_by: j.resolved_by || j.resolvedBy || null,\n    match_status: j.match_status || null,\n    classification: j.classification || j.emailType || null,\n    summary: j.summary || j.classificationSummary || null,\n    required_action: j.required_action || j.requiredAction || null,\n    lost_reason: j.lost_reason || j.lostReason || null,\n    offer: j.offer || null,\n    raw_extraction: j.raw_extraction || null,\n    status: j.status || (j.errorMessage || j.error ? 'error' : 'processed'),\n    error_step: j.error_step || j.errorStep || null,\n    error_message: j.error_message || j.errorMessage || j.error || null,\n    pipedrive_actions: j.pipedrive_actions || [],\n    workflow_id: j.workflow_id || null,\n    execution_id: j.execution_id || null,\n  } });\n}\nreturn out;"
+      },
+      "name": "Normalizar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ],
+      "id": "54b95f68-6212-4259-b2bd-ff7bde92eb14"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.COMMAND_CENTER_URL }}/api/bank-responses",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 15000,
+          "retry": {
+            "maxTries": 3
+          }
+        }
+      },
+      "name": "POST Command Center",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        0
+      ],
+      "id": "61670c63-b980-4a32-8c81-97fd2fc1e889",
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REEMPLAZAR",
+          "name": "Command Center · x-offers-secret"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Normalizar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar": {
+      "main": [
+        [
+          {
+            "node": "POST Command Center",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner"
+  }
+}

@@ -21,6 +21,12 @@
  *   "FEIN emitida"                   → 74 (Notary Formalization)
  *   "Fechada para firma"             → 74 (Notary Formalization)
  *   "Firmada"                        → status=won, stage 75
+ *   "Denegada LTV"                   → status=lost, 302- DENEGADO - LTV
+ *   "Denegada endeudamiento"         → status=lost, 303- DENEGADO - ENDEUDAMIENTO
+ *   "Denegada perfil"                → status=lost, 304- DENEGADO - PERFIL DEL CLIENTE
+ *
+ * Nunca retrocede: solo avanza si la etapa destino va después de la actual
+ * (según STAGE_ORDER) y nunca toca deals ya ganados/perdidos.
  */
 
 import { NextResponse } from 'next/server'
@@ -44,6 +50,17 @@ const STAGE_MAP: Record<string, number | null> = {
   'FEIN emitida':                   74,
   'Fechada para firma':             74,
   'Firmada':                        75,
+}
+
+// Orden de etapas del pipeline 7 (Pipedrive order_nr)
+const STAGE_ORDER: Record<number, number> = { 77: 1, 70: 2, 71: 3, 79: 4, 72: 5, 73: 6, 74: 7, 75: 8 }
+
+// Denegaciones → deal bancario lost con motivo ([Bayteca] Lost reason in Bank_area)
+const BANK_LOST_REASON_FIELD = '5af7c8a4d8341bfe53526b6a7b4e2fc793503a90'
+const DENIAL_MAP: Record<string, { optionId: number; label: string }> = {
+  'Denegada LTV':           { optionId: 3137, label: '302- DENEGADO - LTV (FASE BANCARIA)' },
+  'Denegada endeudamiento': { optionId: 3138, label: '303- DENEGADO - ENDEUDAMIENTO (FASE BANCARIA)' },
+  'Denegada perfil':        { optionId: 3139, label: '304- DENEGADO - PERFIL DEL CLIENTE (FASE BANCARIA)' },
 }
 
 const STAGE_NAMES: Record<number, string> = {
@@ -75,6 +92,7 @@ interface RowResult {
   stage_updated_to?: number
   stage_name?:      string
   marked_won?:      boolean
+  marked_lost?:     boolean
   note_added?:      boolean
 }
 
@@ -92,6 +110,34 @@ async function updateDealStage(bankDealId: number, stageId: number, won: boolean
         body: JSON.stringify(payload),
       }
     )
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+async function getDeal(bankDealId: number): Promise<{ stage_id: number; status: string } | null> {
+  try {
+    const res = await fetch(`${PIPEDRIVE_BASE}/deals/${bankDealId}?api_token=${PIPEDRIVE_TOKEN}`)
+    if (!res.ok) return null
+    const json = await res.json()
+    return json?.data ? { stage_id: json.data.stage_id, status: json.data.status } : null
+  } catch {
+    return null
+  }
+}
+
+async function markDealLost(bankDealId: number, denial: { optionId: number; label: string }): Promise<boolean> {
+  try {
+    const res = await fetch(`${PIPEDRIVE_BASE}/deals/${bankDealId}?api_token=${PIPEDRIVE_TOKEN}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        status: 'lost',
+        lost_reason: denial.label,
+        [BANK_LOST_REASON_FIELD]: denial.optionId,
+      }),
+    })
     return res.ok
   } catch {
     return false
@@ -175,12 +221,36 @@ export async function POST(req: Request) {
       deal_id: dealIdStr, dni, estado, status: 'no_change', bank_deal_id: bankDealId,
     }
 
-    const targetStage = estado in STAGE_MAP ? STAGE_MAP[estado] : undefined
+    const denial = DENIAL_MAP[estado]
+    let targetStage = estado in STAGE_MAP ? STAGE_MAP[estado] : undefined
     const isWon = estado === 'Firmada'
+
+    // Estado actual del deal bancario: nunca retroceder ni tocar deals cerrados
+    const current = bankDealId && (denial || (targetStage !== undefined && targetStage !== null))
+      ? await getDeal(bankDealId)
+      : null
+    if (current && current.status !== 'open') {
+      result.status = 'no_change'
+      result.detail = `Deal bancario ya ${current.status === 'won' ? 'ganado' : 'perdido'}: no se modifica`
+      targetStage = null
+    } else if (current && targetStage && (STAGE_ORDER[targetStage] ?? 0) <= (STAGE_ORDER[current.stage_id] ?? 0)) {
+      result.status = 'no_change'
+      result.detail = `No retrocede: ya está en ${STAGE_NAMES[current.stage_id] ?? current.stage_id}`
+      targetStage = null
+    }
 
     // Update Pipedrive stage if we have a bank deal and a stage to set
     let stageUpdated = false
-    if (bankDealId && targetStage !== undefined && targetStage !== null) {
+    if (bankDealId && denial && (!current || current.status === 'open')) {
+      if (await markDealLost(bankDealId, denial)) {
+        result.status      = 'processed'
+        result.marked_lost = true
+        result.detail      = denial.label
+      } else {
+        result.status = 'error'
+        result.detail = 'Error al marcar lost en Pipedrive'
+      }
+    } else if (bankDealId && targetStage !== undefined && targetStage !== null) {
       stageUpdated = await updateDealStage(bankDealId, targetStage, isWon)
       if (stageUpdated) {
         result.stage_updated_to = targetStage
@@ -191,10 +261,10 @@ export async function POST(req: Request) {
         result.status = 'error'
         result.detail = 'Error al actualizar stage en Pipedrive'
       }
-    } else if (targetStage === null) {
+    } else if (targetStage === null && !result.detail) {
       // Known estado with no stage change — still record + add note if comentario
       result.status = 'processed'
-    } else if (!(estado in STAGE_MAP)) {
+    } else if (!(estado in STAGE_MAP) && !denial) {
       result.status = 'no_change'
       result.detail = `Estado no reconocido: ${estado}`
     }

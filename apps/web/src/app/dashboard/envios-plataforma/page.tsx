@@ -139,6 +139,8 @@ export default function EnviosPlataformaPage() {
   const bothLoading = loading && kutxaLoading
   const anyError = error || kutxaError
   const totalPending = deals.length + kutxaSubs.length
+  // Un deal puede tener varios bancos pendientes: contar envíos (deal × banco) para que cuadre con los filtros por banco
+  const totalPendingDispatches = deals.reduce((n, d) => n + d.banks.length, 0) + kutxaSubs.length
   const totalFiltered = filteredDeals.length + filteredKutxa.length
 
   return (
@@ -195,13 +197,14 @@ export default function EnviosPlataformaPage() {
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setBankFilter('Todos')}
+            title={`${totalPendingDispatches} envíos pendientes en ${totalPending} deals`}
             className={`rounded-full px-3 py-1 text-xs font-medium border transition-colors ${
               bankFilter === 'Todos'
                 ? 'bg-gray-800 text-white border-gray-800'
                 : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
             }`}
           >
-            Todos ({totalPending})
+            Todos ({totalPendingDispatches})
           </button>
           {PLATFORM_BANKS.map((bank) => {
             const count = deals.filter((d) => d.banks.some((b) => b.name === bank)).length

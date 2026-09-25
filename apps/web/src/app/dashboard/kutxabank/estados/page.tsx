@@ -31,6 +31,7 @@ interface ProcessResponse {
     stage_updated_to?: number
     stage_name?:      string
     marked_won?:      boolean
+    marked_lost?:     boolean
     note_added?:      boolean
   }>
 }
@@ -401,6 +402,7 @@ export default function KutxabankEstadosPage() {
                           const parts: string[] = []
                           if (r.stage_name) parts.push(`Stage → ${r.stage_name}`)
                           if (r.marked_won) parts.push('Marcado como ganado')
+                          if (r.marked_lost) parts.push('Marcado como perdido')
                           if (r.note_added) parts.push('Nota añadida')
                           return parts.join(' · ') || 'Sin stage change'
                         })()}
