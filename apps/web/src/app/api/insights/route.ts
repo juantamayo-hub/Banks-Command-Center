@@ -3,20 +3,32 @@
  *
  * Returns a random insight based on real data from Supabase.
  * Called periodically by SmartInsights component to show non-intrusive toasts.
+ *
+ * Todas las cifras son exactas: conteos con count='exact' o agregados en SQL
+ * (bank_stats, bank_responses_summary). Nunca se agregan filas en memoria, porque
+ * PostgREST corta en 1000 filas.
  */
 
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
+import { RESPONSE_BANKS } from '@/lib/bankResponses'
 
 interface Insight {
   text: string
   type: 'info' | 'success' | 'warning'
 }
 
+const BANK_NAME = new Map<string, string>(RESPONSE_BANKS.map((b) => [b.slug, b.name]))
+const plural = (n: number, s: string, p = s + 's') => (n === 1 ? s : p)
+const fmt = (n: number) => n.toLocaleString('es-ES')
+
 export async function GET() {
 
   const supabase = await createAdminClient()
   const insights: Insight[] = []
+  const year = new Date().getFullYear()
+  const ytdStart = `${year}-01-01T00:00:00Z`
+  const since30 = new Date(Date.now() - 30 * 86_400_000).toISOString()
 
   try {
     // ── Pending platform dispatches ────────────────────────────────────
@@ -28,7 +40,7 @@ export async function GET() {
 
     if (pendingPlatform && pendingPlatform > 0) {
       insights.push({
-        text: `Tienes ${pendingPlatform} envío${pendingPlatform !== 1 ? 's' : ''} pendiente${pendingPlatform !== 1 ? 's' : ''} por plataforma`,
+        text: `Tienes ${fmt(pendingPlatform)} ${plural(pendingPlatform, 'envío')} ${plural(pendingPlatform, 'pendiente')} por plataforma`,
         type: 'warning',
       })
     }
@@ -42,114 +54,98 @@ export async function GET() {
 
     if (kutxaPending && kutxaPending > 0) {
       insights.push({
-        text: `${kutxaPending} envío${kutxaPending !== 1 ? 's' : ''} de Kutxabank listo${kutxaPending !== 1 ? 's' : ''} para enviar`,
+        text: `${fmt(kutxaPending)} ${plural(kutxaPending, 'envío')} de Kutxabank ${plural(kutxaPending, 'listo')} para enviar`,
         type: 'warning',
       })
     }
 
-    // ── Bank stats from sheet_rows ─────────────────────────────────────
-    const year = new Date().getFullYear()
-    const ytdStart = `${year}-01-01T00:00:00`
-
-    const { data: rows } = await supabase
+    // ── Envíos por Sheets este año (fecha real de envío) ───────────────
+    const { count: sentYtd } = await supabase
       .from('sheet_rows')
-      .select('bank_id, status')
-      .gte('created_at', ytdStart)
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'sent')
+      .gte('timestamp_sent', ytdStart)
 
-    if (rows && rows.length > 0) {
-      // Total envíos YTD
-      const totalRows = rows.length
+    if (sentYtd && sentYtd > 0) {
       insights.push({
-        text: `Este año se han procesado ${totalRows.toLocaleString('es-ES')} operaciones en total`,
+        text: `En ${year} se han enviado ${fmt(sentYtd)} operaciones a bancos desde los Sheets`,
+        type: 'success',
+      })
+    }
+
+    // ── Platform dispatches enviados este año ──────────────────────────
+    const { count: sentPlatform } = await supabase
+      .from('platform_dispatches')
+      .select('*', { count: 'exact', head: true })
+      .gte('sent_at', ytdStart)
+
+    if (sentPlatform && sentPlatform > 0) {
+      insights.push({
+        text: `En ${year} se han completado ${fmt(sentPlatform)} envíos por plataforma`,
+        type: 'info',
+      })
+    }
+
+    // ── Volumen y bloqueos por banco (agregado en SQL, histórico) ──────
+    const { data: stats } = await supabase.rpc('bank_stats')
+    const bankStats = ((stats ?? []) as Array<{ name: string; total: number; blocked: number }>)
+      .map((s) => ({ name: s.name, total: Number(s.total), blocked: Number(s.blocked) }))
+
+    if (bankStats.length > 1) {
+      const top = [...bankStats].sort((a, b) => b.total - a.total)[0]
+      const all = bankStats.reduce((n, s) => n + s.total, 0)
+      const share = Math.round((top.total / all) * 100)
+      insights.push({
+        text: `${top.name} concentra el ${share}% de las operaciones registradas (${fmt(top.total)} de ${fmt(all)})`,
         type: 'info',
       })
 
-      // Sent count
-      const sentRows = rows.filter((r) => r.status === 'sent')
-      if (sentRows.length > 0) {
+      const worst = bankStats
+        .filter((s) => s.total >= 20 && s.blocked > 0)
+        .map((s) => ({ ...s, rate: Math.round((s.blocked / s.total) * 100) }))
+        .sort((a, b) => b.rate - a.rate)[0]
+      if (worst) {
         insights.push({
-          text: `Se han completado ${sentRows.length.toLocaleString('es-ES')} envíos exitosos en ${year}`,
-          type: 'success',
-        })
-      }
-
-      // Per-bank stats
-      const bankCounts = new Map<string, { total: number; sent: number; offers: number; blocked: number }>()
-      for (const row of rows) {
-        const bank = row.bank_id as string
-        const entry = bankCounts.get(bank) ?? { total: 0, sent: 0, offers: 0, blocked: 0 }
-        entry.total++
-        if (row.status === 'sent') entry.sent++
-        if (row.status === 'offer_received') entry.offers++
-        if (String(row.status).startsWith('blocked_')) entry.blocked++
-        bankCounts.set(bank, entry)
-      }
-
-      // Top bank by volume
-      const sorted = [...bankCounts.entries()].sort((a, b) => b[1].total - a[1].total)
-      if (sorted.length > 0) {
-        const [topSlug, topStats] = sorted[0]
-        const bankName = slugToName(topSlug)
-        const avg = totalRows / bankCounts.size
-        const pctAbove = Math.round(((topStats.total - avg) / avg) * 100)
-        if (pctAbove > 10) {
-          insights.push({
-            text: `${bankName} lidera con ${topStats.total} operaciones, ${pctAbove}% por encima de la media`,
-            type: 'info',
-          })
-        }
-      }
-
-      // Bank with most offers
-      const sortedOffers = [...bankCounts.entries()]
-        .filter(([, s]) => s.offers > 0)
-        .sort((a, b) => b[1].offers - a[1].offers)
-      if (sortedOffers.length > 0) {
-        const [topSlug, topStats] = sortedOffers[0]
-        insights.push({
-          text: `${slugToName(topSlug)} es el banco con más ofertas recibidas: ${topStats.offers} este año`,
-          type: 'success',
-        })
-      }
-
-      // Best offer rate (min 5 sent)
-      const withRate = [...bankCounts.entries()]
-        .filter(([, s]) => s.sent >= 5 && s.offers > 0)
-        .map(([slug, s]) => ({ slug, rate: Math.round((s.offers / s.sent) * 100), ...s }))
-        .sort((a, b) => b.rate - a.rate)
-      if (withRate.length > 0) {
-        const best = withRate[0]
-        insights.push({
-          text: `${slugToName(best.slug)} tiene el mejor ratio de oferta: ${best.rate}% sobre enviados`,
-          type: 'success',
-        })
-      }
-
-      // Most blocked bank
-      const sortedBlocked = [...bankCounts.entries()]
-        .filter(([, s]) => s.blocked > 0 && s.total >= 5)
-        .map(([slug, s]) => ({ slug, rate: Math.round((s.blocked / s.total) * 100), ...s }))
-        .sort((a, b) => b.rate - a.rate)
-      if (sortedBlocked.length > 0) {
-        const worst = sortedBlocked[0]
-        insights.push({
-          text: `${slugToName(worst.slug)} tiene el mayor ratio de bloqueo: ${worst.rate}% de sus operaciones`,
+          text: `${worst.name} es el banco con más bloqueos: ${worst.rate}% de sus operaciones (${fmt(worst.blocked)} de ${fmt(worst.total)})`,
           type: 'warning',
         })
       }
     }
 
-    // ── Platform dispatches stats ──────────────────────────────────────
-    const { count: sentPlatform } = await supabase
-      .from('platform_dispatches')
-      .select('*', { count: 'exact', head: true })
-      .not('sent_at', 'is', null)
-      .gte('created_at', ytdStart)
+    // ── Ofertas y rechazos de los últimos 30 días (bank_responses) ─────
+    const { data: summary } = await supabase.rpc('bank_responses_summary', { p_since: since30 })
+    const responses = ((summary ?? []) as Array<{ bank_slug: string; offers: number; rejections: number; attention: number }>)
+      .map((r) => ({ slug: r.bank_slug, offers: Number(r.offers), rejections: Number(r.rejections), attention: Number(r.attention) }))
 
-    if (sentPlatform && sentPlatform > 0) {
+    const offers30 = responses.reduce((n, r) => n + r.offers, 0)
+    if (offers30 > 0) {
       insights.push({
-        text: `Se han completado ${sentPlatform} envíos por plataforma este año`,
-        type: 'info',
+        text: `En los últimos 30 días se han recibido ${fmt(offers30)} ${plural(offers30, 'oferta')} de bancos`,
+        type: 'success',
+      })
+      const topOffers = [...responses].sort((a, b) => b.offers - a.offers)[0]
+      insights.push({
+        text: `${BANK_NAME.get(topOffers.slug) ?? topOffers.slug} es el banco con más ofertas en los últimos 30 días: ${fmt(topOffers.offers)}`,
+        type: 'success',
+      })
+    }
+
+    const bestRatio = responses
+      .filter((r) => r.offers + r.rejections >= 10)
+      .map((r) => ({ ...r, rate: Math.round((r.offers / (r.offers + r.rejections)) * 100) }))
+      .sort((a, b) => b.rate - a.rate)[0]
+    if (bestRatio) {
+      insights.push({
+        text: `${BANK_NAME.get(bestRatio.slug) ?? bestRatio.slug} convierte el ${bestRatio.rate}% de sus respuestas en oferta (últimos 30 días)`,
+        type: 'success',
+      })
+    }
+
+    const attention = responses.reduce((n, r) => n + r.attention, 0)
+    if (attention > 0) {
+      insights.push({
+        text: `${fmt(attention)} ${plural(attention, 'respuesta')} de bancos ${plural(attention, 'requiere', 'requieren')} revisión manual en Ofertas recibidas`,
+        type: 'warning',
       })
     }
 
@@ -164,20 +160,4 @@ export async function GET() {
 
   const picked = insights[Math.floor(Math.random() * insights.length)]
   return NextResponse.json({ insight: picked })
-}
-
-/** Convert bank slug to display name */
-function slugToName(slug: string): string {
-  const map: Record<string, string> = {
-    caixabank: 'CaixaBank', abanca: 'Abanca', bankinter: 'Bankinter',
-    santander: 'Santander', sabadell: 'Sabadell', kutxabank: 'Kutxabank',
-    deutsche_bank: 'Deutsche Bank', evo_banco: 'EVO Banco', ibercaja: 'Ibercaja',
-    unicaja: 'Unicaja', openbank: 'Openbank', bbva: 'BBVA',
-    ing: 'ING', myinvestor: 'MyInvestor', targobank: 'Targobank',
-    cajamar: 'Cajamar', liberbank: 'Liberbank', laboral_kutxa: 'Laboral Kutxa',
-    cajasur: 'Cajasur', imaginbank: 'ImaginBank', pibank: 'Pibank',
-    cr_navarra: 'CR Navarra', cr_teruel: 'CR Teruel', cr_extremadura: 'CR Extremadura',
-    banca_360: 'Banca 360',
-  }
-  return map[slug] ?? slug.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }

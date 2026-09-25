@@ -30,7 +30,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $vars.COMMAND_CENTER_URL }}/api/bank-responses",
+        "url": "https://banks-command-center.vercel.app/api/bank-responses",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
@@ -57,8 +57,8 @@
       "waitBetweenTries": 2000,
       "credentials": {
         "httpHeaderAuth": {
-          "id": "REEMPLAZAR",
-          "name": "Command Center · x-offers-secret"
+          "id": "3leSdf1hQF3r1ZEC",
+          "name": "OFFERS_API_SECRET"
         }
       }
     }

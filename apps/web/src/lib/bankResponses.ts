@@ -3,7 +3,20 @@
  * Escritas por los workflows n8n *_Offers_Received vía POST /api/bank-responses.
  */
 
-export type ResponseSource = 'email' | 'api' | 'platform' | 'sheet' | 'manual'
+import { ACTIVE_BANKS } from '@/lib/banks'
+
+export type ResponseSource = 'email' | 'api' | 'platform' | 'sheet' | 'manual' | 'backfill'
+
+/**
+ * Bancos que pueden registrar respuestas: los de ACTIVE_BANKS (sheets) más los que
+ * reciben ofertas por otros canales y no tienen pestaña en el Sheet.
+ */
+export const RESPONSE_BANKS: ReadonlyArray<{ slug: string; name: string }> = [
+  ...ACTIVE_BANKS,
+  { slug: 'caixabank',     name: 'CaixaBank' },
+  { slug: 'hipotecas_com', name: 'Hipotecas.com' },
+  { slug: 'evo',           name: 'EVO' },
+]
 export type ResponseClassification = 'offer' | 'more_info' | 'rejection' | 'approval' | 'other'
 export type MatchStatus = 'matched' | 'unmatched' | 'ambiguous'
 export type ResponseStatus = 'processed' | 'error' | 'manual_review' | 'resolved'

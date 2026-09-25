@@ -3,7 +3,6 @@ import { createClient } from '@/lib/supabase/server'
 import PageHeader from '@/components/ui/PageHeader'
 import StatsCard from '@/components/ui/StatsCard'
 import EmptyState from '@/components/ui/EmptyState'
-import { ACTIVE_BANKS } from '@/lib/banks'
 import { getBankLogo } from '@/lib/bankLogos'
 import {
   type BankResponse,
@@ -12,6 +11,7 @@ import {
   CLASSIFICATION_STYLE,
   needsAttention,
   pipedriveDealUrl,
+  RESPONSE_BANKS,
 } from '@/lib/bankResponses'
 import ResponseReviewActions from '@/components/ofertas/ResponseReviewActions'
 
@@ -21,7 +21,7 @@ interface OfertasPageProps {
   searchParams: Promise<{ bank?: string; tipo?: string; vista?: string; dias?: string }>
 }
 
-const BANK_NAME = new Map<string, string>(ACTIVE_BANKS.map((b) => [b.slug, b.name]))
+const BANK_NAME = new Map<string, string>(RESPONSE_BANKS.map((b) => [b.slug, b.name]))
 const TIPOS: ResponseClassification[] = ['offer', 'more_info', 'rejection', 'approval', 'other']
 const DIAS = [7, 30, 90]
 
@@ -71,38 +71,37 @@ export default async function OfertasPage({ searchParams }: OfertasPageProps) {
 
   const since = sinceIso(dias)
   const supabase = await createClient()
-  const { data, error } = await supabase
+
+  // Totales por banco: agregados en SQL (no dependen del límite de filas de PostgREST)
+  const { data: summaryData, error: summaryError } = await supabase.rpc('bank_responses_summary', { p_since: since })
+  const bankRows = ((summaryData ?? []) as Array<{
+    bank_slug: string; total: number; offers: number; more_info: number; rejections: number; attention: number; last_at: string
+  }>).map((b) => [b.bank_slug, {
+    total: Number(b.total), offer: Number(b.offers), more_info: Number(b.more_info),
+    rejection: Number(b.rejections), attention: Number(b.attention), last: b.last_at,
+  }] as const)
+
+  const sum = (k: 'total' | 'offer' | 'more_info' | 'rejection' | 'attention') =>
+    bankRows.reduce((n, [, b]) => n + b[k], 0)
+  const totalCount = sum('total')
+  const offers = sum('offer')
+  const moreInfo = sum('more_info')
+  const rejections = sum('rejection')
+  const attentionCount = sum('attention')
+
+  // Listado: filtrado en la base de datos, últimas 300
+  let query = supabase
     .from('bank_responses')
     .select('*')
     .gte('received_at', since)
     .order('received_at', { ascending: false })
-    .limit(2000)
-
-  const all = (data ?? []) as BankResponse[]
-  const attention = all.filter(needsAttention)
-
-  // KPIs sobre el periodo completo (sin filtros de banco/tipo)
-  const offers = all.filter((r) => r.classification === 'offer').length
-  const rejections = all.filter((r) => r.classification === 'rejection').length
-  const moreInfo = all.filter((r) => r.classification === 'more_info').length
-
-  // Resumen por banco
-  const byBank = new Map<string, { total: number; offer: number; rejection: number; more_info: number; attention: number; last: string }>()
-  for (const r of all) {
-    const b = byBank.get(r.bank_slug) ?? { total: 0, offer: 0, rejection: 0, more_info: 0, attention: 0, last: r.received_at }
-    b.total++
-    if (r.classification === 'offer') b.offer++
-    if (r.classification === 'rejection') b.rejection++
-    if (r.classification === 'more_info') b.more_info++
-    if (needsAttention(r)) b.attention++
-    if (r.received_at > b.last) b.last = r.received_at
-    byBank.set(r.bank_slug, b)
-  }
-  const bankRows = [...byBank.entries()].sort((a, b) => b[1].total - a[1].total)
-
-  const list = (vista ? attention : all).filter(
-    (r) => (!bank || r.bank_slug === bank) && (!tipo || r.classification === tipo)
-  )
+    .limit(300)
+  if (bank) query = query.eq('bank_slug', bank)
+  if (tipo) query = query.eq('classification', tipo)
+  if (vista) query = query.neq('status', 'resolved').or('status.in.(error,manual_review),match_status.neq.matched')
+  const { data, error: listError } = await query
+  const list = (data ?? []) as BankResponse[]
+  const error = summaryError ?? listError
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -135,11 +134,11 @@ export default async function OfertasPage({ searchParams }: OfertasPageProps) {
 
       {/* ── KPIs ──────────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-        <StatsCard label={`Respuestas (${dias} días)`} value={all.length} href={buildHref(current, { vista: undefined, tipo: undefined })} />
+        <StatsCard label={`Respuestas (${dias} días)`} value={totalCount} href={buildHref(current, { vista: undefined, tipo: undefined })} />
         <StatsCard label="Ofertas" value={offers} color="text-emerald-600" href={buildHref(current, { vista: undefined, tipo: 'offer' })} />
         <StatsCard label="Más información" value={moreInfo} color="text-amber-600" href={buildHref(current, { vista: undefined, tipo: 'more_info' })} />
         <StatsCard label="Rechazos" value={rejections} color="text-red-600" href={buildHref(current, { vista: undefined, tipo: 'rejection' })} />
-        <StatsCard label="Requieren atención" value={attention.length} color={attention.length ? 'text-orange-600' : 'text-gray-900'} href={buildHref(current, { vista: 'atencion', tipo: undefined })} />
+        <StatsCard label="Requieren atención" value={attentionCount} color={attentionCount ? 'text-orange-600' : 'text-gray-900'} href={buildHref(current, { vista: 'atencion', tipo: undefined })} />
       </div>
 
       {/* ── Por banco ─────────────────────────────────────────────────────── */}
@@ -194,7 +193,7 @@ export default async function OfertasPage({ searchParams }: OfertasPageProps) {
           href={buildHref(current, { vista: 'atencion' })}
           className={`rounded-full border px-3 py-1 text-xs font-medium ${vista ? 'border-orange-600 bg-orange-600 text-white' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-400'}`}
         >
-          Requieren atención ({attention.length})
+          Requieren atención ({attentionCount})
         </Link>
         <span className="mx-1 h-4 w-px bg-gray-200" />
         {TIPOS.map((t) => (
@@ -216,12 +215,12 @@ export default async function OfertasPage({ searchParams }: OfertasPageProps) {
       {/* ── Listado ───────────────────────────────────────────────────────── */}
       {list.length === 0 ? (
         <EmptyState
-          title={all.length === 0 ? 'Todavía no hay respuestas registradas' : 'Sin resultados para estos filtros'}
-          description={all.length === 0 ? 'Aparecerán aquí cuando los workflows de n8n empiecen a registrar en /api/bank-responses.' : undefined}
+          title={totalCount === 0 ? 'Todavía no hay respuestas registradas' : 'Sin resultados para estos filtros'}
+          description={totalCount === 0 ? 'Aparecerán aquí cuando los workflows de n8n empiecen a registrar en /api/bank-responses.' : undefined}
         />
       ) : (
         <div className="flex flex-col divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white">
-          {list.slice(0, 300).map((r) => {
+          {list.map((r) => {
             const headline = offerHeadline(r)
             const bankUrl = pipedriveDealUrl(r.bank_deal_id)
             const generalUrl = pipedriveDealUrl(r.general_deal_id)

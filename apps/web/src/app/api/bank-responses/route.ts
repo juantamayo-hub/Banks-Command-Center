@@ -10,7 +10,7 @@
  * {
  *   bank_slug: 'bankinter',            // obligatorio (= ACTIVE_BANKS.slug)
  *   external_id: '1a0d78d054703176',   // obligatorio (Gmail message id / id API)
- *   source?: 'email' | 'api' | 'platform' | 'sheet',
+ *   source?: 'email' | 'api' | 'platform' | 'sheet' | 'backfill',
  *   thread_id?, received_at?, subject?, from_email?,
  *   general_deal_id?, bank_deal_id?, client_name?, resolved_by?,
  *   match_status?: 'matched' | 'unmatched' | 'ambiguous',
@@ -27,11 +27,10 @@
 
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
-import { ACTIVE_BANKS } from '@/lib/banks'
-import { normalizeClassification } from '@/lib/bankResponses'
+import { normalizeClassification, RESPONSE_BANKS } from '@/lib/bankResponses'
 
-const BANK_SLUGS = new Set<string>(ACTIVE_BANKS.map((b) => b.slug))
-const SOURCES = new Set(['email', 'api', 'platform', 'sheet', 'manual'])
+const BANK_SLUGS = new Set<string>(RESPONSE_BANKS.map((b) => b.slug))
+const SOURCES = new Set(['email', 'api', 'platform', 'sheet', 'manual', 'backfill'])
 const MATCH = new Set(['matched', 'unmatched', 'ambiguous'])
 const STATUS = new Set(['processed', 'error', 'manual_review'])
 
@@ -118,8 +117,8 @@ export async function POST(req: Request) {
   }
 
   const inputs = (obj(body)?.responses as unknown[] | undefined) ?? [body]
-  if (!Array.isArray(inputs) || inputs.length === 0 || inputs.length > 50) {
-    return NextResponse.json({ error: 'Se esperan entre 1 y 50 respuestas' }, { status: 400 })
+  if (!Array.isArray(inputs) || inputs.length === 0 || inputs.length > 200) {
+    return NextResponse.json({ error: 'Se esperan entre 1 y 200 respuestas' }, { status: 400 })
   }
 
   const rows: Record<string, unknown>[] = []
