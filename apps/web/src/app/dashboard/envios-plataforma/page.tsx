@@ -137,7 +137,10 @@ export default function EnviosPlataformaPage() {
       ? kutxaSubs
       : [] // Platform bank filter → hide kutxa
 
-  const bothLoading = loading && kutxaLoading
+  // Spinner solo en la carga inicial: los refrescos automáticos no desmontan las tarjetas
+  // (si no, se pierde el estado local de las tarjetas, p.ej. "Verificando documentos")
+  const hasData = deals.length > 0 || kutxaSubs.length > 0
+  const bothLoading = loading && kutxaLoading && !hasData
   const anyError = error || kutxaError
   const totalPending = deals.length + kutxaSubs.length
   // Un deal puede tener varios bancos pendientes: contar envíos (deal × banco) para que cuadre con los filtros por banco

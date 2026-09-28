@@ -16,6 +16,7 @@ interface KutxabankSubmission {
   rastreator_status: 'pending' | 'approved' | 'rejected' | 'sent'
   sent_at: string | null
   created_at: string
+  updated_at?: string | null
   notes?: { content: string; created_at: string }[]
   red_flags?: string[]
 }
@@ -50,9 +51,29 @@ export default function KutxabankCard({ submission: sub, onSent }: Props) {
   const [errMsg, setErrMsg]   = useState('')
   const [leaving, setLeaving] = useState(false)
   const [dismissing, setDismissing] = useState(false)
-  const [verify, setVerify] = useState<'idle' | 'loading' | 'started' | 'error'>('idle')
-  const [verifyMsg, setVerifyMsg] = useState('')
   const hasMissing = sub.missing_docs.length > 0
+
+  // La verificación corre en n8n (puede tardar hasta ~1 h si falta la autorización):
+  // se recuerda en localStorage para sobrevivir a refrescos; deja de mostrarse cuando
+  // cambian los documentos faltantes o pasa 1 h.
+  const verifyKey = `kutxa-verify-${sub.id}`
+  const missingSig = [...sub.missing_docs].sort().join(',')
+  const [verifyMsg, setVerifyMsg] = useState('')
+  const [verifyRun, setVerifyRun] = useState<{ status: 'loading' | 'started' | 'error'; missing: string; at: number } | null>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(verifyKey) || 'null') as { at: number; missing: string } | null
+      return saved && Date.now() - saved.at < 60 * 60 * 1000 ? { status: 'started', missing: saved.missing, at: saved.at } : null
+    } catch {
+      return null
+    }
+  })
+  // La verificación terminó si cambiaron los faltantes o n8n actualizó el envío después de lanzarla
+  const updatedAt = Date.parse(sub.updated_at ?? '')
+  const finished = !!verifyRun && verifyRun.status === 'started' &&
+    (verifyRun.missing !== missingSig || (Number.isFinite(updatedAt) && updatedAt > verifyRun.at))
+  const verify = verifyRun && !finished ? verifyRun.status : 'idle'
+  const setVerify = (status: 'idle' | 'loading' | 'started' | 'error', at = 0) =>
+    setVerifyRun(status === 'idle' ? null : { status, missing: missingSig, at })
 
   // Email Sender resolves bank_deal_id + searches ZIP in Drive dynamically
   const canSend = sub.rastreator_status === 'approved'
@@ -96,7 +117,13 @@ export default function KutxabankCard({ submission: sub, onSent }: Props) {
         setVerifyMsg(data?.error ?? 'Error al verificar')
         return
       }
-      setVerify('started')
+      const startedAt = Date.now()
+      setVerify('started', startedAt)
+      try {
+        localStorage.setItem(verifyKey, JSON.stringify({ at: startedAt, missing: missingSig }))
+      } catch {
+        // sin localStorage: el estado dura hasta el próximo refresco
+      }
     } catch {
       setVerify('error')
       setVerifyMsg('Error de red')
@@ -250,7 +277,7 @@ export default function KutxabankCard({ submission: sub, onSent }: Props) {
               </button>
               {verify === 'started' && (
                 <span className="text-xs text-gray-500">
-                  Verificando en Drive. Si hay documentos nuevos se regenera el ZIP (tarda unos minutos).
+                  Verificando en Drive… Si hay documentos nuevos se regenera el ZIP. Puede tardar varios minutos (hasta 1 h si falta la autorización); la tarjeta se actualizará sola.
                 </span>
               )}
               {verify === 'error' && <span className="text-xs text-red-600">{verifyMsg}</span>}
