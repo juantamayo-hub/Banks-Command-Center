@@ -11,6 +11,7 @@ import {
   CLASSIFICATION_STYLE,
   needsAttention,
   pipedriveDealUrl,
+  gmailThreadUrl,
   RESPONSE_BANKS,
 } from '@/lib/bankResponses'
 import ResponseReviewActions from '@/components/ofertas/ResponseReviewActions'
@@ -249,6 +250,7 @@ export default async function OfertasPage({ searchParams }: OfertasPageProps) {
             const headline = offerHeadline(r)
             const bankUrl = pipedriveDealUrl(r.bank_deal_id)
             const generalUrl = pipedriveDealUrl(r.general_deal_id)
+            const mailUrl = r.source === 'email' ? gmailThreadUrl(r.thread_id) : null
             const attn = needsAttention(r)
             return (
               <div key={r.id} className={`flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-start sm:justify-between ${attn ? 'bg-orange-50/40' : ''}`}>
@@ -282,13 +284,18 @@ export default async function OfertasPage({ searchParams }: OfertasPageProps) {
                       {r.error_step ? `${r.error_step}: ` : ''}{r.error_message}
                     </p>
                   )}
-                  {r.subject && <p className="mt-1 truncate text-xs text-gray-400">{r.subject}</p>}
+                  {r.subject && (
+                    <p className="mt-1 break-words text-xs text-gray-600">
+                      <span className="text-gray-400">Asunto:</span> {r.subject}
+                    </p>
+                  )}
                 </div>
                 <div className="flex shrink-0 flex-col items-start gap-1.5 sm:items-end">
                   <span className="text-xs text-gray-500">{fmtDate(r.received_at)}</span>
                   <div className="flex gap-2 text-xs">
                     {bankUrl && <a href={bankUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Deal banco ↗</a>}
                     {generalUrl && <a href={generalUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Deal general ↗</a>}
+                    {mailUrl && <a href={mailUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Abrir correo ↗</a>}
                   </div>
                   {attn && <ResponseReviewActions id={r.id} unmatched={r.match_status !== 'matched'} />}
                 </div>

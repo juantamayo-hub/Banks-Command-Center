@@ -120,3 +120,10 @@ export function needsAttention(r: Pick<BankResponse, 'status' | 'match_status'>)
 export function pipedriveDealUrl(dealId: number | null): string | null {
   return dealId ? `https://mdsl.pipedrive.com/deal/${dealId}` : null
 }
+
+/** Hilo en el Gmail de Hipotecas (los workflows leen el buzón hipotecas@bayteca.com) */
+export function gmailThreadUrl(threadId: string | null): string | null {
+  return threadId && /^[0-9a-f]+$/i.test(threadId)
+    ? `https://mail.google.com/mail/u/?authuser=hipotecas@bayteca.com#all/${threadId}`
+    : null
+}
