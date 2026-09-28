@@ -1,0 +1,634 @@
+{
+  "name": "OFFERS · Revisión diaria con IA (1ª semana)",
+  "nodes": [
+    {
+      "id": "562db699-d01f-4099-88dd-6c6e7b70c414",
+      "name": "Cada día 9:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "cf7602ae-4b09-44eb-9056-b9440252a3b6",
+      "name": "Ejecutar ahora (manual)",
+      "webhookId": "ab3e50eb-0a07-4ee6-9b51-5292326ed04c",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        200
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "offers-revision-diaria-41bd9e7c7b",
+        "options": {}
+      }
+    },
+    {
+      "id": "b039be41-f448-4a32-a3bb-6c9191ce7e62",
+      "name": "¿Primera semana?",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        100
+      ],
+      "parameters": {
+        "jsCode": "// Revisión diaria solo durante la primera semana (hasta el domingo 5 de octubre de 2026 incluido)\nconst hasta = new Date('2026-10-05T23:59:59+02:00');\nif (new Date() > hasta && !$('Ejecutar ahora (manual)').isExecuted) return [];\nreturn [{ json: { inicio: new Date().toISOString() } }];"
+      }
+    },
+    {
+      "id": "f9ada72b-489e-4eab-b17d-17279a645536",
+      "name": "Bancos a vigilar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        100
+      ],
+      "parameters": {
+        "jsCode": "const banks = [{\"id\": \"YqQIDjAozwsDAQR1\", \"name\": \"CRSur_Offers_Received\", \"base\": \"from:@crsur.es -label:CR_Sur-Procesado in:inbox\", \"poll\": 5}, {\"id\": \"d3S1y48F0qKoVc6O\", \"name\": \"Bankinter_Offers_Received_v19\", \"base\": \"from:bankinter.com -label:Bankinter-Procesado in:inbox\", \"poll\": 5}, {\"id\": \"IOIg26EPCqtgCSLv\", \"name\": \"CRAragón_Offers_Received\", \"base\": \"from:@craragon.es -label:CRAragón-Procesado in:inbox\", \"poll\": 5}, {\"id\": \"12m8gBooQnUpwG14\", \"name\": \"CRAsturias_Offers_Received\", \"base\": \"from:@crasturias.com -label:CRAsturias-Procesado in:inbox\", \"poll\": 5}, {\"id\": \"Yd82lkDzorla4x7T\", \"name\": \"CRGranada_Offers_Received\", \"base\": \"from:@crgranada.com -label:CRGranada-Procesado in:inbox\", \"poll\": 5}, {\"id\": \"eoxXdCBbq6zFL2me\", \"name\": \"CRTeruel_Offers_Received_v3\", \"base\": \"from:@ruralteruel.com -label:CRTeruel-Procesado in:inbox\", \"poll\": 5}, {\"id\": \"RezivFIqH10FdaB9\", \"name\": \"CaixaBank_Offers_Received\", \"base\": \"from:caixabank.com -label:CaixaBank-Procesado in:inbox\", \"poll\": 5}, {\"id\": \"O6V1P2efIYpyu1bC\", \"name\": \"CaixaPopular_Offers_Received_v2\", \"base\": \"from:@caixapopular.es -label:CaixaPopular-Procesado in:inbox\", \"poll\": 5}, {\"id\": \"sEQ8HDbHIB3HvPDY\", \"name\": \"DeutscheBank_Offers_Received\", \"base\": \"from:db.com -label:Deutsche-Procesado in:inbox\", \"poll\": 5}, {\"id\": \"qXIKYBEK2Yr7LWWs\", \"name\": \"EuroCajaRural_Offers_Received\", \"base\": \"from:eurocajarural.es -label:EuroCajaRural-Procesado in:inbox\", \"poll\": 5}, {\"id\": \"n35da7vAodC9XUsH\", \"name\": \"Globalcaja_Offers_Received\", \"base\": \"from:@globalcaja.es -label:Globalcaja-Procesado in:inbox\", \"poll\": 5}, {\"id\": \"IZpYM4yNvwza5ol7\", \"name\": \"ING_Offers_Received\", \"base\": \"from:nnespana.com -label:ING-Procesado  in:inbox\", \"poll\": 5}, {\"id\": \"VI1n8UQng6gAWV8B\", \"name\": \"Ibercaja_Offers_Received\", \"base\": \"from:ibercaja.es -label:Ibercaja-Procesado in:inbox\", \"poll\": 5}, {\"id\": \"iMzC4NjXDOlCbPuf\", \"name\": \"LaboralKutxa_Offers_Received\", \"base\": \"from:laboralkutxa.com -label:Laboral-Kutxa-Procesado in:inbox\", \"poll\": 5}, {\"id\": \"mxewpxzScRz3jHX2\", \"name\": \"MyInvestor_Offers_Received_v2\", \"base\": \"from:myinvestor.es -label:MyInvestor-Procesado in:inbox\", \"poll\": 5}, {\"id\": \"ZtErLRcQa0SwXfZb\", \"name\": \"Sabadell_Offers_Received_v1\", \"base\": \"(from:gibobs.com OR from:gibobs.co OR from:bancsabadell.com) (subject:\\\"Oferta disponible de Banco Sabadell\\\" OR subject:\\\"Operación cerrada\\\") -label:Sabadell-Procesado in:inbox\", \"poll\": 5}, {\"id\": \"pNOk4VBlVu9PLdKV\", \"name\": \"UCI_Offers_Received\", \"base\": \"from:redext.uci.com -label:UCI-Procesado in:inbox\", \"poll\": 5}, {\"id\": \"hY2DR1im7zSNx28E\", \"name\": \"Unicaja_Offers_Received_v4\", \"base\": \"from:@unicaja.es -label:Unicaja-Procesado in:inbox\", \"poll\": 1}];\nreturn banks.map(b => ({ json: b }));"
+      }
+    },
+    {
+      "id": "254e3226-ccbf-4e0a-bba0-49a9c83ad218",
+      "name": "Última ejecución",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "onError": "continueRegularOutput",
+      "position": [
+        660,
+        100
+      ],
+      "parameters": {
+        "url": "https://huspy.app.n8n.cloud/api/v1/executions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {},
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "workflowId",
+              "value": "={{ $json.id }}"
+            },
+            {
+              "name": "limit",
+              "value": "1"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "hrakRabWjpdiv6Rp",
+          "name": "n8n API (revisión diaria)"
+        }
+      }
+    },
+    {
+      "id": "edb77260-ef3d-4d81-b5fd-239c286f1b98",
+      "name": "Errores recientes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "executeOnce": true,
+      "onError": "continueRegularOutput",
+      "position": [
+        880,
+        100
+      ],
+      "parameters": {
+        "url": "https://huspy.app.n8n.cloud/api/v1/executions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {},
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "status",
+              "value": "error"
+            },
+            {
+              "name": "limit",
+              "value": "40"
+            },
+            {
+              "name": "includeData",
+              "value": "true"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "hrakRabWjpdiv6Rp",
+          "name": "n8n API (revisión diaria)"
+        }
+      }
+    },
+    {
+      "id": "00653933-dbd5-4476-b722-41b3658ae40b",
+      "name": "Estado workflows",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "executeOnce": true,
+      "onError": "continueRegularOutput",
+      "position": [
+        1100,
+        100
+      ],
+      "parameters": {
+        "url": "https://huspy.app.n8n.cloud/api/v1/workflows",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {},
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "projectId",
+              "value": "yR8f7Z2qsaNooaZW"
+            },
+            {
+              "name": "limit",
+              "value": "250"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "hrakRabWjpdiv6Rp",
+          "name": "n8n API (revisión diaria)"
+        }
+      }
+    },
+    {
+      "id": "50b1ffcd-9ae7-406c-ad67-7bf2fd96e397",
+      "name": "Consultas Gmail",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "executeOnce": true,
+      "position": [
+        1320,
+        100
+      ],
+      "parameters": {
+        "jsCode": "// Dos búsquedas por banco (marcas de tiempo exactas, misma ventana de 2 días que la búsqueda de los bancos):\n//  fuga         = correo del banco sin recoger (sin n8n-visto) con más de 1 h → no debería existir\n//  sin_procesado = recogido hace más de 2 h pero sin etiqueta Procesado → revisar\nconst now = Math.floor(Date.now() / 1000);\nconst banks = $('Bancos a vigilar').all().map(i => i.json);\nconst out = [];\nfor (const b of banks) {\n  out.push({ json: { bank: b.name, tipo: 'fuga', q: `${b.base} -label:n8n-visto after:${now - 47 * 3600} before:${now - 3600}` } });\n  out.push({ json: { bank: b.name, tipo: 'sin_procesado', q: `${b.base} label:n8n-visto after:${now - 72 * 3600} before:${now - 7200}` } });\n}\nreturn out;"
+      }
+    },
+    {
+      "id": "bebd5635-d130-48f2-b78e-75a2a9ddb8d2",
+      "name": "Gmail buscar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "onError": "continueRegularOutput",
+      "position": [
+        1540,
+        100
+      ],
+      "parameters": {
+        "url": "https://gmail.googleapis.com/gmail/v1/users/me/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "gmailOAuth2",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $json.q }}"
+            },
+            {
+              "name": "maxResults",
+              "value": "50"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "sW0S8ksGFfOAk3zC",
+          "name": "Hipotecas Bayteca"
+        }
+      }
+    },
+    {
+      "id": "81be0fa6-4774-430e-9049-f9551cd21898",
+      "name": "Command Center: datos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "executeOnce": true,
+      "onError": "continueRegularOutput",
+      "position": [
+        1760,
+        100
+      ],
+      "parameters": {
+        "url": "https://banks-command-center.vercel.app/api/health/offers",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "3leSdf1hQF3r1ZEC",
+          "name": "OFFERS_API_SECRET"
+        }
+      }
+    },
+    {
+      "id": "a14f94fe-5f3a-4eff-bff5-61f72c46d976",
+      "name": "Command Center: disponible",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "executeOnce": true,
+      "onError": "continueRegularOutput",
+      "position": [
+        1980,
+        100
+      ],
+      "parameters": {
+        "url": "https://banks-command-center.vercel.app/login",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "text"
+            }
+          },
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "68736699-4658-4e5c-9236-f965e7b9ec55",
+      "name": "Consolidar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "executeOnce": true,
+      "position": [
+        2200,
+        100
+      ],
+      "parameters": {
+        "jsCode": "// Junta todos los datos y calcula los hallazgos de forma determinista (la IA solo redacta)\nconst now = Date.now();\nconst banks = $('Bancos a vigilar').all().map(i => i.json);\nconst last = $('Última ejecución').all().map(i => (i.json.data || [])[0] || null);\nconst wfs = ($('Estado workflows').first().json.data || []);\nconst wfById = Object.fromEntries(wfs.map(w => [w.id, w]));\nconst OTHER = {\"OjNQDNcBsDOj78gS\": \"OFFERS · Repartidor de correos bancarios\", \"Vrvs44IG0BaKPLlH\": \"Santander - Daily Status Sync\", \"SVMlT6a9uSRlZjHU\": \"SANTANDER OFFER\", \"dVozY20frxVJmNXw\": \"Kutxabank ZIP Creator\", \"P3uI8Ejm8qQbHWSg\": \"Kutxabank Email Sender\", \"fIZemWSyjTjiM8cn\": \"Kutxabank Rastreator Sync\", \"HmdIF5DLPIOJiGas\": \"Kutxabank Daily Email\", \"p9WkjPl75vFBvrAW\": \"Ibercaja - Send Dossier\", \"uQpf3C5LaecqDvoF\": \"Ibercaja · Excel datos básicos\", \"awyhc675ipFuqqXv\": \"OFFERS · Registrar respuesta\", \"3dRzXNAhcsj7vsaV\": \"OFFERS · Error handler\"};\nconst findings = [];\n\n// 1) Repartidor de correos al día (busca los correos de los 18 bancos cada 5 min) y bancos activos\nconst rep = ($('Repartidor: última ejecución').first().json.data || [])[0];\nconst repMin = rep ? Math.round((now - Date.parse(rep.startedAt)) / 60000) : null;\nif (!wfById['OjNQDNcBsDOj78gS']?.active) findings.push('Repartidor de correos bancarios: DESACTIVADO (no se recoge ningún correo)');\nelse if (repMin === null || repMin > 20) findings.push(`Repartidor de correos bancarios: no se ejecuta desde hace ${repMin ?? '?'} min`);\nelse if (rep.status === 'error') findings.push('Repartidor de correos bancarios: su última ejecución falló');\nconst polling = banks.map((b, i) => {\n  const e = last[i]; const w = wfById[b.id];\n  if (!w?.active) findings.push(`${b.name}: workflow DESACTIVADO`);\n  return { banco: b.name, activo: !!w?.active, ultimo_correo_procesado: e?.startedAt || null, estado_ultimo: e?.status || null };\n});\nfor (const [id, name] of Object.entries(OTHER)) {\n  const w = wfById[id];\n  if (w && !w.active && !['SANTANDER OFFER','Ibercaja · Excel datos básicos','OFFERS · Registrar respuesta','OFFERS · Error handler'].includes(name)) findings.push(`${name}: workflow DESACTIVADO`);\n}\n\n// 2) Errores de las últimas 24 h\nconst WATCH = new Set([...banks.map(b => b.id), ...Object.keys(OTHER)]);\nconst errs = ($('Errores recientes').first().json.data || [])\n  .filter(e => WATCH.has(e.workflowId) && now - Date.parse(e.startedAt) < 24 * 3600e3)\n  // errores anteriores a la última modificación del workflow se consideran ya corregidos\n  .filter(e => !wfById[e.workflowId]?.updatedAt || Date.parse(e.startedAt) > Date.parse(wfById[e.workflowId].updatedAt))\n  .map(e => ({ workflow: wfById[e.workflowId]?.name || e.workflowId, cuando: e.startedAt, nodo: e.data?.resultData?.lastNodeExecuted || null,\n               error: String(e.data?.resultData?.error?.message || '').slice(0, 160), url: `https://huspy.app.n8n.cloud/workflow/${e.workflowId}/executions/${e.id}` }));\nconst errByWf = {};\nfor (const e of errs) errByWf[e.workflow] = (errByWf[e.workflow] || 0) + 1;\nfor (const [wfn, n] of Object.entries(errByWf)) findings.push(`${wfn}: ${n} ejecución(es) con error en 24 h`);\n\n// 3) Gmail: fugas y correos recogidos sin etiqueta Procesado\nconst qs = $('Consultas Gmail').all().map(i => i.json);\nconst res = $('Gmail buscar').all().map(i => i.json);\nconst gmail = qs.map((q, i) => ({ ...q, n: (res[i]?.messages || []).length, error: res[i]?.error?.message || null }));\nfor (const g of gmail) {\n  if (g.error) findings.push(`${g.bank}: no se pudo consultar Gmail (${g.error})`);\n  else if (g.tipo === 'fuga' && g.n > 0) findings.push(`${g.bank}: ${g.n} correo(s) del banco SIN RECOGER con más de 1 h (posible fuga)`);\n  else if (g.tipo === 'sin_procesado' && g.n > 0) findings.push(`${g.bank}: ${g.n} correo(s) recogidos pero sin etiqueta Procesado (revisar)`);\n}\n\n// 4) Command Center\nconst cc = $('Command Center: datos').first().json || {};\nconst login = $('Command Center: disponible').first().json || {};\nif (!(login.statusCode >= 200 && login.statusCode < 400)) findings.push(`Command Center: /login responde ${login.statusCode ?? 'sin respuesta'}`);\nif (cc.error) findings.push(`Command Center: /api/health/offers falló (${cc.error})`);\nconst att = cc.responses?.attention_open || [];\nif (att.length) findings.push(`Ofertas recibidas: ${att.length} respuesta(s) en «Requieren atención»`);\nconst mis = cc.misplaced_bank_deals_in_opportunity || [];\nfor (const d of mis) findings.push(`Pipedrive: deal bancario en pipeline Opportunity → ${d.title} (https://mdsl.pipedrive.com/deal/${d.id})`);\nconst kx = cc.kutxabank?.approved_with_missing_docs || [];   // estado normal: va al resumen, no es hallazgo\n\nconst r24 = cc.responses?.last24h_by_bank || [];\nconst tot = (k) => r24.reduce((n, r) => n + Number(r[k] || 0), 0);\nreturn [{ json: {\n  fecha: new Date().toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid', weekday: 'long', day: 'numeric', month: 'long' }),\n  hallazgos: findings,\n  resumen: { repartidor_ultima_ejecucion_min: repMin, respuestas_24h: tot('total'), ofertas_24h: tot('offers'), rechazos_24h: tot('rejections'), mas_info_24h: tot('more_info'),\n             atencion_abierta: att.length, envios_plataforma_pendientes: cc.platform?.pending_dispatches ?? null,\n             kutxabank_aprobados: cc.kutxabank?.approved ?? null, kutxabank_con_docs_faltantes: kx.length, errores_24h: errs.length, bancos_vigilados: banks.length },\n  detalle: { polling, errores: errs.slice(0, 15), gmail: gmail.filter(g => g.n > 0 || g.error), atencion: att.slice(0, 10), mal_ubicados: mis, kutxabank_faltantes: kx },\n} }];"
+      }
+    },
+    {
+      "id": "c32fc8ec-c74a-4b14-9780-75d22c3df566",
+      "name": "Claude: redactar informe",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "onError": "continueRegularOutput",
+      "position": [
+        2420,
+        100
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: $vars.CLAUDE_MODEL || 'claude-sonnet-5',\n  max_tokens: 1500,\n  system: 'Eres el revisor diario de operaciones bancarias de Bayteca (recepción de ofertas en n8n, envío de dossiers y el Command Center). Recibes datos YA CALCULADOS en JSON. Redacta un informe para Slack en español, formato mrkdwn de Slack (negrita con *asteriscos simples*, viñetas con •, enlaces <url|texto>). Reglas: 1) No inventes nada que no esté en los datos. 2) Si \"hallazgos\" está vacío, di claramente que todo está correcto y muestra solo el resumen del día. 3) Si hay hallazgos, agrúpalos por prioridad (🔴 corregir ya / 🟠 revisar) y para cada uno di en una línea qué pasa y qué hacer. 4) Incluye una línea con las cifras del día (respuestas, ofertas, rechazos, más info, cola de atención, errores). 5) Máximo 25 líneas. No añadas saludos ni despedidas. No menciones a nadie (la mención la añade el sistema).',\n  messages: [{ role: 'user', content: 'Datos de la revisión de hoy:\\n' + JSON.stringify($json) }]\n}) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "JiNzSOo3QThBSg39",
+          "name": "Claude API"
+        }
+      }
+    },
+    {
+      "id": "a035e100-f1cd-4ae4-8b0b-f6855791f9e0",
+      "name": "Mensaje Slack",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        100
+      ],
+      "parameters": {
+        "jsCode": "// Mensaje final: título + informe de la IA + mención a Juanjo solo si hay algo que corregir\nconst d = $('Consolidar').first().json;\nconst ia = ($json.content || []).filter(b => b.type === 'text').map(b => b.text).join('\\n').trim();   // ignora bloques de razonamiento\nconst hay = d.hallazgos.length > 0;\nconst cuerpo = ia || (hay ? d.hallazgos.map(h => '• ' + h).join('\\n') : 'Todo correcto.');\nconst titulo = hay\n  ? `:rotating_light: *Revisión diaria de flujos bancarios* — ${d.fecha} · *${d.hallazgos.length} punto(s) a revisar* <@U0A6ZSLGC1Y>`\n  : `:white_check_mark: *Revisión diaria de flujos bancarios* — ${d.fecha} · sin incidencias`;\nreturn [{ json: { text: `${titulo}\\n\\n${cuerpo}\\n\\n_Revisión automática (n8n + Claude) · activa hasta el 5 de octubre._` } }];"
+      }
+    },
+    {
+      "id": "f47b7cc0-1b74-4a00-bfa7-f4c7a200c32b",
+      "name": "Slack (Alma) → #team-bank-ops",
+      "webhookId": "70565006-e9e7-411b-b37b-9aeff2441ba0",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "position": [
+        2860,
+        100
+      ],
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C093C710KUZ",
+          "mode": "id"
+        },
+        "text": "={{ $json.text }}",
+        "otherOptions": {
+          "mrkdwn": true
+        }
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "DcJW5SNx5ydIUM5l",
+          "name": "Smarta"
+        }
+      }
+    },
+    {
+      "id": "f2deebff-58ee-40ed-a3ed-85d0f5ad8a28",
+      "name": "¿Publicar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2750,
+        260
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "a11805bf-b2f6-4b6c-9646-993f33147108",
+              "leftValue": "={{ (() => { try { return $('Ejecutar ahora (manual)').first().json.body?.dryRun === true } catch (e) { return false } })() }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "5197b2b5-b760-4524-8617-41bf9adae164",
+      "name": "Repartidor: última ejecución",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "executeOnce": true,
+      "onError": "continueRegularOutput",
+      "position": [
+        1210,
+        280
+      ],
+      "parameters": {
+        "url": "https://huspy.app.n8n.cloud/api/v1/executions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "workflowId",
+              "value": "OjNQDNcBsDOj78gS"
+            },
+            {
+              "name": "limit",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "hrakRabWjpdiv6Rp",
+          "name": "n8n API (revisión diaria)"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Cada día 9:00": {
+      "main": [
+        [
+          {
+            "node": "¿Primera semana?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ejecutar ahora (manual)": {
+      "main": [
+        [
+          {
+            "node": "¿Primera semana?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Primera semana?": {
+      "main": [
+        [
+          {
+            "node": "Bancos a vigilar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bancos a vigilar": {
+      "main": [
+        [
+          {
+            "node": "Última ejecución",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Última ejecución": {
+      "main": [
+        [
+          {
+            "node": "Errores recientes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Errores recientes": {
+      "main": [
+        [
+          {
+            "node": "Estado workflows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Estado workflows": {
+      "main": [
+        [
+          {
+            "node": "Repartidor: última ejecución",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultas Gmail": {
+      "main": [
+        [
+          {
+            "node": "Gmail buscar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail buscar": {
+      "main": [
+        [
+          {
+            "node": "Command Center: datos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Command Center: datos": {
+      "main": [
+        [
+          {
+            "node": "Command Center: disponible",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Command Center: disponible": {
+      "main": [
+        [
+          {
+            "node": "Consolidar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consolidar": {
+      "main": [
+        [
+          {
+            "node": "Claude: redactar informe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: redactar informe": {
+      "main": [
+        [
+          {
+            "node": "Mensaje Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mensaje Slack": {
+      "main": [
+        [
+          {
+            "node": "¿Publicar?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Publicar?": {
+      "main": [
+        [
+          {
+            "node": "Slack (Alma) → #team-bank-ops",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Repartidor: última ejecución": {
+      "main": [
+        [
+          {
+            "node": "Consultas Gmail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "errorWorkflow": "3dRzXNAhcsj7vsaV",
+    "timezone": "Europe/Madrid",
+    "executionOrder": "v1",
+    "availableInMCP": true
+  }
+}
