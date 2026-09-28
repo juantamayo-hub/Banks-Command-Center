@@ -307,6 +307,7 @@ export default function EnviosPlataformaPage() {
               key={`kx-${sub.id}`}
               submission={sub}
               onSent={removeKutxa}
+              onVerifyStarted={() => { setTimeout(fetchKutxa, 20_000); setTimeout(fetchKutxa, 60_000) }}
             />
           ))}
         </div>

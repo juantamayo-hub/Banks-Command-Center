@@ -24,6 +24,8 @@ interface KutxabankSubmission {
 interface Props {
   submission: KutxabankSubmission
   onSent: (id: string) => void
+  /** Se llama al lanzar "Verificar documentos" para refrescar la tarjeta en cuanto n8n responda */
+  onVerifyStarted?: () => void
 }
 
 const DOC_LABELS: Record<string, string> = {
@@ -46,23 +48,23 @@ const DOC_LABELS: Record<string, string> = {
 
 type SendPhase = 'idle' | 'confirming' | 'loading' | 'done' | 'error'
 
-export default function KutxabankCard({ submission: sub, onSent }: Props) {
+export default function KutxabankCard({ submission: sub, onSent, onVerifyStarted }: Props) {
   const [phase, setPhase]     = useState<SendPhase>('idle')
   const [errMsg, setErrMsg]   = useState('')
   const [leaving, setLeaving] = useState(false)
   const [dismissing, setDismissing] = useState(false)
   const hasMissing = sub.missing_docs.length > 0
 
-  // La verificación corre en n8n (puede tardar hasta ~1 h si falta la autorización):
-  // se recuerda en localStorage para sobrevivir a refrescos; deja de mostrarse cuando
-  // cambian los documentos faltantes o pasa 1 h.
+  // La verificación corre en n8n (un solo intento, unos segundos): se recuerda en
+  // localStorage para sobrevivir a refrescos; deja de mostrarse cuando n8n actualiza
+  // el envío, cambian los documentos faltantes o pasan 3 min.
   const verifyKey = `kutxa-verify-${sub.id}`
   const missingSig = [...sub.missing_docs].sort().join(',')
   const [verifyMsg, setVerifyMsg] = useState('')
   const [verifyRun, setVerifyRun] = useState<{ status: 'loading' | 'started' | 'error'; missing: string; at: number } | null>(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(verifyKey) || 'null') as { at: number; missing: string } | null
-      return saved && Date.now() - saved.at < 60 * 60 * 1000 ? { status: 'started', missing: saved.missing, at: saved.at } : null
+      return saved && Date.now() - saved.at < 3 * 60 * 1000 ? { status: 'started', missing: saved.missing, at: saved.at } : null
     } catch {
       return null
     }
@@ -119,6 +121,7 @@ export default function KutxabankCard({ submission: sub, onSent }: Props) {
       }
       const startedAt = Date.now()
       setVerify('started', startedAt)
+      onVerifyStarted?.()
       try {
         localStorage.setItem(verifyKey, JSON.stringify({ at: startedAt, missing: missingSig }))
       } catch {
@@ -277,7 +280,7 @@ export default function KutxabankCard({ submission: sub, onSent }: Props) {
               </button>
               {verify === 'started' && (
                 <span className="text-xs text-gray-500">
-                  Verificando en Drive… Si hay documentos nuevos se regenera el ZIP. Puede tardar varios minutos (hasta 1 h si falta la autorización); la tarjeta se actualizará sola.
+                  Verificando en Drive… Si hay documentos nuevos se regenera el ZIP. Tarda unos segundos; la tarjeta se actualizará sola.
                 </span>
               )}
               {verify === 'error' && <span className="text-xs text-red-600">{verifyMsg}</span>}
