@@ -100,26 +100,37 @@ export async function POST(req: Request) {
   }
 
   const supabase = await createAdminClient()
-  const { data, error } = await supabase
+  const fields = {
+    bank_deal_id: bank_deal_id ?? null,
+    nombre_cliente: nombre_cliente ?? null,
+    dni: dni ?? null,
+    plan: plan ?? null,
+    drive_folder_id: drive_folder_id ?? null,
+    zip_file_id: zip_file_id ?? null,
+    zip_drive_link: zip_drive_link ?? null,
+    missing_docs: missing_docs ?? [],
+  }
+
+  // Si ya existe (ZIP regenerado / verificación de documentos), solo se actualizan
+  // ZIP y documentos: NUNCA se reinicia rastreator_status (approved/sent → pending).
+  const { data: existing } = await supabase
     .from('kutxabank_submissions')
-    .upsert(
-      {
-        deal_id,
-        bank_deal_id: bank_deal_id ?? null,
-        nombre_cliente: nombre_cliente ?? null,
-        dni: dni ?? null,
-        plan: plan ?? null,
-        drive_folder_id: drive_folder_id ?? null,
-        zip_file_id: zip_file_id ?? null,
-        zip_drive_link: zip_drive_link ?? null,
-        missing_docs: missing_docs ?? [],
-        rastreator_row: rastreator_row ?? null,
-        rastreator_status: 'pending',
-      },
-      { onConflict: 'deal_id' }
-    )
-    .select()
-    .single()
+    .select('id')
+    .eq('deal_id', deal_id)
+    .maybeSingle()
+
+  const { data, error } = existing
+    ? await supabase
+        .from('kutxabank_submissions')
+        .update({ ...fields, ...(rastreator_row != null && { rastreator_row }) })
+        .eq('id', existing.id)
+        .select()
+        .single()
+    : await supabase
+        .from('kutxabank_submissions')
+        .insert({ deal_id, ...fields, rastreator_row: rastreator_row ?? null, rastreator_status: 'pending' })
+        .select()
+        .single()
 
   if (error) {
     console.error('[kutxabank/submissions POST]', error)

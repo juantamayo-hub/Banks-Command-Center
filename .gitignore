@@ -34,3 +34,4 @@ supabase/.temp
 
 # claude local/private
 CLAUDE.local.md
+scripts/.backfill_rows.json

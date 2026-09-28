@@ -49,6 +49,9 @@ export default function KutxabankCard({ submission: sub, onSent }: Props) {
   const [errMsg, setErrMsg]   = useState('')
   const [leaving, setLeaving] = useState(false)
   const [dismissing, setDismissing] = useState(false)
+  const [verify, setVerify] = useState<'idle' | 'loading' | 'started' | 'error'>('idle')
+  const [verifyMsg, setVerifyMsg] = useState('')
+  const hasMissing = sub.missing_docs.length > 0
 
   // Email Sender resolves bank_deal_id + searches ZIP in Drive dynamically
   const canSend = sub.rastreator_status === 'approved'
@@ -73,6 +76,29 @@ export default function KutxabankCard({ submission: sub, onSent }: Props) {
       alert('Error de red')
     } finally {
       setDismissing(false)
+    }
+  }
+
+  // Relanza el ZIP Creator en modo verificación: recalcula faltantes y regenera el ZIP si hay docs nuevos
+  async function doVerify() {
+    setVerify('loading')
+    setVerifyMsg('')
+    try {
+      const res = await fetch('/api/kutxabank/verify-docs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ submission_id: sub.id }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setVerify('error')
+        setVerifyMsg(data?.error ?? 'Error al verificar')
+        return
+      }
+      setVerify('started')
+    } catch {
+      setVerify('error')
+      setVerifyMsg('Error de red')
     }
   }
 
@@ -201,6 +227,21 @@ export default function KutxabankCard({ submission: sub, onSent }: Props) {
                 </li>
               ))}
             </ul>
+            <div className="mt-2 flex items-center gap-2">
+              <button
+                onClick={doVerify}
+                disabled={verify === 'loading' || verify === 'started'}
+                className="rounded-md border border-red-300 bg-white px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-60 transition-colors"
+              >
+                {verify === 'loading' ? 'Verificando…' : 'Verificar documentos'}
+              </button>
+              {verify === 'started' && (
+                <span className="text-xs text-gray-500">
+                  Verificando en Drive. Si hay documentos nuevos se regenera el ZIP (tarda unos minutos).
+                </span>
+              )}
+              {verify === 'error' && <span className="text-xs text-red-600">{verifyMsg}</span>}
+            </div>
           </div>
         )}
 
@@ -218,9 +259,11 @@ export default function KutxabankCard({ submission: sub, onSent }: Props) {
               {canSend ? (
                 <button
                   onClick={() => setPhase('confirming')}
-                  className="rounded-lg bg-teal-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-teal-700 transition-colors"
+                  className={hasMissing
+                    ? 'rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 transition-colors'
+                    : 'rounded-lg bg-teal-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-teal-700 transition-colors'}
                 >
-                  Enviar a Kutxabank
+                  {hasMissing ? 'Enviar igualmente' : 'Enviar a Kutxabank'}
                 </button>
               ) : sub.rastreator_status === 'pending' ? (
                 <p className="text-xs text-amber-600">

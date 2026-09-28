@@ -13,6 +13,7 @@ Se envía a POST /api/bank-responses (misma validación que n8n).
 Uso:
   python3 scripts/backfill_bank_responses.py --dry-run
   python3 scripts/backfill_bank_responses.py [--api https://banks-command-center.vercel.app]
+  python3 scripts/backfill_bank_responses.py --resume   # reenvía filas ya calculadas
 
 Lee PIPEDRIVE_API_TOKEN y OFFERS_API_SECRET de apps/web/.env.local.
 """
@@ -184,8 +185,15 @@ def build_denial(deal, slug):
 def post(api, secret, rows):
     req = urllib.request.Request(f'{api}/api/bank-responses', data=json.dumps({'responses': rows}).encode(),
                                  headers={'Content-Type': 'application/json', 'x-offers-secret': secret})
-    with urllib.request.urlopen(req, timeout=120) as r:
-        return json.load(r)
+    for attempt in range(5):
+        try:
+            with urllib.request.urlopen(req, timeout=300) as r:
+                return json.load(r)
+        except Exception as err:  # noqa: BLE001 — reintento con espera (red caída, timeout de Vercel)
+            if attempt == 4:
+                raise
+            print(f'  POST reintento {attempt + 1}: {err}', flush=True)
+            time.sleep(10 * (attempt + 1))
 
 
 def main():
@@ -193,6 +201,7 @@ def main():
     ap.add_argument('--api', default='https://banks-command-center.vercel.app')
     ap.add_argument('--dry-run', action='store_true')
     ap.add_argument('--workers', type=int, default=4)
+    ap.add_argument('--resume', action='store_true', help='reutiliza scripts/.backfill_rows.json')
     args = ap.parse_args()
 
     e = env()
@@ -209,8 +218,14 @@ def main():
         print('Ejemplos sin banco:', skipped[:10])
         return
 
-    rows = [build_denial(d, bank_slug(d['title'])) for d in denials if bank_slug(d['title'])]
-    todo = [d for d in offers if bank_slug(d['title'])]
+    cache = ROOT / 'scripts/.backfill_rows.json'   # filas ya calculadas (evita repetir 12k llamadas al flow)
+    if args.resume and cache.exists():
+        rows = json.loads(cache.read_text())
+        print(f'Reanudando con {len(rows)} filas guardadas en {cache.name}', flush=True)
+        todo = []
+    else:
+        rows = [build_denial(d, bank_slug(d['title'])) for d in denials if bank_slug(d['title'])]
+        todo = [d for d in offers if bank_slug(d['title'])]
     done = 0
     with cf.ThreadPoolExecutor(args.workers) as ex:
         futures = {ex.submit(pd.offer_date, d): d for d in todo}
@@ -226,9 +241,12 @@ def main():
             if done % 500 == 0:
                 print(f'  fechas de oferta: {done}/{len(todo)}', flush=True)
 
+    if todo:
+        cache.write_text(json.dumps(rows))
+
     saved, errors = 0, []
-    for i in range(0, len(rows), 200):
-        res = post(args.api, e['OFFERS_API_SECRET'].strip(), rows[i:i + 200])
+    for i in range(0, len(rows), 50):
+        res = post(args.api, e['OFFERS_API_SECRET'].strip(), rows[i:i + 50])
         saved += res.get('saved', 0)
         errors += res.get('errors') or []
     print(f'Guardadas: {saved}/{len(rows)} · errores: {len(errors)}', errors[:5])
