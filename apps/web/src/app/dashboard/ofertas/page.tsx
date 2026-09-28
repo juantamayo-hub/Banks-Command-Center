@@ -14,11 +14,13 @@ import {
   RESPONSE_BANKS,
 } from '@/lib/bankResponses'
 import ResponseReviewActions from '@/components/ofertas/ResponseReviewActions'
+import OfertasSearch from '@/components/ofertas/OfertasSearch'
+import PreserveScroll from '@/components/ofertas/PreserveScroll'
 
 export const dynamic = 'force-dynamic'
 
 interface OfertasPageProps {
-  searchParams: Promise<{ bank?: string; tipo?: string; vista?: string; dias?: string }>
+  searchParams: Promise<{ bank?: string; tipo?: string; vista?: string; dias?: string; q?: string }>
 }
 
 const BANK_NAME = new Map<string, string>(RESPONSE_BANKS.map((b) => [b.slug, b.name]))
@@ -67,7 +69,8 @@ export default async function OfertasPage({ searchParams }: OfertasPageProps) {
   const bank = params.bank && BANK_NAME.has(params.bank) ? params.bank : undefined
   const tipo = TIPOS.includes(params.tipo as ResponseClassification) ? (params.tipo as ResponseClassification) : undefined
   const vista = params.vista === 'atencion' ? 'atencion' : undefined
-  const current = { bank, tipo, vista, dias: dias === 30 ? undefined : String(dias) }
+  const q = (params.q ?? '').trim().slice(0, 80) || undefined
+  const current = { bank, tipo, vista, q, dias: dias === 30 ? undefined : String(dias) }
 
   const since = sinceIso(dias)
   const supabase = await createClient()
@@ -89,13 +92,20 @@ export default async function OfertasPage({ searchParams }: OfertasPageProps) {
   const rejections = sum('rejection')
   const attentionCount = sum('attention')
 
-  // Listado: filtrado en la base de datos, últimas 300
+  // Listado: filtrado en la base de datos, últimas 300.
+  // Con búsqueda (cliente / deal ID) se ignora el rango de días para encontrar también casos antiguos.
   let query = supabase
     .from('bank_responses')
     .select('*')
-    .gte('received_at', since)
     .order('received_at', { ascending: false })
     .limit(300)
+  if (!q) query = query.gte('received_at', since)
+  if (q && /^\d{1,12}$/.test(q)) {
+    query = query.or(`bank_deal_id.eq.${q},general_deal_id.eq.${q}`)
+  } else if (q) {
+    const term = q.replace(/[,()*%\\"'.:]/g, ' ').trim().split(/\s+/).filter(Boolean).join('%')
+    if (term) query = query.or(`client_name.ilike.%${term}%,subject.ilike.%${term}%`)
+  }
   if (bank) query = query.eq('bank_slug', bank)
   if (tipo) query = query.eq('classification', tipo)
   if (vista) query = query.neq('status', 'resolved').or('status.in.(error,manual_review),match_status.neq.matched')
@@ -105,6 +115,7 @@ export default async function OfertasPage({ searchParams }: OfertasPageProps) {
 
   return (
     <div className="flex flex-col gap-6 p-6">
+      <PreserveScroll token={JSON.stringify(current)} />
       <PageHeader
         title="Ofertas recibidas"
         subtitle="Respuestas de los bancos procesadas por n8n: ofertas, peticiones de información y rechazos."
@@ -113,6 +124,8 @@ export default async function OfertasPage({ searchParams }: OfertasPageProps) {
           <div className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white p-0.5">
             {DIAS.map((d) => (
               <Link
+                scroll={false}
+                data-keep-scroll
                 key={d}
                 href={buildHref(current, { dias: d === 30 ? undefined : String(d) })}
                 className={`rounded-md px-2.5 py-1 text-xs font-medium ${
@@ -134,11 +147,11 @@ export default async function OfertasPage({ searchParams }: OfertasPageProps) {
 
       {/* ── KPIs ──────────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-        <StatsCard label={`Respuestas (${dias} días)`} value={totalCount} href={buildHref(current, { vista: undefined, tipo: undefined })} />
-        <StatsCard label="Ofertas" value={offers} color="text-emerald-600" href={buildHref(current, { vista: undefined, tipo: 'offer' })} />
-        <StatsCard label="Más información" value={moreInfo} color="text-amber-600" href={buildHref(current, { vista: undefined, tipo: 'more_info' })} />
-        <StatsCard label="Rechazos" value={rejections} color="text-red-600" href={buildHref(current, { vista: undefined, tipo: 'rejection' })} />
-        <StatsCard label="Requieren atención" value={attentionCount} color={attentionCount ? 'text-orange-600' : 'text-gray-900'} href={buildHref(current, { vista: 'atencion', tipo: undefined })} />
+        <StatsCard keepScroll label={`Respuestas (${dias} días)`} value={totalCount} href={buildHref(current, { vista: undefined, tipo: undefined })} />
+        <StatsCard keepScroll label="Ofertas" value={offers} color="text-emerald-600" href={buildHref(current, { vista: undefined, tipo: 'offer' })} />
+        <StatsCard keepScroll label="Más información" value={moreInfo} color="text-amber-600" href={buildHref(current, { vista: undefined, tipo: 'more_info' })} />
+        <StatsCard keepScroll label="Rechazos" value={rejections} color="text-red-600" href={buildHref(current, { vista: undefined, tipo: 'rejection' })} />
+        <StatsCard keepScroll label="Requieren atención" value={attentionCount} color={attentionCount ? 'text-orange-600' : 'text-gray-900'} href={buildHref(current, { vista: 'atencion', tipo: undefined })} />
       </div>
 
       {/* ── Por banco ─────────────────────────────────────────────────────── */}
@@ -162,7 +175,7 @@ export default async function OfertasPage({ searchParams }: OfertasPageProps) {
                 return (
                   <tr key={slug} className={slug === bank ? 'bg-gray-50' : 'hover:bg-gray-50'}>
                     <td className="px-4 py-2">
-                      <Link href={buildHref(current, { bank: slug === bank ? undefined : slug })} className="inline-flex items-center gap-2 font-medium text-gray-800 hover:underline">
+                      <Link scroll={false} data-keep-scroll href={buildHref(current, { bank: slug === bank ? undefined : slug })} className="inline-flex items-center gap-2 font-medium text-gray-800 hover:underline">
                         {logo && <img src={logo} alt="" width={16} height={16} className="rounded-sm" />}
                         {BANK_NAME.get(slug) ?? slug}
                       </Link>
@@ -183,13 +196,18 @@ export default async function OfertasPage({ searchParams }: OfertasPageProps) {
 
       {/* ── Filtros activos ───────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-2">
+        <OfertasSearch key={q ?? ''} initial={q ?? ''} />
         <Link
+                scroll={false}
+                data-keep-scroll
           href={buildHref(current, { vista: undefined })}
           className={`rounded-full border px-3 py-1 text-xs font-medium ${!vista ? 'border-gray-800 bg-gray-800 text-white' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-400'}`}
         >
           Todas
         </Link>
         <Link
+                scroll={false}
+                data-keep-scroll
           href={buildHref(current, { vista: 'atencion' })}
           className={`rounded-full border px-3 py-1 text-xs font-medium ${vista ? 'border-orange-600 bg-orange-600 text-white' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-400'}`}
         >
@@ -198,6 +216,8 @@ export default async function OfertasPage({ searchParams }: OfertasPageProps) {
         <span className="mx-1 h-4 w-px bg-gray-200" />
         {TIPOS.map((t) => (
           <Link
+                scroll={false}
+                data-keep-scroll
             key={t}
             href={buildHref(current, { tipo: tipo === t ? undefined : t })}
             className={`rounded-full border px-3 py-1 text-xs font-medium ${tipo === t ? CLASSIFICATION_STYLE[t] + ' border-current' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-400'}`}
@@ -205,8 +225,13 @@ export default async function OfertasPage({ searchParams }: OfertasPageProps) {
             {CLASSIFICATION_LABEL[t]}
           </Link>
         ))}
+        {q && (
+          <Link scroll={false} data-keep-scroll href={buildHref(current, { q: undefined })} className="rounded-full border border-gray-300 bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
+            “{q}” (todas las fechas) ✕
+          </Link>
+        )}
         {bank && (
-          <Link href={buildHref(current, { bank: undefined })} className="rounded-full border border-gray-300 bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
+          <Link scroll={false} data-keep-scroll href={buildHref(current, { bank: undefined })} className="rounded-full border border-gray-300 bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
             {BANK_NAME.get(bank)} ✕
           </Link>
         )}
@@ -215,8 +240,8 @@ export default async function OfertasPage({ searchParams }: OfertasPageProps) {
       {/* ── Listado ───────────────────────────────────────────────────────── */}
       {list.length === 0 ? (
         <EmptyState
-          title={totalCount === 0 ? 'Todavía no hay respuestas registradas' : 'Sin resultados para estos filtros'}
-          description={totalCount === 0 ? 'Aparecerán aquí cuando los workflows de n8n empiecen a registrar en /api/bank-responses.' : undefined}
+          title={q ? `Sin resultados para “${q}”` : totalCount === 0 ? 'Todavía no hay respuestas registradas' : 'Sin resultados para estos filtros'}
+          description={!q && totalCount === 0 ? 'Aparecerán aquí cuando los workflows de n8n empiecen a registrar en /api/bank-responses.' : undefined}
         />
       ) : (
         <div className="flex flex-col divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white">

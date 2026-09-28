@@ -5,9 +5,11 @@ interface StatsCardProps {
   value: number
   href?: string
   color?: string
+  /** Navega sin volver arriba (filtros dentro de la misma página) */
+  keepScroll?: boolean
 }
 
-export default function StatsCard({ label, value, href, color = 'text-gray-900' }: StatsCardProps) {
+export default function StatsCard({ label, value, href, color = 'text-gray-900', keepScroll }: StatsCardProps) {
   const content = (
     <div className="bg-white rounded-lg border border-gray-200 p-5 flex flex-col gap-1 hover:border-gray-300 hover:shadow-sm transition-all">
       <span className={`text-3xl font-bold tabular-nums ${color}`}>
@@ -19,7 +21,7 @@ export default function StatsCard({ label, value, href, color = 'text-gray-900' 
 
   if (href) {
     return (
-      <Link href={href} className="block">
+      <Link href={href} className="block" {...(keepScroll && { scroll: false, 'data-keep-scroll': '' })}>
         {content}
       </Link>
     )
