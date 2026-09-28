@@ -22,6 +22,7 @@ interface KutxabankSubmission {
   sent_at: string | null
   created_at: string
   notes?: { content: string; created_at: string }[]
+  red_flags?: string[]
 }
 
 type BankFilter = PlatformBankName | 'Kutxabank' | 'Todos'

@@ -58,9 +58,30 @@ export async function GET() {
     }
   }
 
+  // Red flags: fila de Kutxabank en sheet_rows (opportunity_id = deal general)
+  const flagsMap = new Map<number, string[]>()
+  const dealIds = submissions.map((s) => s.deal_id as number)
+  if (dealIds.length > 0) {
+    const { data: bank } = await supabase.from('banks').select('id').eq('slug', 'kutxabank').maybeSingle()
+    if (bank) {
+      const { data: rows } = await supabase
+        .from('sheet_rows')
+        .select('opportunity_id, red_flags')
+        .eq('bank_id', bank.id)
+        .in('opportunity_id', dealIds)
+      for (const r of rows ?? []) {
+        const flags = ((r.red_flags as string[] | null) ?? [])
+          .map((f) => f.replace(/^red flags? found:\s*/i, '').trim())
+          .filter((f) => f && !/^(yes|ok|no|validaci[oó]n completada)$/i.test(f))
+        if (flags.length) flagsMap.set(Number(r.opportunity_id), flags)
+      }
+    }
+  }
+
   const enriched = submissions.map((s) => ({
     ...s,
     notes: notesMap.get(s.id as string) ?? [],
+    red_flags: flagsMap.get(Number(s.deal_id)) ?? [],
   }))
 
   return NextResponse.json({ submissions: enriched })
