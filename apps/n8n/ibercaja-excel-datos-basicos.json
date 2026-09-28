@@ -1,0 +1,199 @@
+{
+  "name": "Ibercaja · Excel datos básicos (sustituye Zapier)",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "name": "Entrada",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "1ef6c195-e550-4940-b81c-d24de3001dfc"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://sheets.googleapis.com/v4/spreadsheets/18utuUYbapRIuCgjMswts1hoHr-uJsHCWZQTJtQq_vTg/values/'Lista Actualizada'!A:G",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "options": {}
+      },
+      "name": "Leer oficinas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        0
+      ],
+      "id": "9252f600-e67e-446c-bd2f-fbf3a54ea2cd",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "eIrQolo2o3XIvmzV",
+          "name": "Juanjo"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://sheets.googleapis.com/v4/spreadsheets/14txmC7MoGGvqkk8Oz8XY-ULp6G9EYT-Q-G73kfQ2cS4/values/Sheet2!A:A",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "options": {}
+      },
+      "name": "Leer IDs Excel",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        0
+      ],
+      "id": "5a1bb0e3-cfba-4a40-9d6a-5cacae1a628a",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "eIrQolo2o3XIvmzV",
+          "name": "Juanjo"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepara la fila del Excel \"Ibercaja datos básicos\" (Sheet2) para este deal.\n// Sustituye al Zapier 338662427: 1 escritura por envío, sin duplicados (upsert por ID en col A),\n// importes como números y B = email oficina / C = Dirección Territorial.\nconst input = $('Entrada').first().json;\nconst deal = input.dealGeneral || {};\nconst bank = input.bankDeal || {};\nconst rv = (v) => (v && typeof v === 'object' && 'value' in v) ? v.value : (v ?? '');\nconst pick = (key) => { const b = rv(bank[key]); return (b !== '' && b !== null) ? b : rv(deal[key]); };\nconst num = (v) => { const n = Number(String(v ?? '').replace(/[^0-9.,-]/g, '').replace(',', '.')); return Number.isFinite(n) && String(v ?? '') !== '' ? n : ''; };\nconst provinciaMap = {\n  '2553': 'Albacete', '2554': 'Alicante/Alacant', '2555': 'Almería',\n  '2556': 'Araba/Álava', '2557': 'Asturias', '2558': 'Ávila',\n  '2559': 'Badajoz', '2560': 'Balears, Illes', '2561': 'Barcelona',\n  '2562': 'Bizkaia', '2563': 'Burgos', '2564': 'Cáceres',\n  '2565': 'Cádiz', '2566': 'Cantabria', '2567': 'Castellón/Castelló',\n  '2568': 'Ciudad Real', '2569': 'Córdoba', '2570': 'Coruña, A',\n  '2571': 'Cuenca', '2572': 'Gipuzkoa', '2573': 'Girona',\n  '2574': 'Granada', '2575': 'Guadalajara', '2576': 'Huelva',\n  '2577': 'Huesca', '2578': 'Jaén', '2579': 'León',\n  '2580': 'Lleida', '2581': 'Lugo', '2582': 'Madrid',\n  '2583': 'Málaga', '2584': 'Murcia', '2585': 'Navarra',\n  '2586': 'Ourense', '2587': 'Palencia', '2588': 'Palmas, Las',\n  '2589': 'Pontevedra', '2590': 'Rioja, La', '2591': 'Salamanca',\n  '2592': 'Santa Cruz de Tenerife', '2593': 'Segovia', '2594': 'Sevilla',\n  '2595': 'Soria', '2596': 'Tarragona', '2597': 'Teruel',\n  '2598': 'Toledo', '2599': 'Valencia/València', '2600': 'Valladolid',\n  '2601': 'Zamora', '2602': 'Zaragoza', '2603': 'Ceuta',\n  '2604': 'Melilla', '2605': 'Canarias', '3052': 'Vitoria',\n  '3053': 'Oviedo', '3113': 'TBC'\n};\nconst tipoCompraMap = {\n  '2547': 'Primera residencia', '2548': 'Segunda residencia',\n  '2549': 'Inversión', '2550': 'Cambio de hipoteca',\n  '2551': 'Extinción de condominio', '2552': 'Autopromoción'\n};\n\nconst bankDealId = Number(bank.id || input.bankDealId);\nif (!bankDealId) throw new Error('Falta bankDeal.id');\n\nconst provincia = provinciaMap[String(pick('15edcbc34620af8067c2413c2d9793b2a6bba3ba'))] || '';\nconst tipoOperacion = tipoCompraMap[String(pick('bc2fb38a576f000bd311e49d4da2dd20dbf9439b'))] || '';\nconst titular2 = pick('209a0da7966a29bf05e96b6a124536222e0318dd');\n\n// Oficina por provincia (\"Lista Actualizada\": A provincia, C código, D email, G territorial)\nconst norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();\nconst keys = (s) => [norm(s), norm(String(s).split('/')[0]), norm(String(s).split('/')[1] || '')].filter(Boolean);\nconst oficinas = ($('Leer oficinas').first().json.values || []).slice(1);\nconst wanted = keys(provincia);\nconst of = oficinas.find(r => keys(r[0]).some(k => wanted.includes(k)));\nconst email = of ? (String(of[3] || '').trim() || (of[2] ? `2085.${String(of[2]).trim()}@ibercaja.es` : '')) : '';\nconst territorial = of ? String(of[6] || '').trim() : '';\n\n// Fila destino: la del mismo ID en col A (upsert) o la primera libre\nconst colA = ($('Leer IDs Excel').first().json.values || []).map(r => String(r[0] ?? '').trim());\nlet rowIdx = colA.findIndex((v, i) => i > 0 && v === String(bankDealId));\nconst updated = rowIdx > 0;\nif (!updated) rowIdx = colA.length;          // 0-based → fila siguiente a la última con datos\nconst r = rowIdx + 1;                          // 1-based para A1 notation\n\nconst data = [\n  { range: `Sheet2!A${r}:L${r}`, values: [[\n    bankDealId,\n    email || (provincia ? `PROVINCIA NO ENCONTRADA: ${provincia}` : 'SIN PROVINCIA'),\n    territorial,\n    deal.person_name || bank.person_name || rv(deal.person_id?.name) || '',\n    pick('60228dc43313b931378ec9bb3f21f7ad7f5a144c'),\n    provincia,\n    titular2,\n    pick('c83f49f1e2fd08f55a16b159dd88802d2b5baa04'),\n    titular2 ? provincia : '',\n    tipoOperacion,\n    num(pick('b80d8ee37cc14ecdd7d8a640a57d6bd85308d5b9')),\n    num(pick('184fc13001dbca74b20c77f0fcfdec161b5cb492')),\n  ]] },\n  { range: `Sheet2!O${r}`, values: [[ num(pick('718ded557b843ad6ec94558a1da186ca063b11ee')) ]] },\n  { range: `Sheet2!Q${r}`, values: [[ provincia ]] },\n  { range: `Sheet2!S${r}`, values: [[ num(pick('e1d74951df7afc36b15725af21f21f8d2f89cff6')) ]] },\n];\n\nreturn [{ json: { bankDealId, row: r, updated, provincia, oficinaEncontrada: !!of, dryRun: !!input.dryRun,\n  body: { valueInputOption: 'USER_ENTERED', data } } }];"
+      },
+      "name": "Preparar fila",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        0
+      ],
+      "id": "cb4ba281-d007-4a25-8c04-8dd3218331f3"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "3735d658-84ce-4eac-84c0-411845e85926",
+              "leftValue": "={{ $json.dryRun }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "¿Escribir?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ],
+      "id": "b3c55cc9-c3c0-4d08-adf2-d35a46fba414"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://sheets.googleapis.com/v4/spreadsheets/14txmC7MoGGvqkk8Oz8XY-ULp6G9EYT-Q-G73kfQ2cS4/values:batchUpdate",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}"
+      },
+      "name": "Escribir Excel",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        -80
+      ],
+      "id": "5943e8b0-d6f9-4d5f-ba11-9bf902a6fc1f",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "eIrQolo2o3XIvmzV",
+          "name": "Juanjo"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Entrada": {
+      "main": [
+        [
+          {
+            "node": "Leer oficinas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer oficinas": {
+      "main": [
+        [
+          {
+            "node": "Leer IDs Excel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer IDs Excel": {
+      "main": [
+        [
+          {
+            "node": "Preparar fila",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar fila": {
+      "main": [
+        [
+          {
+            "node": "¿Escribir?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Escribir?": {
+      "main": [
+        [
+          {
+            "node": "Escribir Excel",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner"
+  }
+}
