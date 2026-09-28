@@ -46,7 +46,9 @@ export default function LoginForm() {
       ? 'Solo se permiten cuentas @huspy.io y @bayteca.com'
       : errorParam === 'auth_failed'
         ? 'Error de autenticación. Inténtalo de nuevo.'
-        : null
+        : errorParam === 'session_expired'
+          ? 'Tu sesión ha caducado (24 h). Vuelve a iniciar sesión.'
+          : null
   )
 
   async function handleLogin() {
