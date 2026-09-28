@@ -65,7 +65,7 @@ export async function POST(req: Request) {
   try {
     const n8nRes = await fetch(n8nWebhookUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-kutxabank-secret': process.env.KUTXABANK_API_SECRET ?? '' },
       body: JSON.stringify({
         submission_id: sub.id,
         deal_id: sub.deal_id,
