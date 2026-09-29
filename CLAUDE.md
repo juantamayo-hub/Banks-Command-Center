@@ -131,3 +131,20 @@ Primero construir:
 9. Crear métricas.
 10. Crear clustering.
 11. QA de duplicados y seguridad.
+
+## UX/UI SAFETY RULE — CRITICAL
+
+For any UX/UI task in Request Hub Bancos:
+
+- Preserve 100% of existing functional behavior.
+- UI tasks must not modify business logic, Supabase queries, migrations, APIs,
+  authentication, integrations, routing behavior, ticket workflows,
+  status transitions or database structures.
+- Existing event handlers may be repositioned visually but their implementation
+  must remain unchanged.
+- Do not install, remove or upgrade dependencies for UI work without approval.
+- Do not perform opportunistic refactors during visual tasks.
+- If presentation and business logic coexist in the same code and changing it
+  introduces functional risk, stop and ask before editing.
+- Always inspect `git diff` after UI work and confirm that only presentation
+  concerns changed.
