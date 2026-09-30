@@ -46,28 +46,56 @@ function cellStr(row: unknown[], idx: number): string {
   return String(val).trim()
 }
 
-// Sheet names to look for (in order of preference)
-const OPS_SHEET_NAMES = ['Ops. Enviadas', 'Ops.Enviadas', 'Ops Enviadas']
+// Normaliza nombres de pestaña/cabecera: sin tildes, mayúsculas, espacios ni puntos
+// ("Ops. enviadas" y "Ops.Enviadas" → "opsenviadas")
+function normKey(s: unknown): string {
+  return String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '')
+}
 
-function findSheet(wb: import('xlsx').WorkBook): import('xlsx').WorkSheet {
-  for (const name of OPS_SHEET_NAMES) {
-    if (wb.Sheets[name]) return wb.Sheets[name]
+function sheetRows(wb: import('xlsx').WorkBook, name: string, rawStrings: boolean): unknown[][] {
+  return XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[name], { header: 1, defval: '', raw: !rawStrings })
+}
+
+function hasEstadoHeader(rows: unknown[][]): boolean {
+  return (rows[0] ?? []).some((h) => normKey(h).startsWith('estado'))
+}
+
+// Pestaña "Ops. enviadas" (sin distinguir mayúsculas/puntos). Si no existe, la primera pestaña
+// con columna "Estado…". El Excel de Rastreator trae también "1º Filtro", cuya columna C es
+// el DNI del 2º titular: leerla como estado provocaba "Estado no reconocido: <DNI>".
+function findSheetRows(wb: import('xlsx').WorkBook, rawStrings: boolean): unknown[][] {
+  const ops = wb.SheetNames.find((n) => normKey(n) === 'opsenviadas')
+  if (ops) return sheetRows(wb, ops, rawStrings)
+  for (const name of wb.SheetNames) {
+    const rows = sheetRows(wb, name, rawStrings)
+    if (hasEstadoHeader(rows)) return rows
   }
-  // fallback: first sheet
-  return wb.Sheets[wb.SheetNames[0]]
+  throw new Error('No se encontró la pestaña "Ops. enviadas" ni ninguna con columna "Estado actual Rastreator"')
+}
+
+// Índice de columna por cabecera; si no aparece, posición por defecto
+function colIndex(header: unknown[], match: (key: string) => boolean, fallback: number): number {
+  const idx = header.findIndex((h) => match(normKey(h)))
+  return idx >= 0 ? idx : fallback
 }
 
 function parseWorkbook(wb: import('xlsx').WorkBook, rawStrings = false): ParsedEstadosRow[] {
-  const ws = findSheet(wb)
-  const raw = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '', raw: !rawStrings })
+  const raw = findSheetRows(wb, rawStrings)
+  const header = raw[0] ?? []
+  const col = {
+    dealId:  colIndex(header, (k) => k === 'id', COL.DEAL_ID),
+    dni:     colIndex(header, (k) => k.startsWith('dni'), COL.DNI),
+    estado:  colIndex(header, (k) => k.startsWith('estado'), COL.ESTADO_RASTREATOR),
+    comment: colIndex(header, (k) => k.includes('comentario'), COL.OTROS_COMENTARIOS),
+  }
   return raw.slice(1).flatMap((row) => {
-    const dealId = cellStr(row as unknown[], COL.DEAL_ID)
+    const dealId = cellStr(row as unknown[], col.dealId)
     if (!dealId) return []
     return [{
       deal_id:           dealId,
-      dni:               cellStr(row as unknown[], COL.DNI),
-      estado_rastreator: cellStr(row as unknown[], COL.ESTADO_RASTREATOR),
-      otros_comentarios: cellStr(row as unknown[], COL.OTROS_COMENTARIOS),
+      dni:               cellStr(row as unknown[], col.dni),
+      estado_rastreator: cellStr(row as unknown[], col.estado),
+      otros_comentarios: cellStr(row as unknown[], col.comment),
     }]
   })
 }
