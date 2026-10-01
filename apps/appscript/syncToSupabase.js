@@ -372,7 +372,7 @@ function mapRow_(headers, rowValues, bankId, opportunityId, rowNumber, syncedAt)
     synced_at:             syncedAt,
     uid:                   get(['ITEM ID']),
     bank_deal_id:          toIntOrNull_(get(['Bank Deal ID'])),
-    nombre_cliente:        get(['Nombre Cliente']),
+    nombre_cliente:        get(['Nombre Cliente']) || '', // NOT NULL en Supabase: sin nombre no debe tumbar el lote
     importe:               toNumOrNull_(get(['Importe'])),
     link_dossier:          get(['Link Dossier']),
     timestamp_entry:       toIsoOrNull_(get(['Timestamp'])),
@@ -424,22 +424,56 @@ function batchUpsert_(endpoint, rows, key) {
   var errors = [];
   for (var i = 0; i < rows.length; i += BATCH_SIZE) {
     var batch = rows.slice(i, i + BATCH_SIZE);
-    try {
-      var response = UrlFetchApp.fetch(endpoint, {
-        method:             'POST',
-        headers:            buildHeaders_(key, true),
-        payload:            JSON.stringify(batch),
-        muteHttpExceptions: true,
-      });
-      var code = response.getResponseCode();
-      if (code !== 200 && code !== 201 && code !== 204) {
-        errors.push('HTTP ' + code + ' en lote ' + i + ': ' + response.getContentText().substring(0, 200));
+    // Una sola fila inválida rechaza el lote entero (100 filas sin actualizar en cada sync).
+    // Si el error identifica la fila, se corrige o se aparta y se reintenta el lote (máx. 3 veces).
+    for (var attempt = 0; attempt < 4; attempt++) {
+      try {
+        var response = UrlFetchApp.fetch(endpoint, {
+          method:             'POST',
+          headers:            buildHeaders_(key, true),
+          payload:            JSON.stringify(batch),
+          muteHttpExceptions: true,
+        });
+        var code = response.getResponseCode();
+        if (code === 200 || code === 201 || code === 204) break;
+        var body = response.getContentText();
+        errors.push('HTTP ' + code + ' en lote ' + i + ': ' + body.substring(0, 200));
+        var fixed = attempt < 3 ? fixBatchForError_(batch, body) : null;
+        if (!fixed) break;
+        batch = fixed;
+      } catch (e) {
+        errors.push('Error de red en lote ' + i + ': ' + e.message);
+        break;
       }
-    } catch (e) {
-      errors.push('Error de red en lote ' + i + ': ' + e.message);
     }
   }
   return errors;
+}
+
+/**
+ * Corrige el lote según el error de Postgres para poder reintentarlo:
+ *  - 23505 en (bank_id, uid): el ITEM ID ya pertenece a otra fila → se envía esta fila sin uid.
+ *  - 23502 (NOT NULL): se aparta la fila indicada en "Failing row contains (id, uid, bank_id, opportunity_id, …)".
+ * @return {Object[]|null} lote corregido, o null si no se puede identificar la fila
+ */
+function fixBatchForError_(batch, body) {
+  var uidDup = body.match(/Key \(bank_id, uid\)=\((\d+), ([^)]+)\) already exists/);
+  if (uidDup) {
+    var dupUid = uidDup[2];
+    var hit = false;
+    var out = batch.map(function (r) {
+      if (r.uid === dupUid) { hit = true; var c = {}; for (var k in r) c[k] = r[k]; c.uid = null; return c; }
+      return r;
+    });
+    return hit ? out : null;
+  }
+  var notNull = body.match(/Failing row contains \([^,]*, [^,]*, (\d+), (\d+),/);
+  if (notNull) {
+    var bankId = parseInt(notNull[1], 10), oppId = parseInt(notNull[2], 10);
+    var rest = batch.filter(function (r) { return !(r.bank_id === bankId && r.opportunity_id === oppId); });
+    return rest.length < batch.length ? rest : null;
+  }
+  return null;
 }
 
 /**
