@@ -66,6 +66,24 @@ var BANK_CONFIG = [
  * Puede ejecutarse manualmente o desde un trigger de tiempo.
  */
 function syncAllBanksToSupabase() {
+  // El trigger salta cada minuto y una pasada tarda ~5 min: sin esto se solapan varias y Sheets
+  // rechaza lecturas ("Too many simultaneous invocations"), saltándose bancos al azar.
+  // No se usa LockService.getScriptLock(): lo usan los onEdit de envío y los bloquearía minutos.
+  var props = PropertiesService.getScriptProperties();
+  var runningSince = Number(props.getProperty('SYNC_RUNNING_SINCE') || 0);
+  if (runningSince && Date.now() - runningSince < 10 * 60 * 1000) {
+    Logger.log('[syncToSupabase] Ya hay una sincronización en curso desde ' + new Date(runningSince).toISOString() + ' — se omite.');
+    return;
+  }
+  props.setProperty('SYNC_RUNNING_SINCE', String(Date.now()));
+  try {
+    runSyncAllBanks_();
+  } finally {
+    props.deleteProperty('SYNC_RUNNING_SINCE');
+  }
+}
+
+function runSyncAllBanks_() {
   var key = getServiceRoleKey_();
   if (!key) {
     Logger.log('[syncToSupabase] ERROR: SUPABASE_SERVICE_ROLE_KEY no configurado. Ejecuta setSupabaseKey() primero.');
