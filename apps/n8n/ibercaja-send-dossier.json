@@ -1,0 +1,5100 @@
+{
+  "name": "Ibercaja - Send Dossier",
+  "nodes": [
+    {
+      "id": "c42b64f8-a38c-4939-93e8-1c9fd2d74cf4",
+      "name": "Webhook",
+      "webhookId": "3b137ff2-1813-4d46-a2d0-9e968d7a3df8",
+      "notes": "Trigger: POST desde Google Apps Script. Body = {COL_A..COL_M, ITEM_ID}",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        64,
+        2224
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ibercaja-dossier",
+        "options": {}
+      }
+    },
+    {
+      "id": "82cd37fe-ea68-467c-ae35-74959c4e2a02",
+      "name": "Find Deal General",
+      "notes": "Get deal by COL_A (Opportunity ID)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "position": [
+        336,
+        2224
+      ],
+      "parameters": {
+        "url": "=https://api.pipedrive.com/v1/deals/{{ $json.body['Opportunity ID'] }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "pipedriveApi",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "credentials": {
+        "pipedriveApi": {
+          "id": "wxVNW9LkKk645bg3",
+          "name": "Juanjo"
+        }
+      }
+    },
+    {
+      "id": "75eab344-b680-455b-bada-6d3b85fdc8e3",
+      "name": "CheckBankCount",
+      "notes": "Count banks ≤3 → OK, >3 → block",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2096,
+        2192
+      ],
+      "parameters": {
+        "jsCode": "const deal = $('Find Deal General').first().json.data;\nconst bk = ['af536dbfe7d00fd441ae9bd4b144c25bc1d4c725','8e4b44a3f3973d1f524f8cd0ec6f6babe9e96965',\n  'ed0a30972778ac2c3d29cab53e27a89f5b52a1b2','9049591570e78d3274a72cfb7a28076789ce0676',\n  '36ff3525fb8a73637e069099967b2afe164e408a'];\nconst vals = bk.map(f => deal[f]);\nconst ex = vals.filter(b => b && String(b).trim().toLowerCase()!=='no data' && String(b).trim().toLowerCase()!=='none' && String(b).trim()!=='');\nconst c = ex.length; const ok = c <= 3;\nreturn [{json:{continueFlow:ok,banksCount:c,reason:ok?c+' banks → allowed (≤3)':c+' banks → blocked (>3)'}}];\n"
+      }
+    },
+    {
+      "id": "b1113866-f133-4be4-811d-db353ff35463",
+      "name": "Branch Bank Count",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2336,
+        2192
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "ok",
+              "leftValue": "={{ $json.continueFlow }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            },
+            {
+              "id": "323a9871-fa90-4d4e-a85a-c03cb837fa12",
+              "leftValue": "={{ $('Webhook').item.json.body['Autorización'] }}",
+              "rightValue": "Yes",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "5c27503e-76b2-4ac6-9271-92acc9f0075f",
+              "leftValue": "={{ $('Webhook').item.json.body._source }}",
+              "rightValue": "platform",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "32416112-0471-494b-a34b-f9699966f826",
+      "name": "Sheets Blocked",
+      "notes": "COL_K = motivo bloqueo",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        2560,
+        2288
+      ],
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1bVmfySqlvhb5N8ZFW8c8TJi2gApLJJ0bFvWdYE2viwk",
+          "mode": "list",
+          "cachedResultName": "[Bayteca] Dossier - Envío a Bancos",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1bVmfySqlvhb5N8ZFW8c8TJi2gApLJJ0bFvWdYE2viwk/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 607238196,
+          "mode": "list",
+          "cachedResultName": "Ibercaja Test",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1bVmfySqlvhb5N8ZFW8c8TJi2gApLJJ0bFvWdYE2viwk/edit#gid=607238196"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "ITEM ID": "={{ $('Webhook').item.json.body['ITEM ID'] }}",
+            "Status": "={{ $('CheckBankCount').item.json.reason }}",
+            "Process Status": "Completado"
+          },
+          "matchingColumns": [
+            "ITEM ID"
+          ],
+          "schema": [
+            {
+              "id": "Opportunity ID",
+              "displayName": "Opportunity ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Nombre Cliente",
+              "displayName": "Nombre Cliente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Importe",
+              "displayName": "Importe",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Link Dossier",
+              "displayName": "Link Dossier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Bank Deal ID",
+              "displayName": "Bank Deal ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Enviar",
+              "displayName": "Enviar",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Autorización",
+              "displayName": "Autorización",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Autorización Red Flag",
+              "displayName": "Autorización Red Flag",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Timestamp Sent",
+              "displayName": "Timestamp Sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Red Flag",
+              "displayName": "Red Flag",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Clasificación",
+              "displayName": "Clasificación",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Dossier",
+              "displayName": "Dossier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Auto Bayteca",
+              "displayName": "Auto Bayteca",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Auto Banco",
+              "displayName": "Auto Banco",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "NOTAS",
+              "displayName": "NOTAS",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "ITEM ID",
+              "displayName": "ITEM ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "TEST TIME",
+              "displayName": "TEST TIME",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Process Status",
+              "displayName": "Process Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "USER_ENTERED"
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "eIrQolo2o3XIvmzV",
+          "name": "Juanjo"
+        }
+      }
+    },
+    {
+      "id": "687a3c07-1b31-4318-a343-daa3934f487f",
+      "name": "Note Blocked",
+      "notes": "Nota en deal banco: bloqueado",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2784,
+        2288
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.pipedrive.com/v1/notes",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "pipedriveApi",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "content",
+              "value": "=⚠️ Hay {{ $('CheckBankCount').first().json.banksCount }} bancos seleccionados (más de 3). No se bloquea el envío por esto; revisar con el TL."
+            },
+            {
+              "name": "deal_id",
+              "value": "={{ $('Webhook').item.json.body['Bank Deal ID'] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "pipedriveApi": {
+          "id": "KIihwJJTsYRp3G2m",
+          "name": "Hipotecas Bancos"
+        }
+      }
+    },
+    {
+      "id": "9858f36e-5af5-407c-afc3-64315fe1acbe",
+      "name": "Find Person",
+      "notes": "Person por ID del custom field del deal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2560,
+        2096
+      ],
+      "parameters": {
+        "url": "=https://api.pipedrive.com/v1/persons/{{ $('Find Deal General').first().json.data['3283885664f55b878c121a7e45277abc652c5bc7'] }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "pipedriveApi",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "credentials": {
+        "pipedriveApi": {
+          "id": "KIihwJJTsYRp3G2m",
+          "name": "Hipotecas Bancos"
+        }
+      }
+    },
+    {
+      "id": "59ef20d0-0158-4f65-b6c2-86ab174f3d4d",
+      "name": "Prepare File Searches",
+      "notes": "4 items: una búsqueda por archivo en Drive",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2784,
+        2096
+      ],
+      "parameters": {
+        "jsCode": "const deal = $('Find Deal General').first().json.data;\nconst row = $('Webhook').first().json.body;\nconst dn = deal['b5d36c005e38a4cd72d831be655996a3d6b34dc1'] || '';\nconst dni = deal['60228dc43313b931378ec9bb3f21f7ad7f5a144c'] || '';\n\n// Extraer folder ID del link de Drive\nconst folderLink = deal['c2ea08d72de437ee4957ff3807c48cebe7a1aa3e'] || '';\nconst folderMatch = folderLink.match(/folders\\/([a-zA-Z0-9_-]+)/);\nconst folderId = folderMatch ? folderMatch[1] : '';\n\nif (!folderId) throw new Error('No se encontró carpeta de Drive en el deal');\n\nconst inFolder = \"'\" + folderId + \"' in parents\";\n\nconst files = [\n  {label:'Dossier', query: \"name contains '\" + dn + \" \" + (row.COL_C || '') + \"' and mimeType='application/pdf' and \" + inFolder},\n  {label:'Auth_Ibercaja', query: \"name contains 'Ibercaja \" + dni + \"' and mimeType='application/pdf' and \" + inFolder},\n  {label:'Auth_Bayteca', query: \"name contains 'Bayteca \" + dni + \"' and mimeType='application/pdf' and \" + inFolder},\n  // Documento datos básicos: se busca por Opportunity ID (el nombre del cliente puede variar: \"389439-389439\", \"{opp}-{nombre}\"…)\n  {label:'Nuevo_Documento', pageSize: 50, query: \"name contains '\" + String(row['Opportunity ID'] || '0') + \"' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false and '15Twm1s7eRt0vuibuO4lS3LSEAuzMZ8Ba' in parents\"}\n];\n\nreturn files.map(f => ({json: f}));\n"
+      }
+    },
+    {
+      "id": "5ad023c2-72c6-4092-a455-01438305fd66",
+      "name": "Search Files in Drive",
+      "notes": "Drive API v3 search por cada archivo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
+      "position": [
+        3008,
+        2096
+      ],
+      "parameters": {
+        "url": "https://www.googleapis.com/drive/v3/files",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $json.query }}"
+            },
+            {
+              "name": "fields",
+              "value": "files(id,name,mimeType)"
+            },
+            {
+              "name": "pageSize",
+              "value": "={{ $json.pageSize || 1 }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "YgHXlMGu6BPZkHAh",
+          "name": "Juanjo"
+        }
+      }
+    },
+    {
+      "id": "d8412205-9c8c-4839-b6e8-3d3f46a71318",
+      "name": "Split File Results",
+      "notes": "Un item por archivo encontrado con id/name",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3232,
+        2096
+      ],
+      "parameters": {
+        "jsCode": "const labels = ['Dossier', 'Auth_Ibercaja', 'Auth_Bayteca', 'Nuevo_Documento'];\nconst res = [];\nconst found = [];\n\nconst items = $input.all();\nfor (let i = 0; i < items.length; i++) {\n  const files = items[i].json.files || [];\n  const label = labels[i] || '';\n  let f = files[0];\n  if (label === 'Nuevo_Documento') {\n    // Se toma el documento de ESTA operación (\"{opp}-…\"), preferentemente el que acaba de asegurar\n    // 'Documento datos básicos Ibercaja'. Si se acaba de crear (la copia de Drive devolvió su id),\n    // cuenta como encontrado aunque la búsqueda de Drive aún no lo indexe.\n    const opp = String($('Webhook').first().json.body['Opportunity ID'] || '');\n    const doc = $('Documento datos básicos Ibercaja').isExecuted ? ($('Documento datos básicos Ibercaja').first().json || {}) : {};\n    const docId = ((doc.link || '').match(/\\/d\\/([a-zA-Z0-9_-]+)/) || [])[1] || '';\n    const ofOpp = files.filter(x => opp && new RegExp('^' + opp + '\\\\s*-').test(x.name || ''));\n    f = (docId && files.find(x => x.id === docId)) || ofOpp[0];\n    if (!f && docId && doc.created === true) f = { id: docId, name: doc.docName, mimeType: 'application/vnd.google-apps.spreadsheet' };\n  }\n  if (f) {\n    res.push({ json: { id: f.id, name: f.name, mimeType: f.mimeType, label } });\n    found.push(label);\n  }\n}\n\nconst missing = labels.filter(l => !found.includes(l));\n\nreturn res.map(r => ({\n  json: {\n    ...r.json,\n    archivosFaltantes: missing.length > 0 ? missing.join(', ') : '',\n    todosEncontrados: missing.length === 0\n  }\n}));"
+      }
+    },
+    {
+      "id": "c3336153-f0ad-4817-a8e9-8cd0f6c07272",
+      "name": "Filter All Files",
+      "notes": "Verificar que los 4 archivos se encontraron",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        3456,
+        2096
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "4f",
+              "leftValue": "={{ $input.all().length }}",
+              "rightValue": 4,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            },
+            {
+              "id": "84d5eaf6-f9ee-4bf7-8f13-46f4edb3c481",
+              "leftValue": "={{ $('Webhook').first().json.body['Autorización'] }}",
+              "rightValue": "Yes",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "fc30f072-9bc8-4c06-80ab-28ed32ee6b2b",
+              "leftValue": "={{ $('Webhook').first().json.body._source }}",
+              "rightValue": "platform",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "04558f54-4ada-4593-ae2a-20de2fa18ce8",
+      "name": "Find Bank Deal",
+      "notes": "Deal banco por COL_F",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        4432,
+        2080
+      ],
+      "parameters": {
+        "url": "=https://api.pipedrive.com/v1/deals/{{ $('Webhook').first().json.body['Bank Deal ID'] }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "pipedriveApi",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "credentials": {
+        "pipedriveApi": {
+          "id": "kpHRr8iY0xpmnPi0",
+          "name": "Juanjo"
+        }
+      }
+    },
+    {
+      "id": "ccf13ead-6d98-4d26-8392-fd1c0a8fd076",
+      "name": "Find Owner",
+      "notes": "Email del owner del deal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        4608,
+        2080
+      ],
+      "parameters": {
+        "url": "=https://api.pipedrive.com/v1/users/{{ $('Find Person').first().json.data.owner_id.id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "pipedriveApi",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "credentials": {
+        "pipedriveApi": {
+          "id": "KIihwJJTsYRp3G2m",
+          "name": "Hipotecas Bancos"
+        }
+      }
+    },
+    {
+      "id": "63bc7528-a1f4-42cc-b5bf-30ba3f5bbbb7",
+      "name": "Restore File Items",
+      "notes": "Restaurar items de archivos para descarga",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4784,
+        2080
+      ],
+      "parameters": {
+        "jsCode": "let files = [];\n\n// Path B (no red flags): usa Split File Results1\ntry {\n  const f1 = $('Split File Results1').all();\n  if (f1 && f1.length > 0) files = f1;\n} catch(e) {}\n\n// Path A (red flags): fallback a Split File Results\nif (files.length === 0) {\n  try {\n    files = $('Split File Results').all();\n  } catch(e) {}\n}\n\nreturn files.map(f => ({json:{...f.json}}));\n"
+      }
+    },
+    {
+      "id": "67241243-77d6-4357-bb09-1e8878733157",
+      "name": "Download Files",
+      "notes": "Descargar archivos. Spreadsheets → PDF. ACTIVAR 'Add input fields to output' en Settings.",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
+      "position": [
+        5088,
+        2000
+      ],
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        },
+        "options": {
+          "binaryPropertyName": "data",
+          "googleFileConversion": {
+            "conversion": {
+              "docsToFormat": "application/pdf",
+              "sheetsToFormat": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            }
+          }
+        }
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "YgHXlMGu6BPZkHAh",
+          "name": "Juanjo"
+        }
+      }
+    },
+    {
+      "id": "5a148140-e80d-41c7-ac70-3bab53cc9510",
+      "name": "Merge Binaries",
+      "notes": "Unir 4 binarios en un item con todo el contexto",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5424,
+        1968
+      ],
+      "parameters": {
+        "jsCode": "const row = $('Webhook').first().json.body;\nconst deal = $('Find Deal General').first().json.data;\nconst bankDeal = $('Find Bank Deal').first().json.data;\nconst owner = $('Find Owner').first().json.data;\nconst person = $('Find Person').first().json.data;\nconst merged = {};\nfor (const item of $input.all()) {\n  for (const [key, val] of Object.entries(item.binary||{})) {\n    const fn = (item.json.name||item.json.label||key).replace(/[^a-zA-Z0-9._\\-]/g,'_').replace(/_{2,}/g,'_');\n    merged[fn] = val;\n  }\n}\nreturn [{json:{row,dealGeneral:deal,bankDeal,owner,person},binary:merged}];\n"
+      }
+    },
+    {
+      "id": "3bcc9236-0c5e-4a97-a2b2-264dc02e5581",
+      "name": "Build Email Data",
+      "notes": "Resolver enums, construir body/subject/CC, lookup provincia→oficina",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5664,
+        2080
+      ],
+      "parameters": {
+        "jsCode": "const item = $input.first();\nconst row = item.json.row;\nconst deal = item.json.dealGeneral;\nconst bankDeal = item.json.bankDeal;\nconst owner = item.json.owner;\n\nfunction rv(v) { if (v && typeof v === 'object' && 'value' in v) return v.value; return v || ''; }\n\n// ── Enum maps (extraídos del email de referencia) ──\nconst contratoMap = {\n  '2613': 'Indefinido', '2614': 'Funcionario', '2615': 'Autónomo',\n  '2616': 'Temporal', '2617': 'Interino', '2618': 'Fijo discontínuo',\n  '2619': 'Desempleado', '2620': 'Jubilado', '2863': 'Pensionista'\n};\nconst estadoCivilMap = {\n  '2621': 'Soltero', '2622': 'Casado en Gananciales',\n  '2623': 'Casado en Separación de bienes', '2624': 'Viudo', '2625': 'Divorciado'\n};\nconst provinciaMap = {\n  '2553': 'Albacete', '2554': 'Alicante/Alacant', '2555': 'Almería',\n  '2556': 'Araba/Álava', '2557': 'Asturias', '2558': 'Ávila',\n  '2559': 'Badajoz', '2560': 'Balears, Illes', '2561': 'Barcelona',\n  '2562': 'Bizkaia', '2563': 'Burgos', '2564': 'Cáceres',\n  '2565': 'Cádiz', '2566': 'Cantabria', '2567': 'Castellón/Castelló',\n  '2568': 'Ciudad Real', '2569': 'Córdoba', '2570': 'Coruña, A',\n  '2571': 'Cuenca', '2572': 'Gipuzkoa', '2573': 'Girona',\n  '2574': 'Granada', '2575': 'Guadalajara', '2576': 'Huelva',\n  '2577': 'Huesca', '2578': 'Jaén', '2579': 'León',\n  '2580': 'Lleida', '2581': 'Lugo', '2582': 'Madrid',\n  '2583': 'Málaga', '2584': 'Murcia', '2585': 'Navarra',\n  '2586': 'Ourense', '2587': 'Palencia', '2588': 'Palmas, Las',\n  '2589': 'Pontevedra', '2590': 'Rioja, La', '2591': 'Salamanca',\n  '2592': 'Santa Cruz de Tenerife', '2593': 'Segovia', '2594': 'Sevilla',\n  '2595': 'Soria', '2596': 'Tarragona', '2597': 'Teruel',\n  '2598': 'Toledo', '2599': 'Valencia/València', '2600': 'Valladolid',\n  '2601': 'Zamora', '2602': 'Zaragoza', '2603': 'Ceuta',\n  '2604': 'Melilla', '2605': 'Canarias', '3052': 'Vitoria',\n  '3053': 'Oviedo', '3113': 'TBC'\n};\nconst tipoCompraMap = {\n  '2547': 'Primera residencia', '2548': 'Segunda residencia',\n  '2549': 'Inversión', '2550': 'Cambio de hipoteca',\n  '2551': 'Extinción de condominio', '2552': 'Autopromoción'\n};\nconst mortgageTypeMap = {\n  '1458': 'Fija', '1459': 'Variable', '1460': 'Mixta',\n  '2451': 'Fija y Mixta', '2452': 'Variable y Mixta',\n  '2453': 'Fija y Variable', '2454': 'Fija, Mixta y Variable'\n};\n\n// ── Provincia → nombre → email oficina ──\nconst pMap = {\"Alicante\": \"2085.9915@ibercaja.es\", \"Murcia\": \"2085.8096@ibercaja.es\", \"Valencia\": \"2085.9354@ibercaja.es\", \"Asturias\": \"2085.8147@ibercaja.es\", \"Pontevedra\": \"2085.8146@ibercaja.es\", \"Alicante/Alacant\": \"2085.9915@ibercaja.es\", \"Cádiz\": \"2085.8165@ibercaja.es\", \"Valladolid\": \"2085.4938@ibercaja.es\", \"Coruña, A\": \"2085.8146@ibercaja.es\", \"Córdoba\": \"2085.8156@ibercaja.es\", \"Ourense\": \"2085.8162@ibercaja.es\", \"Santa Cruz de Tenerife\": \"2085.8158@ibercaja.es\", \"Sevilla\": \"2085.4780@ibercaja.es\", \"Cuenca\": \"2085.8167@ibercaja.es\", \"Castellón/Castelló\": \"2085.9558@ibercaja.es\", \"Burgos\": \"2085.4801@ibercaja.es\", \"Araba/Álava\": \"2085.9864@ibercaja.es\", \"Málaga\": \"2085.8155@ibercaja.es\", \"Rioja, La\": \"2085.5651@ibercaja.es\", \"Palmas, Las\": \"2085.8143@ibercaja.es\", \"Bizkaia\": \"2085.8273@ibercaja.es\", \"Gipuzkoa\": \"2085.8275@ibercaja.es\", \"Jaén\": \"2085.8173@ibercaja.es\", \"Salamanca\": \"2085.4763@ibercaja.es\", \"Granada\": \"2085.8166@ibercaja.es\", \"Almería\": \"2085.8356@ibercaja.es\", \"Navarra\": \"2085.9405@ibercaja.es\", \"Balears, Illes\": \"2085.8288@ibercaja.es\", \"Canarias\": \"2085.8143@ibercaja.es\", \"Cantabria\": \"2085.8148@ibercaja.es\", \"Huelva\": \"2085.8181@ibercaja.es\", \"Barcelona\": \"2085.9304@ibercaja.es\", \"Lugo\": \"2085.8313@ibercaja.es\", \"Tarragona\": \"2085.8040@ibercaja.es\", \"Badalona\": \"2085.9304@ibercaja.es\", \"Mataró\": \"2085.9304@ibercaja.es\", \"Ávila\": \"2085.8164@ibercaja.es\", \"Huesca\": \"2085.2066@ibercaja.es\", \"Tenerife\": \"2085.8158@ibercaja.es\", \"Vigo\": \"2085.8160@ibercaja.es\", \"Toledo\": \"2085.7758@ibercaja.es\", \"Zaragoza\": \"2085.0102@ibercaja.es\", \"Madrid\": \"2085.9257@ibercaja.es\", \"Albacete\": \"2085.8038@ibercaja.es\", \"Oviedo\": \"2085.8147@ibercaja.es\", \"Zamora\": \"2085.8309@ibercaja.es\", \"Segovia\": \"2085.8312@ibercaja.es\", \"Teruel\": \"2085.3852@ibercaja.es\", \"Soria\": \"2085.9609@ibercaja.es\", \"Palencia\": \"2085.8157@ibercaja.es\", \"Lleida\": \"2085.9456@ibercaja.es\", \"León\": \"2085.8161@ibercaja.es\", \"Logroño\": \"2085.5651@ibercaja.es\", \"Guadalajara\": \"2085.7605@ibercaja.es\", \"Girona\": \"2085.9762@ibercaja.es\", \"Cáceres\": \"2085.8141@ibercaja.es\", \"Badajoz\": \"2085.4503@bayteca.es\"};\n\n// Resolver provincia: puede venir como ID numérico o como string\nconst provRaw = String(rv(deal['15edcbc34620af8067c2413c2d9793b2a6bba3ba']));\nconst prov = provinciaMap[provRaw] || provRaw;\nconst ofEmail = pMap[prov] || '';\n\n// Resolver enums para 1T\nconst contrato1T = contratoMap[String(rv(deal['5788be4f764dabff9006ab5d685ae8061c7db3d9']))] || rv(deal['5788be4f764dabff9006ab5d685ae8061c7db3d9']);\nconst estadoCivil1T = estadoCivilMap[String(rv(deal['94162c8595944c684ec0e62dd8f8f5bfde30f7d1']))] || rv(deal['94162c8595944c684ec0e62dd8f8f5bfde30f7d1']);\n\n// Resolver enums para 2T\nconst contrato2T = contratoMap[String(rv(deal['9d6bb0a4cffae14651df0370331afa40b101c6e9']))] || rv(deal['9d6bb0a4cffae14651df0370331afa40b101c6e9']);\nconst estadoCivil2T = estadoCivilMap[String(rv(deal['b51dfe92bec2db54fbf8f3849e642d20449cc807']))] || rv(deal['b51dfe92bec2db54fbf8f3849e642d20449cc807']);\n\n// Resolver enums operación\nconst tipoCompra = tipoCompraMap[String(rv(deal['bc2fb38a576f000bd311e49d4da2dd20dbf9439b']))] || rv(deal['bc2fb38a576f000bd311e49d4da2dd20dbf9439b']);\nconst tipoHipoteca = mortgageTypeMap[String(rv(deal['9663fa3058468da182be6afbf71a501b8c9fb89e']))] || rv(deal['9663fa3058468da182be6afbf71a501b8c9fb89e']);\n\n// ── Email / CC ──\nconst bce = bankDeal['498dd83b5c5e1f1181c232131933717ceadfda34'] || '';\nconst hasBE = bce.includes('@') && bce !== '-';\nconst owE = (owner && owner.email) || '';\nconst dn = deal['b5d36c005e38a4cd72d831be655996a3d6b34dc1'] || '';\nconst dni = deal['60228dc43313b931378ec9bb3f21f7ad7f5a144c'] || '';\n\nconst subj = 'Ibercaja - NUEVO EXPEDIENTE - ' + $('Webhook').first().json.body['Bank Deal ID'] + ' - ' + dn + ' ' + $('Webhook').first().json.body['Nombre Cliente'] + ' - DNI ' + dni;\n\n// ── 2do titular condicional ──\nconst nombre2T = rv(deal['209a0da7966a29bf05e96b6a124536222e0318dd']);\nconst nl = '\\n';\n\nconst bloque2T = nombre2T ? (\n'\\u{1F464} Datos 2ndo titular:' + nl + nl +\n'Nombre: ' + nombre2T + nl + nl +\n'Edad: ' + rv(deal['ec6ca39cfe6d29ffb81cfdcb96cbb8fdfee6ac49']) + nl + nl +\n'DNI: ' + rv(deal['c83f49f1e2fd08f55a16b159dd88802d2b5baa04']) + nl + nl +\n'Correo electrónico: ' + rv(deal['43cad7dea8c1b587f141432e1a3965260ae6e0cb']) + nl + nl +\n'Teléfono: ' + rv(deal['5acbbd2a39279bc8fb30ec62dba1529cd7ada335']) + nl + nl +\n'Ingresos mensuales: ' + rv(deal['bc1c04fd97a8e1c29b5d83582cec4794deddbdc5']) + ' \\u20ac' + nl + nl +\n'Deudas mensuales: ' + (rv(deal['1a796802f2ce0da3bc5aeb3957d4926e948a8060']) || '0') + ' \\u20ac' + nl + nl +\n'Tipo de contrato laboral: ' + contrato2T + nl + nl +\n'Antigüedad laboral: ' + rv(deal['7b9c465c402175d6b8aaf029007ec3807495e806']) + nl + nl +\n'Estado civil: ' + estadoCivil2T + nl + nl\n) : '';\n\nconst body = 'Buenos días.' + nl + nl +\n'Compartimos los datos de un cliente interesado en obtener una hipoteca. A continuación, detallamos datos principales:' + nl + nl +\n'Resumen: ' + rv(deal['de65f08f768d5985a623e6a05e033ac55b4781eb']) + nl + nl +\n'\\u{1F464} Datos 1er titular:' + nl + nl +\n'Nombre: ' + $('Webhook').first().json.body['Nombre Cliente'] + nl + nl +\n'Edad: ' + rv(deal['603fc04228fa5186ffc181e33b239a716a70078c']) + nl + nl +\n'DNI: ' + dni + nl + nl +\n'Correo electrónico: ' + (rv(deal['f08d7cd1f8348fb25ee1ba4517bddab358ecd2ef']) || rv(deal['7708e6e9db2709552beafef5fda4929298d71417'])) + nl + nl +\n'Teléfono: ' + rv(deal['95abb5a0541d1b72ffbe2f1abefc5464f6421e3b']) + nl + nl +\n'Ingresos mensuales: ' + rv(deal['290e23bcf92b877deb0d32cc0bb716c1abde1203']) + ' \\u20ac' + nl + nl +\n'Deudas mensuales: ' + (rv(deal['da1c4121a5db43b7e17936492b54af1f0135f587']) || '0') + ' \\u20ac' + nl + nl +\n'Tipo de contrato laboral: ' + contrato1T + nl + nl +\n'Antigüedad laboral: ' + rv(deal['be0f811d86cd2f929e602b57b0745ca59fcbf73e']) + nl + nl +\n'Estado civil: ' + estadoCivil1T + nl + nl +\nbloque2T +\n'\\u{1F3E0} Datos de la operación:' + nl + nl +\n'Importe de compraventa: ' + rv(bankDeal['184fc13001dbca74b20c77f0fcfdec161b5cb492']) + ' \\u20ac' + nl + nl +\n'Importe solicitado de hipoteca: ' + rv(bankDeal['b80d8ee37cc14ecdd7d8a640a57d6bd85308d5b9']) + ' \\u20ac' + nl + nl +\n'Contribución inicial (ahorros): ' + rv(deal['c5f5be52374084fe506fcab9870b296e4ff4f494']) + ' \\u20ac' + nl + nl +\n'Provincia: ' + prov + nl + nl +\n'Dirección del inmueble: ' + rv(deal['51edb7d9fe7a23d2ff47bfd802068172cf20e61b']) + nl + nl +\n'Tipo de compra: ' + tipoCompra + nl + nl +\n'Tipo de hipoteca solicitada: ' + tipoHipoteca + nl + nl +\n'Plazo: ' + rv(deal['718ded557b843ad6ec94558a1da186ca063b11ee']) + ' años' + nl + nl +\n'Quedamos atentos.' + nl + nl + 'Muchas gracias,' + nl + 'Saludos';\n\nconst ccBank = hasBE ? [bce, owE].filter(e => e).join(', ') : '';\nconst ccNoBank = [owE, ofEmail].filter(e => e).join(', ');\n\nreturn [{json: {subject: subj, body, hasBankEmail: hasBE, ccWithBank: ccBank, ccWithoutBank: ccNoBank, row, dealGeneral: deal, bankDeal, owner}, binary: item.binary}];\n"
+      }
+    },
+    {
+      "id": "3227cef9-b249-4bd4-84ce-659306052a67",
+      "name": "Branch Email Bancario",
+      "notes": "true→CC banco+owner; false→CC owner+oficina",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        5888,
+        2080
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "be",
+              "leftValue": "={{ $json.hasBankEmail }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "82f9b663-ff53-4f1f-bbed-61b956ae3028",
+      "name": "Email Sin CC Banco",
+      "webhookId": "d7945bf6-fc05-4c72-bbb3-b98cdfeb76f1",
+      "notes": "TO fijo + CC owner + oficina. 4 adjuntos.",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "onError": "continueErrorOutput",
+      "position": [
+        6112,
+        2272
+      ],
+      "parameters": {
+        "sendTo": "solicitudesici@ibercajaconnect.es",
+        "subject": "={{ $('Build Email Data').first().json.subject }}",
+        "emailType": "text",
+        "message": "={{ $('Build Email Data').first().json.body }}",
+        "options": {
+          "appendAttribution": false,
+          "attachmentsUi": {
+            "attachmentsBinary": [
+              {
+                "property": "={{ Object.keys($binary).join(',') }}"
+              }
+            ]
+          },
+          "ccList": "={{ $('Find Owner').item.json.data.email }}"
+        }
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "sW0S8ksGFfOAk3zC",
+          "name": "Hipotecas Bayteca"
+        }
+      }
+    },
+    {
+      "id": "3d159db5-bd74-4c50-87cf-695c420e2825",
+      "name": "Sheets Error B",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        6288,
+        2448
+      ],
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1bVmfySqlvhb5N8ZFW8c8TJi2gApLJJ0bFvWdYE2viwk",
+          "mode": "list",
+          "cachedResultName": "[Bayteca] Dossier - Envío a Bancos",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1bVmfySqlvhb5N8ZFW8c8TJi2gApLJJ0bFvWdYE2viwk/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 607238196,
+          "mode": "list",
+          "cachedResultName": "Ibercaja Test",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1bVmfySqlvhb5N8ZFW8c8TJi2gApLJJ0bFvWdYE2viwk/edit#gid=607238196"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Process Status": "Completed",
+            "ITEM ID": "={{ $('Webhook').first().json.body['ITEM ID'] }}",
+            "Status": "El correo no ha salido",
+            "NOTAS": "=Error: {{ $json.error.message }}"
+          },
+          "matchingColumns": [
+            "ITEM ID"
+          ],
+          "schema": [
+            {
+              "id": "Opportunity ID",
+              "displayName": "Opportunity ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Nombre Cliente",
+              "displayName": "Nombre Cliente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Importe",
+              "displayName": "Importe",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Link Dossier",
+              "displayName": "Link Dossier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Bank Deal ID",
+              "displayName": "Bank Deal ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Enviar",
+              "displayName": "Enviar",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Autorización",
+              "displayName": "Autorización",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Autorización Red Flag",
+              "displayName": "Autorización Red Flag",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Timestamp Sent",
+              "displayName": "Timestamp Sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Red Flag",
+              "displayName": "Red Flag",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Clasificación",
+              "displayName": "Clasificación",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Dossier",
+              "displayName": "Dossier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Auto Bayteca",
+              "displayName": "Auto Bayteca",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Auto Banco",
+              "displayName": "Auto Banco",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "NOTAS",
+              "displayName": "NOTAS",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ITEM ID",
+              "displayName": "ITEM ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "TEST TIME",
+              "displayName": "TEST TIME",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Process Status",
+              "displayName": "Process Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "USER_ENTERED"
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "eIrQolo2o3XIvmzV",
+          "name": "Juanjo"
+        }
+      }
+    },
+    {
+      "id": "aa5b88ee-3d59-4e77-a588-043bbfb3048b",
+      "name": "Update Deal BS A",
+      "disabled": true,
+      "notes": "Stage → 70",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        6496,
+        1872
+      ],
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://api.pipedrive.com/v1/deals/{{ $('Webhook').item.json.body['Bank Deal ID'] }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "stage_id",
+              "value": "70"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "P1hrvZyFoSLpROYY",
+          "name": "Query Auth Pipe Operations"
+        }
+      }
+    },
+    {
+      "id": "9be568ab-a82a-414d-831f-a28e281331bc",
+      "name": "Note Enviado A",
+      "disabled": true,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        6720,
+        1872
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.pipedrive.com/v1/notes",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "content",
+              "value": "➤𓍝 Enviado a Ibercaja"
+            },
+            {
+              "name": "deal_id",
+              "value": "={{ $('Webhook').item.json.body['Bank Deal ID'] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "P1hrvZyFoSLpROYY",
+          "name": "Query Auth Pipe Operations"
+        }
+      }
+    },
+    {
+      "id": "c40eec68-6bd1-49c0-afc5-a6c4eb2e9350",
+      "name": "Sheets Enviado A",
+      "disabled": true,
+      "notes": "COL_J=fecha, COL_K=Enviado",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        6944,
+        1872
+      ],
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1bVmfySqlvhb5N8ZFW8c8TJi2gApLJJ0bFvWdYE2viwk",
+          "mode": "list",
+          "cachedResultName": "[Bayteca] Dossier - Envío a Bancos",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1bVmfySqlvhb5N8ZFW8c8TJi2gApLJJ0bFvWdYE2viwk/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 607238196,
+          "mode": "list",
+          "cachedResultName": "Ibercaja Test",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1bVmfySqlvhb5N8ZFW8c8TJi2gApLJJ0bFvWdYE2viwk/edit#gid=607238196"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp Sent": "={{ $now.toFormat('yyyy-MM-dd') }}",
+            "ITEM ID": "={{ $('Webhook').item.json.body['ITEM ID'] }}",
+            "Status": "Enviado ✅",
+            "Process Status": "Completado"
+          },
+          "matchingColumns": [
+            "ITEM ID"
+          ],
+          "schema": [
+            {
+              "id": "Opportunity ID",
+              "displayName": "Opportunity ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Nombre Cliente",
+              "displayName": "Nombre Cliente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Importe",
+              "displayName": "Importe",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Link Dossier",
+              "displayName": "Link Dossier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Bank Deal ID",
+              "displayName": "Bank Deal ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Enviar",
+              "displayName": "Enviar",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Autorización",
+              "displayName": "Autorización",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Autorización Red Flag",
+              "displayName": "Autorización Red Flag",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Timestamp Sent",
+              "displayName": "Timestamp Sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Red Flag",
+              "displayName": "Red Flag",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Clasificación",
+              "displayName": "Clasificación",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Dossier",
+              "displayName": "Dossier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Auto Bayteca",
+              "displayName": "Auto Bayteca",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Auto Banco",
+              "displayName": "Auto Banco",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "NOTAS",
+              "displayName": "NOTAS",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "ITEM ID",
+              "displayName": "ITEM ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "TEST TIME",
+              "displayName": "TEST TIME",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Process Status",
+              "displayName": "Process Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "USER_ENTERED"
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "eIrQolo2o3XIvmzV",
+          "name": "Juanjo"
+        }
+      }
+    },
+    {
+      "id": "7aebb3f6-eae8-4da2-af97-f7e9c09c92c9",
+      "name": "Update Deal BS B",
+      "notes": "Stage → 70",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        6496,
+        2256
+      ],
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://api.pipedrive.com/v1/deals/{{ $('Webhook').first().json.body['Bank Deal ID'] }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "pipedriveApi",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "stage_id",
+              "value": "70"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "pipedriveApi": {
+          "id": "KIihwJJTsYRp3G2m",
+          "name": "Hipotecas Bancos"
+        }
+      }
+    },
+    {
+      "id": "12a903ee-92c8-4b97-b12f-7ddd88dc1056",
+      "name": "Note Enviado B",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        6720,
+        2256
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.pipedrive.com/v1/notes",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "pipedriveApi",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "content",
+              "value": "➤𓍝 Enviado a Ibercaja"
+            },
+            {
+              "name": "deal_id",
+              "value": "={{ $('Webhook').first().json.body['Bank Deal ID'] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "pipedriveApi": {
+          "id": "KIihwJJTsYRp3G2m",
+          "name": "Hipotecas Bancos"
+        }
+      }
+    },
+    {
+      "id": "1e147cae-c908-486b-adf3-d92ae15b5a77",
+      "name": "Sheets Enviado B",
+      "notes": "COL_J=fecha, COL_K=Enviado",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "position": [
+        6944,
+        2256
+      ],
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1bVmfySqlvhb5N8ZFW8c8TJi2gApLJJ0bFvWdYE2viwk",
+          "mode": "list",
+          "cachedResultName": "[Bayteca] Dossier - Envío a Bancos",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1bVmfySqlvhb5N8ZFW8c8TJi2gApLJJ0bFvWdYE2viwk/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 607238196,
+          "mode": "list",
+          "cachedResultName": "Ibercaja Test",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1bVmfySqlvhb5N8ZFW8c8TJi2gApLJJ0bFvWdYE2viwk/edit#gid=607238196"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "ITEM ID": "={{ $('Webhook').first().json.body['ITEM ID'] }}",
+            "Status": "Enviado ✅",
+            "Timestamp Sent": "={{ $now.toFormat('yyyy-MM-dd') }}",
+            "Process Status": "Completado"
+          },
+          "matchingColumns": [
+            "ITEM ID"
+          ],
+          "schema": [
+            {
+              "id": "Opportunity ID",
+              "displayName": "Opportunity ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Nombre Cliente",
+              "displayName": "Nombre Cliente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Importe",
+              "displayName": "Importe",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Link Dossier",
+              "displayName": "Link Dossier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Bank Deal ID",
+              "displayName": "Bank Deal ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Enviar",
+              "displayName": "Enviar",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Autorización",
+              "displayName": "Autorización",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Autorización Red Flag",
+              "displayName": "Autorización Red Flag",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Timestamp Sent",
+              "displayName": "Timestamp Sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Red Flag",
+              "displayName": "Red Flag",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Clasificación",
+              "displayName": "Clasificación",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Dossier",
+              "displayName": "Dossier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Auto Bayteca",
+              "displayName": "Auto Bayteca",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Auto Banco",
+              "displayName": "Auto Banco",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "NOTAS",
+              "displayName": "NOTAS",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "ITEM ID",
+              "displayName": "ITEM ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "TEST TIME",
+              "displayName": "TEST TIME",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Process Status",
+              "displayName": "Process Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "USER_ENTERED"
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "eIrQolo2o3XIvmzV",
+          "name": "Juanjo"
+        }
+      }
+    },
+    {
+      "id": "6d552624-123e-437b-9526-ab9ab30bbb92",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        5776,
+        2352
+      ],
+      "parameters": {
+        "content": "ana.rodriguez@bayteca.com\nTo: solicitudesici@ibercajaconnect.es\nCC: {{ $('Build Email Data').first().json.ccWithoutBank }}",
+        "height": 240
+      }
+    },
+    {
+      "id": "2a6923a9-3ddd-4351-b884-d26ed4d487d2",
+      "name": "Call 'Red Flag Check IRPF'",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "onError": "continueErrorOutput",
+      "position": [
+        1472,
+        2240
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "7uUqWPCqDB7QQWeb",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/7uUqWPCqDB7QQWeb",
+          "cachedResultName": "Bayteca — Red Flag Check IRPF"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "ID": "={{ $('Webhook').item.json.body['Opportunity ID'] }}",
+            "Row_ID": "={{ $('Webhook').item.json.body['ITEM ID'] }}",
+            "Bank_ID": "={{ $('Webhook').item.json.body['Bank Deal ID'] }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "ID",
+              "displayName": "ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "number",
+              "removed": false
+            },
+            {
+              "id": "Row_ID",
+              "displayName": "Row_ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Bank_ID",
+              "displayName": "Bank_ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "number",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "71fa7a4c-77f4-4dec-b51e-899cd97dcdee",
+      "name": "Edit Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1648,
+        2416
+      ],
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "{\n  \"note\": \"Validación Pendiente\",\n  \"Red_flags\": false\n}\n",
+        "options": {}
+      }
+    },
+    {
+      "id": "dda9f8a4-4d8a-407d-aafc-b7786c0b435c",
+      "name": "red Flags?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1824,
+        2208
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "27d2dcc5-71b2-4c05-b21d-076e7f79a41d",
+              "leftValue": "={{ $json.Red_flags }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "997d7d23-227c-4f95-8d5b-f675ebdbadae",
+              "leftValue": "={{ $('Webhook').item.json.body['Autorización'] }}",
+              "rightValue": "Yes",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "cd9a0c17-ae58-461c-9284-d26b4028752f",
+              "leftValue": "={{ $('Webhook').item.json.body._source }}",
+              "rightValue": "platform",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "be7c9626-d1a3-408b-bca6-861287fdfc29",
+      "name": "Update redflags",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        3184,
+        1712
+      ],
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1bVmfySqlvhb5N8ZFW8c8TJi2gApLJJ0bFvWdYE2viwk",
+          "mode": "list",
+          "cachedResultName": "[Bayteca] Dossier - Envío a Bancos",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1bVmfySqlvhb5N8ZFW8c8TJi2gApLJJ0bFvWdYE2viwk/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 607238196,
+          "mode": "list",
+          "cachedResultName": "Ibercaja Test",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1bVmfySqlvhb5N8ZFW8c8TJi2gApLJJ0bFvWdYE2viwk/edit#gid=607238196"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Red Flag": "={{ $('red Flags?').first().json.note }}",
+            "Process Status": "Completado",
+            "ITEM ID": "={{ $('Webhook').first().json.body['ITEM ID'] }}",
+            "NOTAS": "={{ $json.archivosFaltantes }}"
+          },
+          "matchingColumns": [
+            "ITEM ID"
+          ],
+          "schema": [
+            {
+              "id": "Opportunity ID",
+              "displayName": "Opportunity ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Nombre Cliente",
+              "displayName": "Nombre Cliente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Importe",
+              "displayName": "Importe",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Link Dossier",
+              "displayName": "Link Dossier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Bank Deal ID",
+              "displayName": "Bank Deal ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Enviar",
+              "displayName": "Enviar",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Autorización",
+              "displayName": "Autorización",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Autorización Red Flag",
+              "displayName": "Autorización Red Flag",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Timestamp Sent",
+              "displayName": "Timestamp Sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Red Flag",
+              "displayName": "Red Flag",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Clasificación",
+              "displayName": "Clasificación",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Dossier",
+              "displayName": "Dossier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Auto Bayteca",
+              "displayName": "Auto Bayteca",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Auto Banco",
+              "displayName": "Auto Banco",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "NOTAS",
+              "displayName": "NOTAS",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ITEM ID",
+              "displayName": "ITEM ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "TEST TIME",
+              "displayName": "TEST TIME",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Process Status",
+              "displayName": "Process Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "eIrQolo2o3XIvmzV",
+          "name": "Juanjo"
+        }
+      }
+    },
+    {
+      "id": "c050b49f-9e29-461f-87eb-b2b81f6ddea0",
+      "name": "Send a message",
+      "webhookId": "68255bb0-0cbc-4ea3-8285-7136d335ca7a",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.4,
+      "position": [
+        3392,
+        1712
+      ],
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0ANV5AHX5F",
+          "mode": "id"
+        },
+        "text": "=🚩 *Red Flag detectada — Ibercaja :ibercaja:*\n*Cliente:* {{ $('Webhook').first().json.body['Nombre Cliente'] }}\n*Deal:* {{ $('Webhook').first().json.body['Opportunity ID'] }}\n\n*Motivos:* {{ $json['Red Flag'] }}\n\n⛔ Envío bloqueado — se requiere revisión antes de enviar a banco.",
+        "otherOptions": {
+          "botProfile": {
+            "imageValues": {
+              "profilePhotoType": "image",
+              "icon_url": "https://avatars.slack-edge.com/2026-09-24/12138584226886_93ebfcd0afee7bfc313e_72.png"
+            }
+          }
+        }
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "DcJW5SNx5ydIUM5l",
+          "name": "Smarta"
+        }
+      }
+    },
+    {
+      "id": "63e211c1-ea9a-47ac-9359-6baee25ed156",
+      "name": "Update redflags ok",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2080,
+        2448
+      ],
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1bVmfySqlvhb5N8ZFW8c8TJi2gApLJJ0bFvWdYE2viwk",
+          "mode": "list",
+          "cachedResultName": "[Bayteca] Dossier - Envío a Bancos",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1bVmfySqlvhb5N8ZFW8c8TJi2gApLJJ0bFvWdYE2viwk/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 607238196,
+          "mode": "list",
+          "cachedResultName": "Ibercaja Test",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1bVmfySqlvhb5N8ZFW8c8TJi2gApLJJ0bFvWdYE2viwk/edit#gid=607238196"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "ITEM ID": "={{ $('Webhook').item.json.body['ITEM ID'] }}"
+          },
+          "matchingColumns": [
+            "ITEM ID"
+          ],
+          "schema": [
+            {
+              "id": "Opportunity ID",
+              "displayName": "Opportunity ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Nombre Cliente",
+              "displayName": "Nombre Cliente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Importe",
+              "displayName": "Importe",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Link Dossier",
+              "displayName": "Link Dossier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Bank Deal ID",
+              "displayName": "Bank Deal ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Enviar",
+              "displayName": "Enviar",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Autorización",
+              "displayName": "Autorización",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Autorización Red Flag",
+              "displayName": "Autorización Red Flag",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Timestamp Sent",
+              "displayName": "Timestamp Sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Red Flag",
+              "displayName": "Red Flag",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Clasificación",
+              "displayName": "Clasificación",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Dossier",
+              "displayName": "Dossier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Auto Bayteca",
+              "displayName": "Auto Bayteca",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Auto Banco",
+              "displayName": "Auto Banco",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "NOTAS",
+              "displayName": "NOTAS",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "ITEM ID",
+              "displayName": "ITEM ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "TEST TIME",
+              "displayName": "TEST TIME",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Process Status",
+              "displayName": "Process Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "eIrQolo2o3XIvmzV",
+          "name": "Juanjo"
+        }
+      }
+    },
+    {
+      "id": "bfe493b2-fdcc-4cb6-ba67-f49c13b8d8f4",
+      "name": "Update redflags ok1",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        3680,
+        2304
+      ],
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1bVmfySqlvhb5N8ZFW8c8TJi2gApLJJ0bFvWdYE2viwk",
+          "mode": "list",
+          "cachedResultName": "[Bayteca] Dossier - Envío a Bancos",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1bVmfySqlvhb5N8ZFW8c8TJi2gApLJJ0bFvWdYE2viwk/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 607238196,
+          "mode": "list",
+          "cachedResultName": "Ibercaja Test",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1bVmfySqlvhb5N8ZFW8c8TJi2gApLJJ0bFvWdYE2viwk/edit#gid=607238196"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "ITEM ID": "={{ $('Webhook').first().json.body['ITEM ID'] }}",
+            "NOTAS": "={{ (() => {\n  const v = $('Split File Results').last().json.archivosFaltantes;\n\n  if (!v) return '';\n\n  if (Array.isArray(v)) {\n    return v.length ? 'Falta ' + v.join(', ') : '';\n  }\n\n  return String(v).trim() ? 'Falta ' + v : '';\n})() }}",
+            "Process Status": "Completado"
+          },
+          "matchingColumns": [
+            "ITEM ID"
+          ],
+          "schema": [
+            {
+              "id": "Opportunity ID",
+              "displayName": "Opportunity ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Nombre Cliente",
+              "displayName": "Nombre Cliente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Importe",
+              "displayName": "Importe",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Link Dossier",
+              "displayName": "Link Dossier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Bank Deal ID",
+              "displayName": "Bank Deal ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Enviar",
+              "displayName": "Enviar",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Autorización",
+              "displayName": "Autorización",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Autorización Red Flag",
+              "displayName": "Autorización Red Flag",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Timestamp Sent",
+              "displayName": "Timestamp Sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Red Flag",
+              "displayName": "Red Flag",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Clasificación",
+              "displayName": "Clasificación",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Dossier",
+              "displayName": "Dossier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Auto Bayteca",
+              "displayName": "Auto Bayteca",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Auto Banco",
+              "displayName": "Auto Banco",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "NOTAS",
+              "displayName": "NOTAS",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ITEM ID",
+              "displayName": "ITEM ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "TEST TIME",
+              "displayName": "TEST TIME",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Process Status",
+              "displayName": "Process Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "eIrQolo2o3XIvmzV",
+          "name": "Juanjo"
+        }
+      }
+    },
+    {
+      "id": "01b7ce2a-ee67-42d2-a976-a55b29f0a76c",
+      "name": "GET EMAILS",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        4256,
+        2080
+      ],
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1rOwsgO5E41i8WH5e-2kYMZJTEtW_mi88GsWnrKrJqM4",
+          "mode": "list",
+          "cachedResultName": "Red_Flags_Bancos_Config",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1rOwsgO5E41i8WH5e-2kYMZJTEtW_mi88GsWnrKrJqM4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1421174098,
+          "mode": "list",
+          "cachedResultName": "Contactos Banco",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1rOwsgO5E41i8WH5e-2kYMZJTEtW_mi88GsWnrKrJqM4/edit#gid=1421174098"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Banco",
+              "lookupValue": "Ibercaja"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "eIrQolo2o3XIvmzV",
+          "name": "Juanjo"
+        }
+      }
+    },
+    {
+      "id": "8c9c92ca-93f6-4f95-9a19-f5ed70b0d17e",
+      "name": "Sheets Error B1",
+      "disabled": true,
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        6400,
+        2032
+      ],
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1bVmfySqlvhb5N8ZFW8c8TJi2gApLJJ0bFvWdYE2viwk",
+          "mode": "list",
+          "cachedResultName": "[Bayteca] Dossier - Envío a Bancos",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1bVmfySqlvhb5N8ZFW8c8TJi2gApLJJ0bFvWdYE2viwk/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 607238196,
+          "mode": "list",
+          "cachedResultName": "Ibercaja Test",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1bVmfySqlvhb5N8ZFW8c8TJi2gApLJJ0bFvWdYE2viwk/edit#gid=607238196"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Process Status": "Completed",
+            "ITEM ID": "={{ $('Webhook').first().json.body['ITEM ID'] }}",
+            "Status": "El correo no ha salido",
+            "NOTAS": "=Error: {{ $json.error }}"
+          },
+          "matchingColumns": [
+            "ITEM ID"
+          ],
+          "schema": [
+            {
+              "id": "Opportunity ID",
+              "displayName": "Opportunity ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Nombre Cliente",
+              "displayName": "Nombre Cliente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Importe",
+              "displayName": "Importe",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Link Dossier",
+              "displayName": "Link Dossier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Bank Deal ID",
+              "displayName": "Bank Deal ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Enviar",
+              "displayName": "Enviar",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Autorización",
+              "displayName": "Autorización",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Autorización Red Flag",
+              "displayName": "Autorización Red Flag",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Timestamp Sent",
+              "displayName": "Timestamp Sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Red Flag",
+              "displayName": "Red Flag",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Clasificación",
+              "displayName": "Clasificación",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Dossier",
+              "displayName": "Dossier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Auto Bayteca",
+              "displayName": "Auto Bayteca",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Auto Banco",
+              "displayName": "Auto Banco",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "NOTAS",
+              "displayName": "NOTAS",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ITEM ID",
+              "displayName": "ITEM ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "TEST TIME",
+              "displayName": "TEST TIME",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Process Status",
+              "displayName": "Process Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "USER_ENTERED"
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "eIrQolo2o3XIvmzV",
+          "name": "Juanjo"
+        }
+      }
+    },
+    {
+      "id": "529870c5-9eed-4d02-993f-f8b52caa0aad",
+      "name": "Find Person1",
+      "notes": "Person por ID del custom field del deal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2048,
+        1840
+      ],
+      "parameters": {
+        "url": "=https://api.pipedrive.com/v1/persons/{{ $('Find Deal General').first().json.data['3283885664f55b878c121a7e45277abc652c5bc7'] }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "pipedriveApi",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "credentials": {
+        "pipedriveApi": {
+          "id": "KIihwJJTsYRp3G2m",
+          "name": "Hipotecas Bancos"
+        }
+      }
+    },
+    {
+      "id": "a0e3c16d-097d-4294-9e71-ba07479edef9",
+      "name": "Prepare File Searches1",
+      "notes": "4 items: una búsqueda por archivo en Drive",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2272,
+        1840
+      ],
+      "parameters": {
+        "jsCode": "const deal = $('Find Deal General').first().json.data;\nconst row = $('Webhook').first().json.body;\nconst dn = deal['b5d36c005e38a4cd72d831be655996a3d6b34dc1'] || '';\nconst dni = deal['60228dc43313b931378ec9bb3f21f7ad7f5a144c'] || '';\n\n// Extraer folder ID del link de Drive\nconst folderLink = deal['c2ea08d72de437ee4957ff3807c48cebe7a1aa3e'] || '';\nconst folderMatch = folderLink.match(/folders\\/([a-zA-Z0-9_-]+)/);\nconst folderId = folderMatch ? folderMatch[1] : '';\n\nif (!folderId) throw new Error('No se encontró carpeta de Drive en el deal');\n\nconst inFolder = \"'\" + folderId + \"' in parents\";\n\nconst files = [\n  {label:'Dossier', query: \"name contains '\" + dn + \" \" + (row.COL_C || '') + \"' and mimeType='application/pdf' and \" + inFolder},\n  {label:'Auth_Ibercaja', query: \"name contains 'Autorizaciones Ibercaja \" + dni + \"' and mimeType='application/pdf' and \" + inFolder},\n  {label:'Auth_Bayteca', query: \"name contains 'Autorizaciones Bayteca \" + dni + \"' and mimeType='application/pdf' and \" + inFolder},\n  // Documento datos básicos: se busca por Opportunity ID (el nombre del cliente puede variar: \"389439-389439\", \"{opp}-{nombre}\"…)\n  {label:'Nuevo_Documento', pageSize: 50, query: \"name contains '\" + String(row['Opportunity ID'] || '0') + \"' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false and '15Twm1s7eRt0vuibuO4lS3LSEAuzMZ8Ba' in parents\"}\n];\n\nreturn files.map(f => ({json: f}));\n"
+      }
+    },
+    {
+      "id": "051faf4f-5150-4c7d-b7c1-7e4542403dc7",
+      "name": "Search Files in Drive1",
+      "notes": "Drive API v3 search por cada archivo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
+      "position": [
+        2496,
+        1840
+      ],
+      "parameters": {
+        "url": "https://www.googleapis.com/drive/v3/files",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $json.query }}"
+            },
+            {
+              "name": "fields",
+              "value": "files(id,name,mimeType)"
+            },
+            {
+              "name": "pageSize",
+              "value": "={{ $json.pageSize || 1 }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "YgHXlMGu6BPZkHAh",
+          "name": "Juanjo"
+        }
+      }
+    },
+    {
+      "id": "e5d340b4-a34e-4743-ac52-46a9aa6804c1",
+      "name": "Split File Results1",
+      "notes": "Un item por archivo encontrado con id/name",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2720,
+        1840
+      ],
+      "parameters": {
+        "jsCode": "const labels = ['Dossier', 'Auth_Ibercaja', 'Auth_Bayteca', 'Nuevo_Documento'];\nconst res = [];\nconst found = [];\n\nconst items = $input.all();\nfor (let i = 0; i < items.length; i++) {\n  const files = items[i].json.files || [];\n  const label = labels[i] || '';\n  let f = files[0];\n  if (label === 'Nuevo_Documento') {\n    // Se toma el documento de ESTA operación (\"{opp}-…\"), preferentemente el que acaba de asegurar\n    // 'Documento datos básicos Ibercaja'. Si se acaba de crear (la copia de Drive devolvió su id),\n    // cuenta como encontrado aunque la búsqueda de Drive aún no lo indexe.\n    const opp = String($('Webhook').first().json.body['Opportunity ID'] || '');\n    const doc = $('Documento datos básicos Ibercaja').isExecuted ? ($('Documento datos básicos Ibercaja').first().json || {}) : {};\n    const docId = ((doc.link || '').match(/\\/d\\/([a-zA-Z0-9_-]+)/) || [])[1] || '';\n    const ofOpp = files.filter(x => opp && new RegExp('^' + opp + '\\\\s*-').test(x.name || ''));\n    f = (docId && files.find(x => x.id === docId)) || ofOpp[0];\n    if (!f && docId && doc.created === true) f = { id: docId, name: doc.docName, mimeType: 'application/vnd.google-apps.spreadsheet' };\n  }\n  if (f) {\n    res.push({ json: { id: f.id, name: f.name, mimeType: f.mimeType, label } });\n    found.push(label);\n  }\n}\n\nconst missing = labels.filter(l => !found.includes(l));\n\nreturn res.map(r => ({\n  json: {\n    ...r.json,\n    archivosFaltantes: missing.length > 0 ? missing.join(', ') : '',\n    todosEncontrados: missing.length === 0\n  }\n}));"
+      }
+    },
+    {
+      "id": "18db657f-84e9-4978-ad04-c8263f0aa9c6",
+      "name": "Filter All Files1",
+      "notes": "Verificar que los 4 archivos se encontraron",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2944,
+        1840
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "4f",
+              "leftValue": "={{ $input.all().length }}",
+              "rightValue": 4,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "cc13f739-de94-4dda-ba90-1b8e762b97d7",
+      "name": "Update redflags1",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        3184,
+        1888
+      ],
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1bVmfySqlvhb5N8ZFW8c8TJi2gApLJJ0bFvWdYE2viwk",
+          "mode": "list",
+          "cachedResultName": "[Bayteca] Dossier - Envío a Bancos",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1bVmfySqlvhb5N8ZFW8c8TJi2gApLJJ0bFvWdYE2viwk/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 607238196,
+          "mode": "list",
+          "cachedResultName": "Ibercaja Test",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1bVmfySqlvhb5N8ZFW8c8TJi2gApLJJ0bFvWdYE2viwk/edit#gid=607238196"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Red Flag": "={{ $('red Flags?').first().json.note }}",
+            "Process Status": "Completado",
+            "ITEM ID": "={{ $('Webhook').first().json.body['ITEM ID'] }}",
+            "NOTAS": "={{ (() => {\n  const v = $('Split File Results1').last().json.archivosFaltantes;\n\n  if (!v) return '';\n\n  if (Array.isArray(v)) {\n    return v.length ? 'Falta ' + v.join(', ') : '';\n  }\n\n  return String(v).trim() ? 'Falta ' + v : '';\n})() }}"
+          },
+          "matchingColumns": [
+            "ITEM ID"
+          ],
+          "schema": [
+            {
+              "id": "Opportunity ID",
+              "displayName": "Opportunity ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Nombre Cliente",
+              "displayName": "Nombre Cliente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Importe",
+              "displayName": "Importe",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Link Dossier",
+              "displayName": "Link Dossier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Bank Deal ID",
+              "displayName": "Bank Deal ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Enviar",
+              "displayName": "Enviar",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Autorización",
+              "displayName": "Autorización",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Autorización Red Flag",
+              "displayName": "Autorización Red Flag",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Timestamp Sent",
+              "displayName": "Timestamp Sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Red Flag",
+              "displayName": "Red Flag",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Clasificación",
+              "displayName": "Clasificación",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Dossier",
+              "displayName": "Dossier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Auto Bayteca",
+              "displayName": "Auto Bayteca",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Auto Banco",
+              "displayName": "Auto Banco",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "NOTAS",
+              "displayName": "NOTAS",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ITEM ID",
+              "displayName": "ITEM ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "TEST TIME",
+              "displayName": "TEST TIME",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Process Status",
+              "displayName": "Process Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "eIrQolo2o3XIvmzV",
+          "name": "Juanjo"
+        }
+      }
+    },
+    {
+      "id": "ff78f71d-cf0c-4c4b-9b5d-a85206a759c3",
+      "name": "Send a message1",
+      "webhookId": "68255bb0-0cbc-4ea3-8285-7136d335ca7a",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.4,
+      "position": [
+        3392,
+        1888
+      ],
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0ANV5AHX5F",
+          "mode": "id"
+        },
+        "text": "=🚩 *Red Flag detectada — Ibercaja :ibercaja:*\n*Cliente:* {{ $('Webhook').item.json.body['Nombre Cliente'] }}\n*Deal:* {{ $('Webhook').item.json.body['Opportunity ID'] }}\n\n*Motivos:* {{ $('Call \\'Red Flag Check IRPF\\'').item.json.note }}\n\n⛔ Envío bloqueado — se requiere revisión antes de enviar a banco.",
+        "otherOptions": {
+          "botProfile": {
+            "imageValues": {
+              "profilePhotoType": "image",
+              "icon_url": "https://avatars.slack-edge.com/2026-09-24/12138584226886_93ebfcd0afee7bfc313e_72.png"
+            }
+          }
+        }
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "DcJW5SNx5ydIUM5l",
+          "name": "Smarta"
+        }
+      }
+    },
+    {
+      "id": "57103e32-e6d5-4b16-a9dd-eae82a7b9697",
+      "name": "Email Sin CC Banco1",
+      "webhookId": "d7945bf6-fc05-4c72-bbb3-b98cdfeb76f1",
+      "disabled": true,
+      "notes": "TO fijo + CC owner + oficina. 4 adjuntos.",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "onError": "continueErrorOutput",
+      "position": [
+        6208,
+        1888
+      ],
+      "parameters": {
+        "sendTo": "solicitudesici@ibercajaconnect.es",
+        "subject": "={{ $('Build Email Data').first().json.subject }}",
+        "emailType": "text",
+        "message": "={{ $('Build Email Data').first().json.body }}",
+        "options": {
+          "appendAttribution": false,
+          "attachmentsUi": {
+            "attachmentsBinary": [
+              {
+                "property": "={{ Object.keys($binary).join(',') }}"
+              }
+            ]
+          },
+          "ccList": "={{ $('Find Owner').item.json.data.email }}"
+        }
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "sW0S8ksGFfOAk3zC",
+          "name": "Hipotecas Bayteca"
+        }
+      }
+    },
+    {
+      "id": "c54c63a7-e5c2-481e-9ec1-a8dcce328823",
+      "name": "Wait",
+      "webhookId": "46a716e5-c073-49ff-a5bd-e9cacefbeb34",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1184,
+        2128
+      ],
+      "parameters": {
+        "unit": "minutes"
+      }
+    },
+    {
+      "id": "d77dde87-5c39-42d6-aa29-dae5a045f36a",
+      "name": "If6",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        848,
+        2224
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "5ed36418-6b4d-49a2-836c-1dde85f11f24",
+              "leftValue": "={{ $('Webhook').item.json.body['Autorización'] }}",
+              "rightValue": "Yes",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "08c83406-b0b3-407d-99fe-a4cfa9e98e9a",
+      "name": "SheetsFaltaAutoBanco",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1184,
+        2100
+      ],
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1bVmfySqlvhb5N8ZFW8c8TJi2gApLJJ0bFvWdYE2viwk",
+          "mode": "list",
+          "cachedResultName": "[Bayteca] Dossier - Envío a Bancos",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1bVmfySqlvhb5N8ZFW8c8TJi2gApLJJ0bFvWdYE2viwk/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 607238196,
+          "mode": "list",
+          "cachedResultName": "Ibercaja Test",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1bVmfySqlvhb5N8ZFW8c8TJi2gApLJJ0bFvWdYE2viwk/edit#gid=607238196"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Process Status": "Procesando",
+            "ITEM ID": "={{ $('Webhook').item.json.body['ITEM ID'] }}"
+          },
+          "matchingColumns": [
+            "ITEM ID"
+          ],
+          "schema": [
+            {
+              "id": "Opportunity ID",
+              "displayName": "Opportunity ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Nombre Cliente",
+              "displayName": "Nombre Cliente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Importe",
+              "displayName": "Importe",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Link Dossier",
+              "displayName": "Link Dossier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Bank Deal ID",
+              "displayName": "Bank Deal ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Enviar",
+              "displayName": "Enviar",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Autorización",
+              "displayName": "Autorización",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Autorización Red Flag",
+              "displayName": "Autorización Red Flag",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Timestamp Sent",
+              "displayName": "Timestamp Sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Red Flag",
+              "displayName": "Red Flag",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Clasificación",
+              "displayName": "Clasificación",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Dossier",
+              "displayName": "Dossier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Auto Bayteca",
+              "displayName": "Auto Bayteca",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Auto Banco",
+              "displayName": "Auto Banco",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "NOTAS",
+              "displayName": "NOTAS",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "ITEM ID",
+              "displayName": "ITEM ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "TEST TIME",
+              "displayName": "TEST TIME",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Process Status",
+              "displayName": "Process Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Owner",
+              "displayName": "Owner",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "eIrQolo2o3XIvmzV",
+          "name": "Juanjo"
+        }
+      }
+    },
+    {
+      "id": "62ff2ad9-5a96-4d58-9339-e16f00739d41",
+      "name": "SheetsFaltaAutoBanco3",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1072,
+        1968
+      ],
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1bVmfySqlvhb5N8ZFW8c8TJi2gApLJJ0bFvWdYE2viwk",
+          "mode": "list",
+          "cachedResultName": "[Bayteca] Dossier - Envío a Bancos",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1bVmfySqlvhb5N8ZFW8c8TJi2gApLJJ0bFvWdYE2viwk/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 607238196,
+          "mode": "list",
+          "cachedResultName": "Ibercaja Test",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1bVmfySqlvhb5N8ZFW8c8TJi2gApLJJ0bFvWdYE2viwk/edit#gid=607238196"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Process Status": "Esperando a la creación del dossier... 🏃 🏃 🏃",
+            "ITEM ID": "={{ $('Webhook').item.json.body['ITEM ID'] }}"
+          },
+          "matchingColumns": [
+            "ITEM ID"
+          ],
+          "schema": [
+            {
+              "id": "Opportunity ID",
+              "displayName": "Opportunity ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Nombre Cliente",
+              "displayName": "Nombre Cliente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Importe",
+              "displayName": "Importe",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Link Dossier",
+              "displayName": "Link Dossier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Bank Deal ID",
+              "displayName": "Bank Deal ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Enviar",
+              "displayName": "Enviar",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Autorización",
+              "displayName": "Autorización",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Autorización Red Flag",
+              "displayName": "Autorización Red Flag",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Timestamp Sent",
+              "displayName": "Timestamp Sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Red Flag",
+              "displayName": "Red Flag",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Clasificación",
+              "displayName": "Clasificación",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Dossier",
+              "displayName": "Dossier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Auto Bayteca",
+              "displayName": "Auto Bayteca",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Auto Banco",
+              "displayName": "Auto Banco",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "NOTAS",
+              "displayName": "NOTAS",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "ITEM ID",
+              "displayName": "ITEM ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "TEST TIME",
+              "displayName": "TEST TIME",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Process Status",
+              "displayName": "Process Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Owner",
+              "displayName": "Owner",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "eIrQolo2o3XIvmzV",
+          "name": "Juanjo"
+        }
+      }
+    },
+    {
+      "id": "a256d2a5-b250-44b1-8b42-34785af6cf96",
+      "name": "Filter All Files2",
+      "notes": "Verificar que los 4 archivos se encontraron",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        3856,
+        2096
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "4f",
+              "leftValue": "={{ $('Split File Results').item.json.todosEncontrados }}",
+              "rightValue": 4,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "71bee555-b476-426b-a73b-02bf9a12d252",
+      "name": "Update redflags ok2",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        4128,
+        2272
+      ],
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1bVmfySqlvhb5N8ZFW8c8TJi2gApLJJ0bFvWdYE2viwk",
+          "mode": "list",
+          "cachedResultName": "[Bayteca] Dossier - Envío a Bancos",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1bVmfySqlvhb5N8ZFW8c8TJi2gApLJJ0bFvWdYE2viwk/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 607238196,
+          "mode": "list",
+          "cachedResultName": "Ibercaja Test",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1bVmfySqlvhb5N8ZFW8c8TJi2gApLJJ0bFvWdYE2viwk/edit#gid=607238196"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "ITEM ID": "={{ $('Webhook').first().json.body['ITEM ID'] }}",
+            "NOTAS": "={{ (() => {\n  const v = $('Split File Results').last().json.archivosFaltantes;\n\n  if (!v) return '';\n\n  if (Array.isArray(v)) {\n    return v.length ? 'Falta ' + v.join(', ') : '';\n  }\n\n  return String(v).trim() ? 'Falta ' + v : '';\n})() }}",
+            "Process Status": "Completado"
+          },
+          "matchingColumns": [
+            "ITEM ID"
+          ],
+          "schema": [
+            {
+              "id": "Opportunity ID",
+              "displayName": "Opportunity ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Nombre Cliente",
+              "displayName": "Nombre Cliente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Importe",
+              "displayName": "Importe",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Link Dossier",
+              "displayName": "Link Dossier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Bank Deal ID",
+              "displayName": "Bank Deal ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Enviar",
+              "displayName": "Enviar",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Autorización",
+              "displayName": "Autorización",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Autorización Red Flag",
+              "displayName": "Autorización Red Flag",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Timestamp Sent",
+              "displayName": "Timestamp Sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Red Flag",
+              "displayName": "Red Flag",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Clasificación",
+              "displayName": "Clasificación",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Dossier",
+              "displayName": "Dossier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Auto Bayteca",
+              "displayName": "Auto Bayteca",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Auto Banco",
+              "displayName": "Auto Banco",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "NOTAS",
+              "displayName": "NOTAS",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ITEM ID",
+              "displayName": "ITEM ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "TEST TIME",
+              "displayName": "TEST TIME",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Process Status",
+              "displayName": "Process Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "eIrQolo2o3XIvmzV",
+          "name": "Juanjo"
+        }
+      }
+    },
+    {
+      "id": "21fff1f9-ff04-4964-8d78-32137b98d4f1",
+      "name": "If4",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        624,
+        1984
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "0d9fa5f2-919e-4e14-8a3a-6ada02ef2b50",
+              "leftValue": "={{ $('Webhook').item.json.body._source }}",
+              "rightValue": "platform",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "34914ae9-1a52-442c-8caa-5912d2d0387a",
+      "name": "Loop Over Items",
+      "disabled": true,
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        5104,
+        2560
+      ],
+      "parameters": {
+        "options": {}
+      }
+    },
+    {
+      "id": "fe6914d2-941c-4864-b052-fd29c14806bb",
+      "name": "Datos Excel Ibercaja",
+      "disabled": true,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "onError": "continueRegularOutput",
+      "position": [
+        7164,
+        2256
+      ],
+      "parameters": {
+        "jsCode": "// Excel 'Ibercaja datos básicos' (sustituye al Zapier): pasa los deals al sub-workflow\nconst d = $('Build Email Data').first().json;\nreturn [{ json: { dealGeneral: d.dealGeneral, bankDeal: d.bankDeal } }];"
+      }
+    },
+    {
+      "id": "90ccf2a5-e82a-4770-ac5e-9f1dd2a16fb2",
+      "name": "Excel datos básicos Ibercaja",
+      "disabled": true,
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "onError": "continueRegularOutput",
+      "position": [
+        7384,
+        2256
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "uQpf3C5LaecqDvoF",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {}
+        },
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      }
+    },
+    {
+      "id": "cc82af87-7155-418a-94d8-4b5def04068b",
+      "name": "Datos documento Ibercaja",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2620,
+        2356
+      ],
+      "parameters": {
+        "jsCode": "// Documento 'datos básicos' de Ibercaja (sustituye Zapier + Apps Script): se asegura ANTES de buscar los archivos\nconst row = $('Webhook').first().json.body;\nconst dealGeneral = $('Find Deal General').first().json.data;\n// \"Oficina recepción lead\" = campo \"Bank Mail / Email agente bancario\" del deal bancario (si está vacío, el sub-workflow pone el código de oficina)\nconst bankDealId = String(row['Bank Deal ID'] || '').trim();\nconst bd = ($('Deal bancario (documento)').first().json || {}).data || {};\nconst bankDeal = String(bd.id || '') === bankDealId ? bd : {};   // sin Bank Deal ID no se usa ningún deal\nconst bm = String(bankDeal['498dd83b5c5e1f1181c232131933717ceadfda34'] || '').trim();\nconst bankMail = bm.includes('@') ? bm : '';\nreturn [{ json: { dealGeneral, opportunityId: row['Opportunity ID'], nombreCliente: row['Nombre Cliente'], bankDealId, bankMail } }];"
+      }
+    },
+    {
+      "id": "d3fba0d9-e8db-42c2-9bb9-4593fbe78893",
+      "name": "Documento datos básicos Ibercaja",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput",
+      "position": [
+        2840,
+        2356
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "uQpf3C5LaecqDvoF",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {}
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "a468c127-e472-45f8-81d3-3ac8aa47b221",
+      "name": "Anti-duplicado · Email Sin CC Banco",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6072,
+        2112
+      ],
+      "parameters": {
+        "jsCode": "// Anti-duplicados: reserva el envío en el Command Center justo antes de mandar el correo al banco.\n// Si este deal ya se envió a este banco en las últimas 6 h (p. ej. llegan ENVIAR + AUTORIZACION,\n// o plataforma + hoja, para la misma fila), no se vuelve a enviar. force=true lo permite.\nconst row = $('Webhook').first().json.body || {};\nconst force = row.force === true || String(row.force || '').toLowerCase() === 'true';\nlet res;\ntry {\n  res = await this.helpers.httpRequest({\n    method: 'POST',\n    url: String($vars.COMMAND_CENTER_URL || 'https://banks-command-center.vercel.app').replace(/\\/$/, '') + '/api/dossier/claim',\n    headers: { 'x-offers-secret': $vars.OFFERS_API_SECRET, 'Content-Type': 'application/json' },\n    body: {\n      bank_slug: 'ibercaja',\n      opportunity_id: row['Opportunity ID'],\n      bank_deal_id: row['Bank Deal ID'] || null,\n      workflow_id: $workflow.id,\n      execution_id: $execution.id,\n      source: row._source || row._ibercaja_action || null,\n      force,\n    },\n    json: true,\n    timeout: 20000,\n  });\n} catch (e) {\n  throw new Error('Anti-duplicados: no se pudo comprobar el envío en el Command Center (' + (e.message || e) + '). No se envía para evitar duplicados.');\n}\nif (!res || res.allowed !== true) return [];   // ya enviado → se detiene esta rama sin mandar el correo\nreturn $input.all();"
+      }
+    },
+    {
+      "id": "ad49de75-f864-4ba7-91ba-05af12071024",
+      "name": "Deal bancario (documento)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "onError": "continueRegularOutput",
+      "position": [
+        2500,
+        2516
+      ],
+      "parameters": {
+        "url": "=https://api.pipedrive.com/v1/deals/{{ String($('Webhook').first().json.body['Bank Deal ID'] || '').trim() || '0' }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "pipedriveApi",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "credentials": {
+        "pipedriveApi": {
+          "id": "kpHRr8iY0xpmnPi0",
+          "name": "Juanjo"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Find Deal General",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Deal General": {
+      "main": [
+        [
+          {
+            "node": "If4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CheckBankCount": {
+      "main": [
+        [
+          {
+            "node": "Branch Bank Count",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Branch Bank Count": {
+      "main": [
+        [
+          {
+            "node": "Find Person",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Find Person",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Note Blocked",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sheets Blocked": {
+      "main": [
+        [
+          {
+            "node": "Note Blocked",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Person": {
+      "main": [
+        [
+          {
+            "node": "Deal bancario (documento)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare File Searches": {
+      "main": [
+        [
+          {
+            "node": "Search Files in Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Files in Drive": {
+      "main": [
+        [
+          {
+            "node": "Split File Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split File Results": {
+      "main": [
+        [
+          {
+            "node": "Filter All Files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter All Files": {
+      "main": [
+        [
+          {
+            "node": "Filter All Files2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update redflags ok1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Bank Deal": {
+      "main": [
+        [
+          {
+            "node": "Find Owner",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Owner": {
+      "main": [
+        [
+          {
+            "node": "Restore File Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore File Items": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Download Files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Files": {
+      "main": [
+        [
+          {
+            "node": "Merge Binaries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Binaries": {
+      "main": [
+        [
+          {
+            "node": "Build Email Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Email Data": {
+      "main": [
+        [
+          {
+            "node": "Branch Email Bancario",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Branch Email Bancario": {
+      "main": [
+        [
+          {
+            "node": "Anti-duplicado · Email Sin CC Banco",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Email Sin CC Banco1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Anti-duplicado · Email Sin CC Banco",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Sin CC Banco": {
+      "main": [
+        [
+          {
+            "node": "Update Deal BS B",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sheets Error B",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Deal BS A": {
+      "main": [
+        [
+          {
+            "node": "Note Enviado A",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Note Enviado A": {
+      "main": [
+        [
+          {
+            "node": "Sheets Enviado A",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Deal BS B": {
+      "main": [
+        [
+          {
+            "node": "Note Enviado B",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Note Enviado B": {
+      "main": [
+        [
+          {
+            "node": "Sheets Enviado B",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call 'Red Flag Check IRPF'": {
+      "main": [
+        [
+          {
+            "node": "red Flags?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "red Flags?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "red Flags?": {
+      "main": [
+        [
+          {
+            "node": "CheckBankCount",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Update redflags ok",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Find Person1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update redflags": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET EMAILS": {
+      "main": [
+        [
+          {
+            "node": "Find Bank Deal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Person1": {
+      "main": [
+        [
+          {
+            "node": "Prepare File Searches1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare File Searches1": {
+      "main": [
+        [
+          {
+            "node": "Search Files in Drive1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Files in Drive1": {
+      "main": [
+        [
+          {
+            "node": "Split File Results1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split File Results1": {
+      "main": [
+        [
+          {
+            "node": "Filter All Files1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter All Files1": {
+      "main": [
+        [
+          {
+            "node": "Update redflags1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update redflags",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update redflags1": {
+      "main": [
+        [
+          {
+            "node": "Send a message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Sin CC Banco1": {
+      "main": [
+        [
+          {
+            "node": "Update Deal BS A",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sheets Error B1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If6": {
+      "main": [
+        [
+          {
+            "node": "SheetsFaltaAutoBanco3",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SheetsFaltaAutoBanco",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Call 'Red Flag Check IRPF'",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Call 'Red Flag Check IRPF'",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Note Blocked": {
+      "main": [
+        []
+      ]
+    },
+    "Filter All Files2": {
+      "main": [
+        [
+          {
+            "node": "GET EMAILS",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update redflags ok2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If4": {
+      "main": [
+        [
+          {
+            "node": "Call 'Red Flag Check IRPF'",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        []
+      ]
+    },
+    "Sheets Enviado B": {
+      "main": [
+        []
+      ]
+    },
+    "Datos Excel Ibercaja": {
+      "main": [
+        [
+          {
+            "node": "Excel datos básicos Ibercaja",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Datos documento Ibercaja": {
+      "main": [
+        [
+          {
+            "node": "Documento datos básicos Ibercaja",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Documento datos básicos Ibercaja": {
+      "main": [
+        [
+          {
+            "node": "Prepare File Searches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anti-duplicado · Email Sin CC Banco": {
+      "main": [
+        [
+          {
+            "node": "Email Sin CC Banco",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deal bancario (documento)": {
+      "main": [
+        [
+          {
+            "node": "Datos documento Ibercaja",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  }
+}

@@ -1,10 +1,8 @@
 {
-  "name": "Ibercaja · Excel datos básicos (sustituye Zapier)",
+  "name": "Ibercaja · Documento datos básicos (sustituye Zapier + Apps Script)",
   "nodes": [
     {
-      "parameters": {
-        "inputSource": "passthrough"
-      },
+      "id": "3b6cd38b-a879-424c-8d24-b24e5405f1e2",
       "name": "Entrada",
       "type": "n8n-nodes-base.executeWorkflowTrigger",
       "typeVersion": 1.1,
@@ -12,24 +10,25 @@
         0,
         0
       ],
-      "id": "1ef6c195-e550-4940-b81c-d24de3001dfc"
+      "parameters": {
+        "inputSource": "passthrough"
+      }
     },
     {
+      "id": "ffaaaaa0-d748-4d9b-9a5e-743028241deb",
+      "name": "Leer oficinas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        224,
+        0
+      ],
       "parameters": {
-        "method": "GET",
         "url": "https://sheets.googleapis.com/v4/spreadsheets/18utuUYbapRIuCgjMswts1hoHr-uJsHCWZQTJtQq_vTg/values/'Lista Actualizada'!A:G",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "googleSheetsOAuth2Api",
         "options": {}
       },
-      "name": "Leer oficinas",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        220,
-        0
-      ],
-      "id": "9252f600-e67e-446c-bd2f-fbf3a54ea2cd",
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "eIrQolo2o3XIvmzV",
@@ -38,21 +37,20 @@
       }
     },
     {
+      "id": "0ca9e8d0-49ae-44c6-9e06-bc139317175b",
+      "name": "Leer Excel",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        448,
+        0
+      ],
       "parameters": {
-        "method": "GET",
-        "url": "https://sheets.googleapis.com/v4/spreadsheets/14txmC7MoGGvqkk8Oz8XY-ULp6G9EYT-Q-G73kfQ2cS4/values/Sheet2!A:A",
+        "url": "https://sheets.googleapis.com/v4/spreadsheets/14txmC7MoGGvqkk8Oz8XY-ULp6G9EYT-Q-G73kfQ2cS4/values/Sheet2!A:R",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "googleSheetsOAuth2Api",
         "options": {}
       },
-      "name": "Leer IDs Excel",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        440,
-        0
-      ],
-      "id": "5a1bb0e3-cfba-4a40-9d6a-5cacae1a628a",
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "eIrQolo2o3XIvmzV",
@@ -61,19 +59,49 @@
       }
     },
     {
+      "id": "9a4e8a83-b7c7-4d95-b930-46f28b0245ac",
+      "name": "Buscar documento",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        672,
+        0
+      ],
       "parameters": {
-        "jsCode": "// Prepara la fila del Excel \"Ibercaja datos básicos\" (Sheet2) para este deal.\n// Sustituye al Zapier 338662427: 1 escritura por envío, sin duplicados (upsert por ID en col A),\n// importes como números y B = email oficina / C = Dirección Territorial.\nconst input = $('Entrada').first().json;\nconst deal = input.dealGeneral || {};\nconst bank = input.bankDeal || {};\nconst rv = (v) => (v && typeof v === 'object' && 'value' in v) ? v.value : (v ?? '');\nconst pick = (key) => { const b = rv(bank[key]); return (b !== '' && b !== null) ? b : rv(deal[key]); };\nconst num = (v) => { const n = Number(String(v ?? '').replace(/[^0-9.,-]/g, '').replace(',', '.')); return Number.isFinite(n) && String(v ?? '') !== '' ? n : ''; };\nconst provinciaMap = {\n  '2553': 'Albacete', '2554': 'Alicante/Alacant', '2555': 'Almería',\n  '2556': 'Araba/Álava', '2557': 'Asturias', '2558': 'Ávila',\n  '2559': 'Badajoz', '2560': 'Balears, Illes', '2561': 'Barcelona',\n  '2562': 'Bizkaia', '2563': 'Burgos', '2564': 'Cáceres',\n  '2565': 'Cádiz', '2566': 'Cantabria', '2567': 'Castellón/Castelló',\n  '2568': 'Ciudad Real', '2569': 'Córdoba', '2570': 'Coruña, A',\n  '2571': 'Cuenca', '2572': 'Gipuzkoa', '2573': 'Girona',\n  '2574': 'Granada', '2575': 'Guadalajara', '2576': 'Huelva',\n  '2577': 'Huesca', '2578': 'Jaén', '2579': 'León',\n  '2580': 'Lleida', '2581': 'Lugo', '2582': 'Madrid',\n  '2583': 'Málaga', '2584': 'Murcia', '2585': 'Navarra',\n  '2586': 'Ourense', '2587': 'Palencia', '2588': 'Palmas, Las',\n  '2589': 'Pontevedra', '2590': 'Rioja, La', '2591': 'Salamanca',\n  '2592': 'Santa Cruz de Tenerife', '2593': 'Segovia', '2594': 'Sevilla',\n  '2595': 'Soria', '2596': 'Tarragona', '2597': 'Teruel',\n  '2598': 'Toledo', '2599': 'Valencia/València', '2600': 'Valladolid',\n  '2601': 'Zamora', '2602': 'Zaragoza', '2603': 'Ceuta',\n  '2604': 'Melilla', '2605': 'Canarias', '3052': 'Vitoria',\n  '3053': 'Oviedo', '3113': 'TBC'\n};\nconst tipoCompraMap = {\n  '2547': 'Primera residencia', '2548': 'Segunda residencia',\n  '2549': 'Inversión', '2550': 'Cambio de hipoteca',\n  '2551': 'Extinción de condominio', '2552': 'Autopromoción'\n};\n\nconst bankDealId = Number(bank.id || input.bankDealId);\nif (!bankDealId) throw new Error('Falta bankDeal.id');\n\nconst provincia = provinciaMap[String(pick('15edcbc34620af8067c2413c2d9793b2a6bba3ba'))] || '';\nconst tipoOperacion = tipoCompraMap[String(pick('bc2fb38a576f000bd311e49d4da2dd20dbf9439b'))] || '';\nconst titular2 = pick('209a0da7966a29bf05e96b6a124536222e0318dd');\n\n// Oficina por provincia (\"Lista Actualizada\": A provincia, C código, D email, G territorial)\nconst norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();\nconst keys = (s) => [norm(s), norm(String(s).split('/')[0]), norm(String(s).split('/')[1] || '')].filter(Boolean);\nconst oficinas = ($('Leer oficinas').first().json.values || []).slice(1);\nconst wanted = keys(provincia);\nconst of = oficinas.find(r => keys(r[0]).some(k => wanted.includes(k)));\nconst email = of ? (String(of[3] || '').trim() || (of[2] ? `2085.${String(of[2]).trim()}@ibercaja.es` : '')) : '';\nconst territorial = of ? String(of[6] || '').trim() : '';\n\n// Fila destino: la del mismo ID en col A (upsert) o la primera libre\nconst colA = ($('Leer IDs Excel').first().json.values || []).map(r => String(r[0] ?? '').trim());\nlet rowIdx = colA.findIndex((v, i) => i > 0 && v === String(bankDealId));\nconst updated = rowIdx > 0;\nif (!updated) rowIdx = colA.length;          // 0-based → fila siguiente a la última con datos\nconst r = rowIdx + 1;                          // 1-based para A1 notation\n\nconst data = [\n  { range: `Sheet2!A${r}:L${r}`, values: [[\n    bankDealId,\n    email || (provincia ? `PROVINCIA NO ENCONTRADA: ${provincia}` : 'SIN PROVINCIA'),\n    territorial,\n    deal.person_name || bank.person_name || rv(deal.person_id?.name) || '',\n    pick('60228dc43313b931378ec9bb3f21f7ad7f5a144c'),\n    provincia,\n    titular2,\n    pick('c83f49f1e2fd08f55a16b159dd88802d2b5baa04'),\n    titular2 ? provincia : '',\n    tipoOperacion,\n    num(pick('b80d8ee37cc14ecdd7d8a640a57d6bd85308d5b9')),\n    num(pick('184fc13001dbca74b20c77f0fcfdec161b5cb492')),\n  ]] },\n  { range: `Sheet2!O${r}`, values: [[ num(pick('718ded557b843ad6ec94558a1da186ca063b11ee')) ]] },\n  { range: `Sheet2!Q${r}`, values: [[ provincia ]] },\n  { range: `Sheet2!S${r}`, values: [[ num(pick('e1d74951df7afc36b15725af21f21f8d2f89cff6')) ]] },\n];\n\nreturn [{ json: { bankDealId, row: r, updated, provincia, oficinaEncontrada: !!of, dryRun: !!input.dryRun,\n  body: { valueInputOption: 'USER_ENTERED', data } } }];"
+        "url": "=https://www.googleapis.com/drive/v3/files?q={{ encodeURIComponent(\"'15Twm1s7eRt0vuibuO4lS3LSEAuzMZ8Ba' in parents and trashed=false and name contains '\" + String($('Entrada').first().json.opportunityId || $('Entrada').first().json.dealGeneral?.id || '0') + \"'\") }}&orderBy=createdTime%20desc&pageSize=50&fields=files(id,name,createdTime)&supportsAllDrives=true&includeItemsFromAllDrives=true",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "options": {}
       },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "YgHXlMGu6BPZkHAh",
+          "name": "Juanjo"
+        }
+      }
+    },
+    {
+      "id": "d66f7b22-85ed-40de-b0e4-cb3eeea43fcd",
       "name": "Preparar fila",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        660,
+        880,
         0
       ],
-      "id": "cb4ba281-d007-4a25-8c04-8dd3218331f3"
+      "parameters": {
+        "jsCode": "// Documento \"datos básicos\" de Ibercaja (sustituye Zapier \"Ibercaja Datos de la operación nuevo documento\"\n// + Apps Script generarPlantillasIbercaja). UNA fila y UN documento por Opportunity ID:\n//  - si la fila ya tiene enlace (col R) o ya existe el documento en la carpeta → se reutiliza\n//  - si no → se copia la plantilla, se rellena y se guarda el enlace en R\nconst input = $('Entrada').first().json;\nconst deal = input.dealGeneral || {};\nconst rv = (v) => (v && typeof v === 'object' && 'value' in v) ? v.value : (v ?? '');\nconst pick = (key) => rv(deal[key]);\nconst num = (v) => { const n = Number(String(v ?? '').replace(/[^0-9.,-]/g, '').replace(',', '.')); return Number.isFinite(n) && String(v ?? '') !== '' ? n : ''; };\nconst provinciaMap = {\n  '2553': 'Albacete', '2554': 'Alicante/Alacant', '2555': 'Almería',\n  '2556': 'Araba/Álava', '2557': 'Asturias', '2558': 'Ávila',\n  '2559': 'Badajoz', '2560': 'Balears, Illes', '2561': 'Barcelona',\n  '2562': 'Bizkaia', '2563': 'Burgos', '2564': 'Cáceres',\n  '2565': 'Cádiz', '2566': 'Cantabria', '2567': 'Castellón/Castelló',\n  '2568': 'Ciudad Real', '2569': 'Córdoba', '2570': 'Coruña, A',\n  '2571': 'Cuenca', '2572': 'Gipuzkoa', '2573': 'Girona',\n  '2574': 'Granada', '2575': 'Guadalajara', '2576': 'Huelva',\n  '2577': 'Huesca', '2578': 'Jaén', '2579': 'León',\n  '2580': 'Lleida', '2581': 'Lugo', '2582': 'Madrid',\n  '2583': 'Málaga', '2584': 'Murcia', '2585': 'Navarra',\n  '2586': 'Ourense', '2587': 'Palencia', '2588': 'Palmas, Las',\n  '2589': 'Pontevedra', '2590': 'Rioja, La', '2591': 'Salamanca',\n  '2592': 'Santa Cruz de Tenerife', '2593': 'Segovia', '2594': 'Sevilla',\n  '2595': 'Soria', '2596': 'Tarragona', '2597': 'Teruel',\n  '2598': 'Toledo', '2599': 'Valencia/València', '2600': 'Valladolid',\n  '2601': 'Zamora', '2602': 'Zaragoza', '2603': 'Ceuta',\n  '2604': 'Melilla', '2605': 'Canarias', '3052': 'Vitoria',\n  '3053': 'Oviedo', '3113': 'TBC'\n};\nconst tipoCompraMap = {\n  '2547': 'Primera residencia', '2548': 'Segunda residencia',\n  '2549': 'Inversión', '2550': 'Cambio de hipoteca',\n  '2551': 'Extinción de condominio', '2552': 'Autopromoción'\n};\n\n\nconst oppId = String(input.opportunityId || deal.id || '').trim();\nif (!/^\\d+$/.test(oppId)) throw new Error('Falta Opportunity ID');\nconst nombre = String(input.nombreCliente || deal.person_name || rv(deal.person_id?.name) || '').trim();\n\nconst provincia = provinciaMap[String(pick('15edcbc34620af8067c2413c2d9793b2a6bba3ba'))] || '';\nconst tipoOperacion = tipoCompraMap[String(pick('bc2fb38a576f000bd311e49d4da2dd20dbf9439b'))] || '';\nconst titular2 = pick('209a0da7966a29bf05e96b6a124536222e0318dd');\nconst dni2 = pick('c83f49f1e2fd08f55a16b159dd88802d2b5baa04');\nconst importeHipoteca = num(pick('b80d8ee37cc14ecdd7d8a640a57d6bd85308d5b9'));\nconst importeVivienda = num(pick('184fc13001dbca74b20c77f0fcfdec161b5cb492'));\nconst ltc = importeHipoteca && importeVivienda ? Math.round(importeHipoteca / importeVivienda * 10000) / 100 : '';\nconst plazo = num(pick('718ded557b843ad6ec94558a1da186ca063b11ee'));\nconst dti = num(pick('e1d74951df7afc36b15725af21f21f8d2f89cff6'));\n\n// Oficina por provincia (\"Lista Actualizada\": A provincia, C código, G territorial)\nconst norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();\nconst keys = (s) => [norm(s), norm(String(s).split('/')[0]), norm(String(s).split('/')[1] || '')].filter(Boolean);\nconst oficinas = ($('Leer oficinas').first().json.values || []).slice(1);\nconst wanted = keys(provincia);\nconst of = oficinas.find(r => keys(r[0]).some(k => wanted.includes(k)));\nconst oficina = of ? String(of[2] || '').trim() : '';   // código de oficina (col C), como el Zapier\nconst territorial = of ? String(of[6] || '').trim() : '';\n\n// Fila: la ÚLTIMA con este Opportunity ID en col A (hay duplicados históricos del Zapier) o una nueva al final\nconst rows = $('Leer Excel').first().json.values || [];\nlet rowIdx = -1;\nfor (let i = rows.length - 1; i > 0; i--) if (String(rows[i]?.[0] ?? '').trim() === oppId) { rowIdx = i; break; }\nconst existingRow = rowIdx > 0;\nconst linkFila = existingRow ? String(rows[rowIdx][17] || '').trim() : '';\nif (!existingRow) rowIdx = rows.length;\nconst r = rowIdx + 1;\n\n// Documento ya creado en la carpeta (por el script antiguo o por este flujo)\nconst files = ($('Buscar documento').first().json.files || []).filter(f => String(f.name || '').startsWith(oppId + '-'));\nconst linkDrive = files.length ? `https://docs.google.com/spreadsheets/d/${files[0].id}/edit?usp=drivesdk` : '';\nconst link = linkFila || linkDrive;\n\n// Col B \"Oficina\" = bank mail del deal bancario; si no tiene, código de oficina por provincia\nconst bankMail = String(input.bankMail || rv((input.bankDeal || {})['498dd83b5c5e1f1181c232131933717ceadfda34']) || '').trim();\nconst colOficina = bankMail.includes('@') ? bankMail : (oficina || (provincia ? `PROVINCIA NO ENCONTRADA: ${provincia}` : 'SIN PROVINCIA'));\nconst fila = [oppId, colOficina, territorial,\n  nombre, pick('60228dc43313b931378ec9bb3f21f7ad7f5a144c'), provincia, titular2, dni2, titular2 ? provincia : '',\n  tipoOperacion, importeHipoteca, importeVivienda, ltc, '', plazo, '', provincia];\n\n// Celdas de la plantilla (mismas que generarPlantillasIbercaja)\nconst celdas = [['B3', fila[1]], ['B4', territorial], ['B5', nombre], ['B6', fila[4]], ['B7', provincia],\n  ['B8', titular2], ['B9', dni2], ['B10', fila[8]], ['B11', tipoOperacion], ['B12', importeHipoteca],\n  ['B13', importeVivienda], ['B14', ltc], ['B15', dti], ['B16', plazo], ['B18', provincia]]\n  .map(([range, v]) => ({ range, values: [[v ?? '']] }));\n\nreturn [{ json: {\n  opportunityId: oppId, nombre, docName: `${oppId}-${nombre}`, row: r, existingRow, link,\n  reused: link ? (linkFila ? 'fila' : 'drive') : null, needCreate: !link && !input.dryRun, dryRun: !!input.dryRun,\n  provincia, oficinaEncontrada: !!of, fila, dti,\n  templateBody: { valueInputOption: 'USER_ENTERED', data: celdas },\n} }];"
+      }
     },
     {
+      "id": "14859684-5db1-4da6-b95d-fcdd0d48f41c",
+      "name": "¿Crear documento?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        0
+      ],
       "parameters": {
         "conditions": {
           "options": {
@@ -84,8 +112,107 @@
           },
           "conditions": [
             {
-              "id": "3735d658-84ce-4eac-84c0-411845e85926",
-              "leftValue": "={{ $json.dryRun }}",
+              "id": "b8f8e2f3-58d8-4145-94ee-f8e5c973f3c4",
+              "leftValue": "={{ $json.needCreate }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "976fc925-dafc-4cd6-8f5b-a4984602cddd",
+      "name": "Copiar plantilla",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1328,
+        -128
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.googleapis.com/drive/v3/files/1PIeJSa3I19UhOw0kRcban9UX9SmL5ueCQ8oaLK4lxvo/copy?supportsAllDrives=true",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ name: $json.docName, parents: ['15Twm1s7eRt0vuibuO4lS3LSEAuzMZ8Ba'] }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "YgHXlMGu6BPZkHAh",
+          "name": "Juanjo"
+        }
+      }
+    },
+    {
+      "id": "be42ec88-c334-4c0b-abaf-7bccda686750",
+      "name": "Rellenar plantilla",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1552,
+        -128
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://sheets.googleapis.com/v4/spreadsheets/{{ $json.id }}/values:batchUpdate",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Preparar fila').first().json.templateBody) }}",
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "eIrQolo2o3XIvmzV",
+          "name": "Juanjo"
+        }
+      }
+    },
+    {
+      "id": "5bead155-cc0d-4668-b42e-4edabeafc8f7",
+      "name": "Enlace y fila",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        16
+      ],
+      "parameters": {
+        "jsCode": "// Añade el enlace del documento (reutilizado o recién creado) y prepara la escritura de la fila\nconst p = $('Preparar fila').first().json;\nlet link = p.link, created = false;\nif ($('Copiar plantilla').isExecuted) {\n  const id = $('Copiar plantilla').first().json.id;\n  if (id) { link = `https://docs.google.com/spreadsheets/d/${id}/edit?usp=drivesdk`; created = true; }\n}\nconst r = p.row;\nconst data = [\n  { range: `Sheet2!A${r}:Q${r}`, values: [p.fila] },\n  { range: `Sheet2!S${r}`, values: [[p.dti]] },\n];\nif (link) data.push({ range: `Sheet2!R${r}`, values: [[link]] });\nconst docId = ((link || '').match(/\\/d\\/([a-zA-Z0-9_-]+)/) || [])[1] || '';\n// Documento reutilizado: se vuelve a rellenar y renombrar con los datos actuales (antes se quedaba con los del 1er intento)\nconst refresh = !created && !!docId && !p.dryRun;\nreturn [{ json: { ...p, link, created, docId, refresh, body: { valueInputOption: 'USER_ENTERED', data } } }];"
+      }
+    },
+    {
+      "id": "a0f91395-8d9e-47ea-89a8-5a7ad4336a8a",
+      "name": "¿Escribir fila?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1984,
+        16
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "b3317e69-cc16-4160-8344-930bad5e1f64",
+              "leftValue": "={{ $('Enlace y fila').first().json.dryRun }}",
               "rightValue": true,
               "operator": {
                 "type": "boolean",
@@ -97,38 +224,137 @@
           "combinator": "and"
         },
         "options": {}
-      },
-      "name": "¿Escribir?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [
-        880,
-        0
-      ],
-      "id": "b3c55cc9-c3c0-4d08-adf2-d35a46fba414"
+      }
     },
     {
+      "id": "f86e0688-6fe4-40a5-861b-8d24c57cad09",
+      "name": "Escribir fila",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2208,
+        -112
+      ],
       "parameters": {
         "method": "POST",
         "url": "https://sheets.googleapis.com/v4/spreadsheets/14txmC7MoGGvqkk8Oz8XY-ULp6G9EYT-Q-G73kfQ2cS4/values:batchUpdate",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "googleSheetsOAuth2Api",
-        "options": {},
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($json.body) }}"
+        "jsonBody": "={{ JSON.stringify($('Enlace y fila').first().json.body) }}",
+        "options": {}
       },
-      "name": "Escribir Excel",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        1100,
-        -80
-      ],
-      "id": "5943e8b0-d6f9-4d5f-ba11-9bf902a6fc1f",
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "eIrQolo2o3XIvmzV",
+          "name": "Juanjo"
+        }
+      }
+    },
+    {
+      "id": "7e99e2b1-8316-4fdc-bcce-47f86d186501",
+      "name": "Resultado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2432,
+        32
+      ],
+      "parameters": {
+        "jsCode": "const j = $('Enlace y fila').first().json;\nreturn [{ json: { ok: !!j.link, opportunityId: j.opportunityId, docName: j.docName, link: j.link, created: j.created,\n  reused: j.reused, refreshed: $('Renombrar documento').isExecuted, row: j.row, existingRow: j.existingRow, dryRun: j.dryRun, provincia: j.provincia, oficinaEncontrada: j.oficinaEncontrada } }];"
+      }
+    },
+    {
+      "id": "6f7f4f12-3fa1-4fcc-ac5d-26e0f6f26ce8",
+      "name": "¿Refrescar documento?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1872,
+        240
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cea57d57-3aad-46a1-a8d2-f12128cb6caa",
+              "leftValue": "={{ $json.refresh }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "10de7172-96bc-4d5a-8f1c-4200f13d6763",
+      "name": "Refrescar plantilla",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "onError": "continueRegularOutput",
+      "position": [
+        2096,
+        320
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://sheets.googleapis.com/v4/spreadsheets/{{ $('Enlace y fila').first().json.docId }}/values:batchUpdate",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Preparar fila').first().json.templateBody) }}",
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "eIrQolo2o3XIvmzV",
+          "name": "Juanjo"
+        }
+      }
+    },
+    {
+      "id": "7ea60dae-d2cd-427b-b7a5-c511d05ede7c",
+      "name": "Renombrar documento",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "onError": "continueRegularOutput",
+      "position": [
+        2320,
+        320
+      ],
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://www.googleapis.com/drive/v3/files/{{ $('Enlace y fila').first().json.docId }}?supportsAllDrives=true",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ name: $('Enlace y fila').first().json.docName }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "YgHXlMGu6BPZkHAh",
           "name": "Juanjo"
         }
       }
@@ -150,14 +376,25 @@
       "main": [
         [
           {
-            "node": "Leer IDs Excel",
+            "node": "Leer Excel",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Leer IDs Excel": {
+    "Leer Excel": {
+      "main": [
+        [
+          {
+            "node": "Buscar documento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar documento": {
       "main": [
         [
           {
@@ -172,28 +409,138 @@
       "main": [
         [
           {
-            "node": "¿Escribir?",
+            "node": "¿Crear documento?",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "¿Escribir?": {
+    "¿Crear documento?": {
       "main": [
         [
           {
-            "node": "Escribir Excel",
+            "node": "Copiar plantilla",
             "type": "main",
             "index": 0
           }
         ],
-        []
+        [
+          {
+            "node": "Enlace y fila",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Copiar plantilla": {
+      "main": [
+        [
+          {
+            "node": "Rellenar plantilla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rellenar plantilla": {
+      "main": [
+        [
+          {
+            "node": "Enlace y fila",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enlace y fila": {
+      "main": [
+        [
+          {
+            "node": "¿Refrescar documento?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Escribir fila?": {
+      "main": [
+        [
+          {
+            "node": "Escribir fila",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Escribir fila": {
+      "main": [
+        [
+          {
+            "node": "Resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Refrescar documento?": {
+      "main": [
+        [
+          {
+            "node": "Refrescar plantilla",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "¿Escribir fila?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Refrescar plantilla": {
+      "main": [
+        [
+          {
+            "node": "Renombrar documento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Renombrar documento": {
+      "main": [
+        [
+          {
+            "node": "¿Escribir fila?",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     }
   },
   "settings": {
     "executionOrder": "v1",
-    "callerPolicy": "workflowsFromSameOwner"
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": true,
+    "binaryMode": "separate"
   }
 }

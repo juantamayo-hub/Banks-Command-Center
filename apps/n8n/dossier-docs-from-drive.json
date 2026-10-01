@@ -1,0 +1,819 @@
+{
+  "name": "SUB - Get Dossier Docs From Drive",
+  "nodes": [
+    {
+      "id": "30e06b01-5dff-435d-9498-0f7f84f339aa",
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -2688,
+        400
+      ],
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "deal_id"
+            },
+            {
+              "name": "folder_link"
+            },
+            {
+              "name": "dni_t1"
+            },
+            {
+              "name": "dni_t2"
+            },
+            {
+              "name": "nombre_t2"
+            },
+            {
+              "name": "numero_expediente"
+            },
+            {
+              "name": "person_name_t1"
+            },
+            {
+              "name": "portada_url"
+            },
+            {
+              "name": "row_num"
+            },
+            {
+              "name": "Asesor"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "4f38bea3-75ea-4800-94e7-f74b95698400",
+      "name": "Prepare Drive Query",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2464,
+        400
+      ],
+      "parameters": {
+        "jsCode": "const input = $input.first()?.json || {};\n\nfunction extractFolderId(value) {\n  const raw = String(value || '').trim();\n  if (!raw) return '';\n\n  // Common forms:\n  // https://drive.google.com/drive/folders/<ID>\n  // https://drive.google.com/open?id=<ID>\n  // Plain folder ID\n  const foldersMatch = raw.match(/\\/folders\\/([a-zA-Z0-9_-]+)/);\n  if (foldersMatch) return foldersMatch[1];\n\n  const idMatch = raw.match(/[?&]id=([a-zA-Z0-9_-]+)/);\n  if (idMatch) return idMatch[1];\n\n  const parts = raw.split('/').filter(Boolean);\n  const maybeId = parts.find(part => /^[a-zA-Z0-9_-]{20,}$/.test(part));\n  return maybeId || raw;\n}\n\nfunction cleanDni(value) {\n  return String(value || '').replace(/\\s+/g, '').toUpperCase();\n}\n\nconst folderId = extractFolderId(input.folder_link || input.folder_id);\nconst codes = ['C003','C004','C005','C006','C007','C008','D003','D004','D005','D006','D007','D008'];\nconst qCodes = codes.map(code => `name contains '${code}'`).join(' or ');\n\nif (!folderId) {\n  return [{\n    json: {\n      ...input,\n      folder_id: '',\n      drive_q: '',\n      has_folder: false,\n      error: 'No folder ID could be extracted from folder_link'\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    ...input,\n    folder_id: folderId,\n    dni_t1_clean: cleanDni(input.dni_t1),\n    dni_t2_clean: cleanDni(input.dni_t2),\n    has_second_holder: Boolean(input.nombre_t2) && String(input.nombre_t2).trim().toUpperCase() !== 'NO TIENE',\n    has_folder: true,\n    drive_q: `'${folderId}' in parents and trashed=false and (${qCodes})`\n  }\n}];"
+      }
+    },
+    {
+      "id": "c13636f7-cd34-4150-9d1b-8f4f402032da",
+      "name": "IF Folder Link Found",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -2240,
+        400
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "248642a6-dd4a-4714-976f-8b977ee5f70e",
+              "leftValue": "={{ $json.has_folder }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "75f5efed-ca4a-489c-8f86-3461b2408f5a",
+      "name": "Search Drive Files",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
+      "position": [
+        -2016,
+        304
+      ],
+      "parameters": {
+        "url": "https://www.googleapis.com/drive/v3/files",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $json.drive_q }}"
+            },
+            {
+              "name": "fields",
+              "value": "files(id,name,mimeType,webViewLink,webContentLink,size,parents)"
+            },
+            {
+              "name": "supportsAllDrives",
+              "value": "true"
+            },
+            {
+              "name": "includeItemsFromAllDrives",
+              "value": "true"
+            },
+            {
+              "name": "pageSize",
+              "value": "100"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "YgHXlMGu6BPZkHAh",
+          "name": "Juanjo"
+        }
+      }
+    },
+    {
+      "id": "1d0a1778-1561-453a-add8-8c0bb745f732",
+      "name": "Explode Drive Files",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1792,
+        304
+      ],
+      "parameters": {
+        "jsCode": "const meta = $('Prepare Drive Query').first().json;\nconst files = $input.first()?.json?.files || [];\n\nconst map = {\n  C003: { field: 'Adjuntar DNI', holder: 't1', decrypt: false },\n  C004: { field: 'Vida laboral', holder: 't1', decrypt: false },\n  C005: { field: '3 últimas nóminas', holder: 't1', decrypt: true },\n  C006: { field: 'Contrato de trabajo', holder: 't1', decrypt: false },\n  C007: { field: 'IRPF o Certificado de Retenciones', holder: 't1', decrypt: false },\n  C008: { field: 'Movimientos de cuenta', holder: 't1', decrypt: true },\n\n  D003: { field: 'Adjuntar DNI - Segundo Titular', holder: 't2', decrypt: false },\n  D004: { field: 'Vida Laboral - Segundo Titular', holder: 't2', decrypt: false },\n  D005: { field: '3 últimas nóminas - Segundo Titular', holder: 't2', decrypt: true },\n  D006: { field: 'Contrato de trabajo - Segundo Titular', holder: 't2', decrypt: false },\n  D007: { field: 'IRPF o Certificado de Retenciones - Segundo Titular', holder: 't2', decrypt: false },\n  D008: { field: 'Movimientos de cuenta - Segundo Titular', holder: 't2', decrypt: true },\n};\n\nconst order = Object.keys(map);\n\nconst items = [];\n\nfor (const file of files) {\n  const name = file.name || '';\n  const code = order.find(c => name.includes(c));\n  if (!code) continue;\n\n  const config = map[code];\n\n  // Archivos vacíos (0 bytes) en la carpeta: PDF.co no puede leerlos y hacen fallar el merge completo\n  // (\"Input file is damaged…\") o el desencriptado (timeout). Se ignoran; el resto del dossier sigue igual.\n  if (file.size !== undefined && file.size !== null && Number(file.size) === 0) continue;\n\n  if (config.holder === 't2' && !meta.has_second_holder) {\n    continue;\n  }\n\n  const isPdf = file.mimeType === 'application/pdf' || /\\.pdf$/i.test(name);\n  const password = config.holder === 't2' ? meta.dni_t2_clean : meta.dni_t1_clean;\n  const needsDecrypt = Boolean(config.decrypt && isPdf && password);\n\n  items.push({\n    json: {\n      id: file.id,\n      name,\n      filename: name,\n      mimeType: file.mimeType,\n      size: file.size ? Number(file.size) : null,\n      code,\n      field: config.field,\n      holder: config.holder,\n      needsDecrypt,\n      password,\n      order: order.indexOf(code),\n      webViewLink: file.webViewLink,\n      webContentLink: file.webContentLink,\n      source: 'drive_fallback'\n    }\n  });\n}\n\nitems.sort((a, b) => {\n  const ao = a.json.order ?? 999;\n  const bo = b.json.order ?? 999;\n  if (ao !== bo) return ao - bo;\n  return String(a.json.name).localeCompare(String(b.json.name), 'es');\n});\n\nif (items.length === 0) {\n  return [{\n    json: {\n      _empty: true,\n      source: 'drive_fallback',\n      deal_id: meta.deal_id,\n      nombre_t2: meta.nombre_t2,\n      message: 'No matching C/D dossier documents found in Drive folder'\n    }\n  }];\n}\n\nreturn items;"
+      }
+    },
+    {
+      "id": "99207d18-9130-4e63-bf76-6e3e9ca5f8bc",
+      "name": "IF Has Drive Files",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1568,
+        304
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "6d23f706-c8f0-4c8c-a546-44f02696fb30",
+              "leftValue": "={{ !$json._empty }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "4de39a3b-24a8-4cc1-ac85-33c117a2f619",
+      "name": "Share Drive File Publicly",
+      "notes": "Comparte cada archivo como reader/anyone para que PDF.co pueda descargarlo.",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "onError": "continueRegularOutput",
+      "position": [
+        -1344,
+        208
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://www.googleapis.com/drive/v3/files/{{ $json.id }}/permissions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "supportsAllDrives",
+              "value": "true"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"role\": \"reader\",\n  \"type\": \"anyone\"\n}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "YgHXlMGu6BPZkHAh",
+          "name": "Juanjo"
+        }
+      }
+    },
+    {
+      "id": "12e10f4e-9af4-43bc-8e7b-16ceae22161a",
+      "name": "Prepare File URLs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1120,
+        208
+      ],
+      "parameters": {
+        "jsCode": "const originalItems = $('Explode Drive Files').all().map(item => item.json);\nconst currentItems = $input.all();\n\nreturn currentItems.map((item, index) => {\n  const original = originalItems[index] || item.json || {};\n  const publicUrl = `https://drive.google.com/uc?export=download&id=${original.id}`;\n\n  return {\n    json: {\n      ...original,\n      url: publicUrl,\n      publicUrl,\n      share_error: item.json?.error?.message || null\n    }\n  };\n});"
+      }
+    },
+    {
+      "id": "c9b34524-68e7-4770-95bb-1f96eaf9bf52",
+      "name": "PDF.co Remove Security",
+      "notes": "Solo recibe archivos que realmente requieren intento de desencriptado. Si PDF.co no puede abrir el PDF con el DNI, el siguiente nodo excluye ese documento del merge y notifica.",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "onError": "continueRegularOutput",
+      "position": [
+        -448,
+        128
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.pdf.co/v1/pdf/security/remove",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": \"{{ $json.publicUrl }}\",\n  \"password\": \"{{ $json.password }}\",\n  \"name\": \"unlocked_{{ $json.filename }}\",\n  \"async\": false\n}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "hnbiyeeguU8ba3oG",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "id": "4022b38c-52bc-42a7-a7b0-97691914f224",
+      "name": "Apply Drive Decrypt Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        560,
+        128
+      ],
+      "parameters": {
+        "jsCode": "const originals = $('Prepare File URLs').all().map((item, index) => ({\n  ...(item.json || {}),\n  _originalIndex: index,\n}));\n\nconst requests = $('Prepare Drive Decrypt Requests')\n  .all()\n  .map(item => item.json || {})\n  .filter(item => !item._no_decrypt_requests);\n\nconst responses = $input.all().map(item => item.json || {});\n\nfunction readMessage(response) {\n  return String(\n    response.message ||\n    response.error?.message ||\n    response.error ||\n    response.body?.message ||\n    response.body?.error ||\n    'PDF.co security/remove did not return a decrypted URL'\n  );\n}\n\nfunction isBenignNotEncrypted(message) {\n  return /not\\s+(encrypted|protected|secured)|not\\s+password\\s+protected|no\\s+password|password\\s+(is\\s+)?not\\s+required|does\\s+not\\s+require\\s+a\\s+password|document\\s+is\\s+not\\s+encrypted/i.test(message);\n}\n\nconst byOriginalIndex = new Map();\n\nresponses.forEach((response, responseIndex) => {\n  const request = requests[responseIndex] || {};\n  if (request._originalIndex === undefined) return;\n\n  const ok = response.error === false && Boolean(response.url);\n  const message = readMessage(response);\n  const benignNotEncrypted = !ok && isBenignNotEncrypted(message);\n\n  byOriginalIndex.set(request._originalIndex, {\n    ok,\n    url: response.url || null,\n    message,\n    benignNotEncrypted,\n  });\n});\n\nreturn originals.map(original => {\n  const result = byOriginalIndex.get(original._originalIndex);\n\n  // Files that never needed decrypt keep their original public URL.\n  if (!original.needsDecrypt) {\n    return {\n      json: {\n        ...original,\n        original_url: original.publicUrl || original.url,\n        url: original.publicUrl || original.url,\n        decrypted: false,\n        decrypt_failed: false,\n        excluded_from_merge: false,\n        decrypt_error: null,\n      }\n    };\n  }\n\n  // PDF.co succeeded: use the unlocked URL.\n  if (result?.ok && result.url) {\n    return {\n      json: {\n        ...original,\n        original_url: original.publicUrl || original.url,\n        url: result.url,\n        decrypted: true,\n        decrypt_failed: false,\n        excluded_from_merge: false,\n        decrypt_error: null,\n      }\n    };\n  }\n\n  // PDF was not actually encrypted: keep the original URL.\n  if (result?.benignNotEncrypted) {\n    return {\n      json: {\n        ...original,\n        original_url: original.publicUrl || original.url,\n        url: original.publicUrl || original.url,\n        decrypted: false,\n        decrypt_failed: false,\n        excluded_from_merge: false,\n        decrypt_error: null,\n      }\n    };\n  }\n\n  // PDF.co could not unlock it with the available DNI: exclude it from the merge.\n  return {\n    json: {\n      ...original,\n      original_url: original.publicUrl || original.url,\n      url: null,\n      decrypted: false,\n      decrypt_failed: true,\n      excluded_from_merge: true,\n      decrypt_error: result?.message || 'PDF.co could not decrypt this file with the available DNI',\n    }\n  };\n});"
+      }
+    },
+    {
+      "id": "04acc53e-4082-4edd-a332-8204240bea1c",
+      "name": "Build Airtable Shape",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        224
+      ],
+      "parameters": {
+        "jsCode": "const meta = $('Prepare Drive Query').first().json;\nconst inputItems = $input.all().map(item => item.json || {});\nconst docs = inputItems.filter(item => !item._empty && item.url);\nconst failedDecryptDocs = inputItems.filter(item => item.decrypt_failed && item.excluded_from_merge);\n\nconst fields = [\n  'Adjuntar DNI',\n  'Vida laboral',\n  '3 últimas nóminas',\n  'Contrato de trabajo',\n  'IRPF o Certificado de Retenciones',\n  'Movimientos de cuenta',\n  'Adjuntar DNI - Segundo Titular',\n  'Vida Laboral - Segundo Titular',\n  '3 últimas nóminas - Segundo Titular',\n  'Contrato de trabajo - Segundo Titular',\n  'IRPF o Certificado de Retenciones - Segundo Titular',\n  'Movimientos de cuenta - Segundo Titular'\n];\n\nconst record = {\n  id: `drive_fallback_${meta.deal_id || Date.now()}`,\n  __source: 'drive_fallback',\n  deal_id: meta.deal_id,\n  folder_id: meta.folder_id,\n  nombre_t2: meta.nombre_t2,\n  numero_expediente: meta.numero_expediente,\n  person_name_t1: meta.person_name_t1,\n  row_num: meta.row_num || '',\n  Asesor: meta.Asesor || meta.asesor || '',\n  docs_found_count: docs.length,\n  docs_excluded_count: failedDecryptDocs.length,\n  decrypted_count: docs.filter(d => d.decrypted).length,\n  decrypt_failed_count: failedDecryptDocs.length,\n  excluded_documents: failedDecryptDocs.map(d => ({\n    field: d.field,\n    code: d.code,\n    holder: d.holder,\n    filename: d.filename || d.name,\n    original_url: d.original_url || d.publicUrl || d.url,\n    decrypt_error: d.decrypt_error || null,\n  })),\n};\n\nfor (const field of fields) {\n  record[field] = [];\n}\n\nfor (const doc of docs) {\n  if (!record[doc.field]) record[doc.field] = [];\n  record[doc.field].push({\n    url: doc.url,\n    size: doc.size,\n    filename: doc.filename || doc.name,\n    id: doc.id,\n    code: doc.code,\n    source: 'drive_fallback',\n    decrypted: Boolean(doc.decrypted),\n    decrypt_failed: Boolean(doc.decrypt_failed),\n    excluded_from_merge: false\n  });\n}\n\nreturn [{ json: record }];"
+      }
+    },
+    {
+      "id": "1035470a-d8e2-4d6f-8250-38f56f6a35ca",
+      "name": "Build Airtable Shape Empty",
+      "notes": "Devuelve un record vacío con la misma forma que Airtable para que el workflow principal genere al menos la portada.",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1344,
+        496
+      ],
+      "parameters": {
+        "jsCode": "const meta = $('Prepare Drive Query').first().json;\nconst inputItems = $input.all().map(item => item.json || {});\nconst docs = inputItems.filter(item => !item._empty && item.url);\nconst failedDecryptDocs = inputItems.filter(item => item.decrypt_failed && item.excluded_from_merge);\n\nconst fields = [\n  'Adjuntar DNI',\n  'Vida laboral',\n  '3 últimas nóminas',\n  'Contrato de trabajo',\n  'IRPF o Certificado de Retenciones',\n  'Movimientos de cuenta',\n  'Adjuntar DNI - Segundo Titular',\n  'Vida Laboral - Segundo Titular',\n  '3 últimas nóminas - Segundo Titular',\n  'Contrato de trabajo - Segundo Titular',\n  'IRPF o Certificado de Retenciones - Segundo Titular',\n  'Movimientos de cuenta - Segundo Titular'\n];\n\nconst record = {\n  id: `drive_fallback_${meta.deal_id || Date.now()}`,\n  __source: 'drive_fallback',\n  deal_id: meta.deal_id,\n  folder_id: meta.folder_id,\n  nombre_t2: meta.nombre_t2,\n  numero_expediente: meta.numero_expediente,\n  person_name_t1: meta.person_name_t1,\n  row_num: meta.row_num || '',\n  Asesor: meta.Asesor || meta.asesor || '',\n  docs_found_count: docs.length,\n  docs_excluded_count: failedDecryptDocs.length,\n  decrypted_count: docs.filter(d => d.decrypted).length,\n  decrypt_failed_count: failedDecryptDocs.length,\n  excluded_documents: failedDecryptDocs.map(d => ({\n    field: d.field,\n    code: d.code,\n    holder: d.holder,\n    filename: d.filename || d.name,\n    original_url: d.original_url || d.publicUrl || d.url,\n    decrypt_error: d.decrypt_error || null,\n  })),\n};\n\nfor (const field of fields) {\n  record[field] = [];\n}\n\nfor (const doc of docs) {\n  if (!record[doc.field]) record[doc.field] = [];\n  record[doc.field].push({\n    url: doc.url,\n    size: doc.size,\n    filename: doc.filename || doc.name,\n    id: doc.id,\n    code: doc.code,\n    source: 'drive_fallback',\n    decrypted: Boolean(doc.decrypted),\n    decrypt_failed: Boolean(doc.decrypt_failed),\n    excluded_from_merge: false\n  });\n}\n\nreturn [{ json: record }];"
+      }
+    },
+    {
+      "id": "5a3f4049-c34f-4cd2-9147-f626b1619216",
+      "name": "Prepare Drive Decrypt Requests",
+      "notes": "Filtra para que PDF.co solo se ejecute sobre C005/C008/D005/D008 que sean PDFs y tengan DNI disponible.",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -896,
+        208
+      ],
+      "parameters": {
+        "jsCode": "const originals = $('Prepare File URLs').all().map((item, index) => ({\n  ...(item.json || {}),\n  _originalIndex: index,\n}));\n\nconst requests = originals.filter(item => item.needsDecrypt);\n\nif (requests.length === 0) {\n  return [{\n    json: {\n      _no_decrypt_requests: true,\n      total_files: originals.length,\n      message: 'No Drive files require PDF.co decrypt'\n    }\n  }];\n}\n\nreturn requests.map(item => ({ json: item }));"
+      }
+    },
+    {
+      "id": "a935e528-6d9e-40ee-8640-c5d8d02d69ab",
+      "name": "IF Has Drive Decrypt Requests",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -672,
+        208
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "8777066c-d93b-47de-b479-99d216a2c6a0",
+              "leftValue": "={{ !$json._no_decrypt_requests }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "80f5b57f-ce08-4896-93b0-d2974e69e8a5",
+      "name": "Use Original Drive URLs",
+      "notes": "Ruta para casos en los que ningún archivo requiere desencriptado.",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -448,
+        304
+      ],
+      "parameters": {
+        "jsCode": "const originals = $('Prepare File URLs').all().map((item, index) => ({\n  ...(item.json || {}),\n  _originalIndex: index,\n}));\n\nreturn originals.map(original => ({\n  json: {\n    ...original,\n    original_url: original.publicUrl || original.url,\n    url: original.publicUrl || original.url,\n    decrypted: false,\n    decrypt_failed: false,\n    excluded_from_merge: false,\n    decrypt_error: null,\n  }\n}));"
+      }
+    },
+    {
+      "id": "4f871cc3-3c0d-4790-b513-c1a8a4524bf1",
+      "name": "Build Drive Decrypt Failure Notification",
+      "notes": "Solo devuelve output si hubo documentos excluidos por fallo de desencriptado.",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const meta = $('Prepare Drive Query').first().json || {};\nconst items = $input.all().map(item => item.json || {});\nconst failures = items.filter(item => item.decrypt_failed && item.excluded_from_merge);\n\nif (failures.length === 0) {\n  return [];\n}\n\nconst list = failures.map((doc, index) => {\n  const holder = doc.holder === 't2' ? 'Segundo titular' : 'Primer titular';\n  const name = doc.filename || doc.name || doc.id || 'archivo sin nombre';\n  const field = doc.field || doc.code || 'documento';\n  const error = doc.decrypt_error ? ` Error: ${doc.decrypt_error}` : '';\n  return `${index + 1}. ${holder} — ${field} — ${name}.${error}`;\n}).join('\\n');\n\nreturn [{\n  json: {\n    person_name_t1: meta.person_name_t1 || '',\n    Asesor: meta.Asesor || meta.asesor || '',\n    deal_id: meta.deal_id || '',\n    row_num: meta.row_num || '',\n    \"Error msg\": `<@U08USF1LZSP> <@U0A6ZSLGC1Y> ⚠️ Algunos documentos del fallback de Google Drive no se pudieron desencriptar con el DNI disponible y fueron excluidos del merge para que el dossier no falle.\\n\\nDeal ID: ${meta.deal_id || 'N/A'}\\nCliente: ${meta.person_name_t1 || 'N/A'}\\nDocumentos excluidos: ${failures.length}\\n\\n${list}\\n\\nHay que agregarlos manualmente al dossier si corresponden.`\n  }\n}];"
+      }
+    },
+    {
+      "id": "429eda9f-6697-4224-840a-4fb634b86641",
+      "name": "Call NOTIFICATION Drive Decrypt Failure",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        224,
+        0
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "vZvydCyy1v0juarm",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/vZvydCyy1v0juarm",
+          "cachedResultName": "Bayteca — NOTIFICATION"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "person_name_t1": "={{ $json.person_name_t1 }}",
+            "Asesor": "={{ $json.Asesor }}",
+            "deal_id": "={{ $json.deal_id }}",
+            "Error msg": "={{ $json['Error msg'] }}",
+            "row_num": "={{ $json.row_num }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Asesor",
+              "displayName": "Asesor",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "person_name_t1",
+              "displayName": "person_name_t1",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "deal_id",
+              "displayName": "deal_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Error msg",
+              "displayName": "Error msg",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "row_num",
+              "displayName": "row_num",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": true,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "9eaf5c71-efaa-49c4-857d-0e5aee802de9",
+      "name": "Contraseñas alternativas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -336,
+        352
+      ],
+      "parameters": {
+        "jsCode": "// Solo para los PDFs que PDF.co rechazó por contraseña incorrecta: se prueban variantes del mismo DNI/NIE\n// (minúsculas, sin letra final, NIE sin letra inicial o con su número equivalente, solo dígitos).\nconst requests = $('Prepare Drive Decrypt Requests').all().map(i => i.json || {}).filter(r => !r._no_decrypt_requests);\nconst responses = $input.all().map(i => i.json || {});\n\nfunction msg(r) {\n  const raw = r.message || r.error?.message || r.error || '';\n  return typeof raw === 'string' ? raw : JSON.stringify(raw);\n}\nconst wrongPassword = (r) => !(r.error === false && r.url) && /password-protected|incorrect password|invalid password|wrong password|\\b441\\b/i.test(msg(r));\n\nfunction variants(pwd) {\n  const d = String(pwd || '').replace(/[\\s.-]+/g, '').toUpperCase();\n  if (!d) return [];\n  const nie = { X: '0', Y: '1', Z: '2' };\n  const list = [\n    d.toLowerCase(),                                   // 12345678z\n    d.slice(0, -1) + d.slice(-1).toLowerCase(),         // 12345678z / X1234567l\n    d.replace(/[A-Z]$/, ''),                           // 12345678 / X1234567\n    d.replace(/^[XYZ]/, ''),                           // 1234567L (NIE)\n    d.replace(/^[XYZ]/, m => nie[m]),                  // 01234567L (NIE)\n    d.replace(/\\D/g, ''),                              // solo dígitos\n  ];\n  return [...new Set(list)].filter(v => v && v.length >= 5 && v !== d);\n}\n\nconst out = [];\nrequests.forEach((request, idx) => {\n  if (!wrongPassword(responses[idx] || {})) return;\n  for (const p of variants(request.password)) out.push({ json: { ...request, password: p, _reqIndex: idx } });\n});\n\nreturn out.length ? out : [{ json: { _no_retries: true } }];"
+      }
+    },
+    {
+      "id": "ad13d9a2-77b6-4762-9025-b4882c071156",
+      "name": "¿Probar otras contraseñas?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -112,
+        352
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cd9d7536-5026-4ccd-b585-b544d4160c86",
+              "leftValue": "={{ !$json._no_retries }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "1ec8c76b-10ab-4b89-8e65-069fa117d4e5",
+      "name": "PDF.co Remove Security (variantes DNI)",
+      "notes": "Mismo paso que PDF.co Remove Security, con variantes del DNI para los PDFs con contraseña incorrecta.",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "onError": "continueRegularOutput",
+      "position": [
+        112,
+        288
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.pdf.co/v1/pdf/security/remove",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": \"{{ $json.publicUrl }}\",\n  \"password\": \"{{ $json.password }}\",\n  \"name\": \"unlocked_{{ $json.filename }}\",\n  \"async\": false\n}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "hnbiyeeguU8ba3oG",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "id": "5c256914-b64d-4c45-bc41-c0221de0b67b",
+      "name": "Consolidar desencriptado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        336,
+        352
+      ],
+      "parameters": {
+        "jsCode": "// Una respuesta por documento (mismo orden que 'Prepare Drive Decrypt Requests'):\n// la del primer intento, o la de la variante de contraseña que haya funcionado.\nconst ok = r => r && r.error === false && Boolean(r.url);\nconst finalResponses = $('PDF.co Remove Security').all().map(i => i.json || {});\n\nif ($('PDF.co Remove Security (variantes DNI)').isExecuted) {\n  const tries = $('Contraseñas alternativas').all().map(i => i.json || {});\n  const res = $('PDF.co Remove Security (variantes DNI)').all().map(i => i.json || {});\n  tries.forEach((t, k) => {\n    if (ok(res[k]) && !ok(finalResponses[t._reqIndex])) finalResponses[t._reqIndex] = { ...res[k], password_variant_used: true };\n  });\n}\n\nreturn finalResponses.map(r => ({ json: r }));"
+      }
+    }
+  ],
+  "connections": {
+    "Prepare Drive Query": {
+      "main": [
+        [
+          {
+            "node": "IF Folder Link Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Folder Link Found": {
+      "main": [
+        [
+          {
+            "node": "Search Drive Files",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Airtable Shape Empty",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Drive Files": {
+      "main": [
+        [
+          {
+            "node": "Explode Drive Files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Explode Drive Files": {
+      "main": [
+        [
+          {
+            "node": "IF Has Drive Files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Has Drive Files": {
+      "main": [
+        [
+          {
+            "node": "Share Drive File Publicly",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Airtable Shape Empty",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Share Drive File Publicly": {
+      "main": [
+        [
+          {
+            "node": "Prepare File URLs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare File URLs": {
+      "main": [
+        [
+          {
+            "node": "Prepare Drive Decrypt Requests",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PDF.co Remove Security": {
+      "main": [
+        [
+          {
+            "node": "Contraseñas alternativas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Prepare Drive Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Drive Decrypt Requests": {
+      "main": [
+        [
+          {
+            "node": "IF Has Drive Decrypt Requests",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Has Drive Decrypt Requests": {
+      "main": [
+        [
+          {
+            "node": "PDF.co Remove Security",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Use Original Drive URLs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apply Drive Decrypt Results": {
+      "main": [
+        [
+          {
+            "node": "Build Airtable Shape",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build Drive Decrypt Failure Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Use Original Drive URLs": {
+      "main": [
+        [
+          {
+            "node": "Build Airtable Shape",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build Drive Decrypt Failure Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Drive Decrypt Failure Notification": {
+      "main": [
+        [
+          {
+            "node": "Call NOTIFICATION Drive Decrypt Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Contraseñas alternativas": {
+      "main": [
+        [
+          {
+            "node": "¿Probar otras contraseñas?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Probar otras contraseñas?": {
+      "main": [
+        [
+          {
+            "node": "PDF.co Remove Security (variantes DNI)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Consolidar desencriptado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PDF.co Remove Security (variantes DNI)": {
+      "main": [
+        [
+          {
+            "node": "Consolidar desencriptado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consolidar desencriptado": {
+      "main": [
+        [
+          {
+            "node": "Apply Drive Decrypt Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  }
+}
