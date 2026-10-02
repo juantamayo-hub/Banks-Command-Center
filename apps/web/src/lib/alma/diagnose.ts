@@ -205,7 +205,7 @@ export function diagnose(input: DiagnoseInput, banco?: string | null): Diagnosis
     if (!match(name) || p.dismissed_at) continue
     out.push(p.sent_at
       ? { banco: name, estado: 'enviado', motivo: 'sent', explicacion: `Se marcó como enviado por plataforma el ${fechaMadrid(p.sent_at)}${p.sent_by ? ` (${s(p.sent_by)})` : ''}.`, que_hacer: 'Nada.', es_tecnico: false, evidencias: ['Envíos por plataforma'] }
-      : { banco: name, estado: 'pendiente', motivo: 'platform_pending', explicacion: `${name} se envía a mano por su plataforma y todavía no está marcado como enviado.`, que_hacer: 'Enviarlo desde la web del banco y marcarlo en "Envíos por plataforma".', es_tecnico: false, evidencias: ['Envíos por plataforma'] })
+      : { banco: name, estado: 'pendiente', motivo: 'platform_pending', explicacion: `${name} se envía a mano por su plataforma y todavía no está marcado como enviado.`, que_hacer: 'Subirlo desde la web del banco y pulsar «Marcar enviado» en la página «Envíos por plataforma» del Command Center. Si hay notas del equipo, explican por qué sigue pendiente.', es_tecnico: false, evidencias: ['Envíos por plataforma'] })
   }
 
   for (const k of input.kutxabank) {

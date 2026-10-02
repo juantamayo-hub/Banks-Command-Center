@@ -460,10 +460,11 @@ export async function getMetrics(supabase: Admin, dias: number) {
   const d = Math.min(Math.max(Math.round(dias) || 1, 1), 90)
   const from = madridDayStart(d)
   const to = madridDayStart(0)
-  const [envios, envios_hoy, respuestas, caixa, kutxa] = await Promise.all([
+  const [envios, envios_hoy, respuestas, respuestasHoy, caixa, kutxa] = await Promise.all([
     dossierSends(supabase, from, to),
     dossierSends(supabase, to, new Date(Date.now() + 60_000)),
     supabase.rpc('bank_responses_summary', { p_since: from.toISOString() }),
+    supabase.from('bank_responses').select('bank_slug, classification').gte('received_at', to.toISOString()).limit(1000),
     caixaPipeline(supabase, from),
     supabase.from('kutxabank_estados_processed').select('estado_rastreator').gte('processed_at', from.toISOString()).limit(1000),
   ])
@@ -473,13 +474,21 @@ export async function getMetrics(supabase: Admin, dias: number) {
     if (!/[a-záéíóú]{3}/i.test(e) || /^[XYZ]?\d{6,9}[A-Z]$/i.test(e)) continue
     kutxaCount[e] = (kutxaCount[e] ?? 0) + 1
   }
+  const hoy: Record<string, Record<string, number>> = {}
+  for (const r of respuestasHoy.data ?? []) {
+    const b = String(r.bank_slug ?? 'sin banco')
+    const c = String(r.classification ?? 'otro')
+    hoy[b] ??= {}
+    hoy[b][c] = (hoy[b][c] ?? 0) + 1
+  }
   return {
+    respuestas_bancos_hoy: { total: (respuestasHoy.data ?? []).length, por_banco_y_tipo: hoy },
     caixabank: caixa,
     kutxabank_estados_rastreator_en_periodo: kutxaCount,
     periodo: `últimos ${d} día(s) completos (hora de Madrid) + hoy`,
     envios_dossier: { total: envios.total, por_banco: envios.por_banco },
     envios_hoy: { total: envios_hoy.total, por_banco: envios_hoy.por_banco },
-    respuestas_bancos: respuestas.data ?? [],
+    respuestas_bancos_periodo_incluye_hoy: respuestas.data ?? [],
     nota: `Los bancos por plataforma (${PLATFORM_BANKS.join(', ')}) cuentan lo marcado como enviado en "Envíos por plataforma".`,
   }
 }

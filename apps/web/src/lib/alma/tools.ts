@@ -171,6 +171,15 @@ const intArg = (v: unknown) => {
 }
 
 /** Ejecuta una herramienta. Valida la entrada y nunca lanza (los errores vuelven como resultado). */
+const fold = (x: string) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '')
+
+/** Notas que el equipo dejó en el Command Center para ese banco (si no se indica banco, todas). Suelen explicar el motivo real. */
+function notasDelBanco(notas: Array<{ banco: string | null; origen: string; nota: string; fecha: string }>, banco: string | null) {
+  const b = fold(banco ?? '')
+  const out = b ? notas.filter((n) => { const nb = fold(n.banco ?? ''); return !!nb && (nb.includes(b) || b.includes(nb)) }) : notas
+  return out.slice(0, 10)
+}
+
 export async function runAlmaTool(name: string, input: Record<string, unknown>): Promise<ToolOutcome> {
   try {
     const supabase = await createAdminClient()
@@ -204,6 +213,13 @@ export async function runAlmaTool(name: string, input: Record<string, unknown>):
           content: json({
             cliente: deal?.cliente ?? records.filas_hoja[0]?.nombre_cliente ?? null,
             diagnostico: result.length ? result : 'No hay ningún envío registrado para ese banco y cliente.',
+            notas_del_equipo: notasDelBanco(records.notas_equipo_command_center, (input.banco as string) || null),
+            ...(/caixa/i.test(String(input.banco ?? '')) && records.caixabank_estado_peticion.length
+              ? { caixabank_estado_peticion: records.caixabank_estado_peticion.slice(0, 5) }
+              : {}),
+            ...(/kutxa/i.test(String(input.banco ?? '')) && records.kutxabank_estados_rastreator.length
+              ? { kutxabank_estados_rastreator: records.kutxabank_estados_rastreator }
+              : {}),
             dossieres_en_drive: docs?.dossieres ?? `No se pudo consultar Drive: ${drive.error}`,
             enlace_pipedrive: deal?.enlace_pipedrive,
           }),

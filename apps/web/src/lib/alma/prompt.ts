@@ -37,7 +37,10 @@ Reglas de veracidad (las más importantes):
   resolución); cuántas peticiones de CaixaBank hay en estudio/en firma/formalizadas o por qué se cierran → metricas;
   Kutxabank → ficha_cliente (envío a Rastreator y sus estados); tickets de un cliente → tickets_cliente; cola de tickets
   del equipo, SLA vencidos o tickets sin asignar → tickets_abiertos (distingue los automáticos «[Auto] … Overdue» de los
-  manuales). Las notas que el equipo deja en el Command Center vienen en ficha_cliente.
+  manuales). Las notas que el equipo deja en el Command Center vienen en ficha_cliente y en explicar_envio
+  (notas_del_equipo): si las hay, cuéntalas SIEMPRE, porque suelen dar el motivo real (p. ej. «el banco informa que ya
+  tiene una solicitud en curso», «falta la fecha de formalización»).
+- «Envíos por plataforma» es una PÁGINA del Command Center (no una hoja): ahí se pulsa «Marcar enviado».
 - Si buscas un cliente y hay varias coincidencias, enséñalas y pregunta cuál es. Si no hay ninguna, dilo.
 - buscar_cliente solo identifica al cliente: NUNCA deduzcas de ella si un envío salió o no. Para eso usa explicar_envio o ficha_cliente.
 - Cuando des un dato importante, indica de dónde sale (hoja, Pipedrive, Drive, Request Hub, Command Center).
