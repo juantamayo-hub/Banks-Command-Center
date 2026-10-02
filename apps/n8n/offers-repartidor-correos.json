@@ -147,6 +147,35 @@
           "waitForSubWorkflow": false
         }
       }
+    },
+    {
+      "id": "c516f84e-2874-4ac8-a9fd-912e085bf308",
+      "name": "Reprocesar correo (manual)",
+      "webhookId": "d0163dc0-3a0b-4c95-931f-7ba1c839dbeb",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        760,
+        260
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "offers-reprocesar-correo",
+        "options": {}
+      }
+    },
+    {
+      "id": "ca720e91-b1de-403d-aaa2-0115ca64a988",
+      "name": "Validar reproceso",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1020,
+        260
+      ],
+      "parameters": {
+        "jsCode": "// Reprocesa correos concretos en el workflow de su banco (mismo camino que el repartidor), sin tocar etiquetas de Gmail.\n// POST {\"messages\":[{\"id\":\"<gmail id>\",\"banco\":\"Ibercaja_Offers_Received\"}]} con cabecera x-offers-secret.\nconst BANKS = {\"YqQIDjAozwsDAQR1\": \"CRSur_Offers_Received\", \"d3S1y48F0qKoVc6O\": \"Bankinter_Offers_Received_v19\", \"IOIg26EPCqtgCSLv\": \"CRAragón_Offers_Received\", \"12m8gBooQnUpwG14\": \"CRAsturias_Offers_Received\", \"Yd82lkDzorla4x7T\": \"CRGranada_Offers_Received\", \"eoxXdCBbq6zFL2me\": \"CRTeruel_Offers_Received_v3\", \"RezivFIqH10FdaB9\": \"CaixaBank_Offers_Received\", \"O6V1P2efIYpyu1bC\": \"CaixaPopular_Offers_Received_v2\", \"sEQ8HDbHIB3HvPDY\": \"DeutscheBank_Offers_Received\", \"qXIKYBEK2Yr7LWWs\": \"EuroCajaRural_Offers_Received\", \"n35da7vAodC9XUsH\": \"Globalcaja_Offers_Received\", \"IZpYM4yNvwza5ol7\": \"ING_Offers_Received\", \"VI1n8UQng6gAWV8B\": \"Ibercaja_Offers_Received\", \"iMzC4NjXDOlCbPuf\": \"LaboralKutxa_Offers_Received\", \"mxewpxzScRz3jHX2\": \"MyInvestor_Offers_Received_v2\", \"ZtErLRcQa0SwXfZb\": \"Sabadell_Offers_Received_v1\", \"pNOk4VBlVu9PLdKV\": \"UCI_Offers_Received\", \"hY2DR1im7zSNx28E\": \"Unicaja_Offers_Received_v4\"};\nconst req = $input.first().json;\nif ((req.headers || {})['x-offers-secret'] !== $vars.OFFERS_API_SECRET) throw new Error('Unauthorized: secreto inválido');\nconst byName = Object.fromEntries(Object.entries(BANKS).map(([id, n]) => [n.toLowerCase(), id]));\nconst list = Array.isArray(req.body?.messages) ? req.body.messages : [];\nconst out = [];\nfor (const m of list.slice(0, 20)) {\n  const id = String(m.id || '').trim();\n  const workflowId = BANKS[m.workflowId] ? m.workflowId : byName[String(m.banco || '').toLowerCase()];\n  if (!/^[0-9a-f]{12,20}$/i.test(id) || !workflowId) throw new Error('Correo o banco no válido: ' + JSON.stringify(m));\n  out.push({ json: { id, threadId: m.threadId || id, workflowId, banco: BANKS[workflowId], reprocesado: true } });\n}\nif (!out.length) throw new Error('Sin correos que reprocesar');\nreturn out;"
+      }
     }
   ],
   "connections": {
@@ -206,6 +235,28 @@
       ]
     },
     "Correos marcados": {
+      "main": [
+        [
+          {
+            "node": "Procesar en el workflow del banco",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reprocesar correo (manual)": {
+      "main": [
+        [
+          {
+            "node": "Validar reproceso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar reproceso": {
       "main": [
         [
           {
