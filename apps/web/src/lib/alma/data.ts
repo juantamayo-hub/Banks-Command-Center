@@ -93,6 +93,18 @@ export async function searchClients(supabase: Admin, q: string): Promise<ClientH
     const found = await pipedriveGet(`deals/search?term=${encodeURIComponent(term)}&exact_match=false&limit=5`)
     const items = (found?.items as Array<{ item: { id: number; title: string } }> | undefined) ?? []
     for (const it of items) add(it.item.id, it.item.title, null)
+    // Completar con los bancos que el Command Center tiene para esos deals (la búsqueda de Pipedrive no los trae)
+    const ids = [...byOpp.keys()]
+    if (ids.length) {
+      const [s2, p2, k2] = await Promise.all([
+        supabase.from('sheet_rows').select('opportunity_id, nombre_cliente, bank_id').in('opportunity_id', ids),
+        supabase.from('platform_dispatches').select('deal_id, person_name, bank_name').in('deal_id', ids),
+        supabase.from('kutxabank_submissions').select('deal_id, nombre_cliente').in('deal_id', ids),
+      ])
+      for (const r of s2.data ?? []) add(r.opportunity_id, r.nombre_cliente, bankName.get(r.bank_id) ?? null)
+      for (const r of p2.data ?? []) add(r.deal_id, r.person_name, r.bank_name)
+      for (const r of k2.data ?? []) add(r.deal_id, r.nombre_cliente, 'Kutxabank')
+    }
   }
   return [...byOpp.values()].slice(0, 10)
 }
