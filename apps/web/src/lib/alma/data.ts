@@ -474,15 +474,21 @@ export async function getMetrics(supabase: Admin, dias: number) {
     if (!/[a-záéíóú]{3}/i.test(e) || /^[XYZ]?\d{6,9}[A-Z]$/i.test(e)) continue
     kutxaCount[e] = (kutxaCount[e] ?? 0) + 1
   }
+  const TIPO: Record<string, string> = { offer: 'ofertas', more_info: 'mas_info', rejection: 'rechazos', other: 'otros' }
   const hoy: Record<string, Record<string, number>> = {}
+  const porTipo: Record<string, number> = { ofertas: 0, mas_info: 0, rechazos: 0, otros: 0 }
   for (const r of respuestasHoy.data ?? []) {
     const b = String(r.bank_slug ?? 'sin banco')
-    const c = String(r.classification ?? 'otro')
+    const c = TIPO[String(r.classification)] ?? 'otros'
     hoy[b] ??= {}
     hoy[b][c] = (hoy[b][c] ?? 0) + 1
+    porTipo[c] += 1
   }
+  const ofertasPorBanco = Object.fromEntries(
+    Object.entries(hoy).filter(([, v]) => v.ofertas).map(([b, v]) => [b, v.ofertas] as const).sort((a, b) => b[1] - a[1]),
+  )
   return {
-    respuestas_bancos_hoy: { total: (respuestasHoy.data ?? []).length, por_banco_y_tipo: hoy },
+    respuestas_bancos_hoy: { total: (respuestasHoy.data ?? []).length, por_tipo: porTipo, ofertas_por_banco: ofertasPorBanco, por_banco_y_tipo: hoy },
     caixabank: caixa,
     kutxabank_estados_rastreator_en_periodo: kutxaCount,
     periodo: `últimos ${d} día(s) completos (hora de Madrid) + hoy`,
