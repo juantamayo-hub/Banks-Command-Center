@@ -3,8 +3,11 @@ import { Suspense } from 'react'
 import SidebarNav from '@/components/dashboard/SidebarNav'
 import SmartInsights from '@/components/dashboard/SmartInsights'
 import UserMenu from '@/components/auth/UserMenu'
+import AlmaMount, { almaVisibleForCurrentUser } from '@/components/alma/AlmaMount'
 
-export default function DashboardLayout({ children }: { children: ReactNode }) {
+export default async function DashboardLayout({ children }: { children: ReactNode }) {
+  // Alma (chat): solo si está activada en este entorno y el usuario está permitido (staging hasta su aprobación)
+  const showAlma = await almaVisibleForCurrentUser()
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
       {/* Sidebar — Bayteca forest green */}
@@ -32,7 +35,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       </main>
 
       {/* Non-intrusive insight toasts */}
-      <SmartInsights />
+      <SmartInsights raised={showAlma} />
+
+      {showAlma && <AlmaMount />}
     </div>
   )
 }

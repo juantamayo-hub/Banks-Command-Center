@@ -23,7 +23,7 @@ const BG: Record<string, string> = {
   warning: 'from-amber-800 to-amber-900',
 }
 
-export default function SmartInsights() {
+export default function SmartInsights({ raised = false }: { raised?: boolean }) {
   const [insight, setInsight] = useState<Insight | null>(null)
   const [visible, setVisible] = useState(false)
   const [dismissed, setDismissed] = useState(false)
@@ -66,7 +66,7 @@ export default function SmartInsights() {
 
   return (
     <div
-      className={`fixed bottom-5 right-5 z-50 max-w-sm transition-all duration-500 ease-out ${
+      className={`fixed ${raised ? 'bottom-24' : 'bottom-5'} right-5 z-50 max-w-sm transition-all duration-500 ease-out ${
         visible
           ? 'translate-y-0 opacity-100'
           : 'translate-y-4 opacity-0 pointer-events-none'

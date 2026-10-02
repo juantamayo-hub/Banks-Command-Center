@@ -21,6 +21,7 @@
 
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
+import { recordFlowEvents } from '@/lib/flowEvents'
 
 export const dynamic = 'force-dynamic'
 
@@ -139,6 +140,21 @@ export async function POST(req: Request) {
       last_blocked_execution_id: row.execution_id,
     })
     .eq('id', existing.id)
+
+  // Rastro para Alma: el bloqueo no deja nada en la hoja, así se puede explicar después
+  const releaseAt = new Date(Date.parse(existing.claimed_at as string) + DUPLICATE_WINDOW_MS).toISOString()
+  await recordFlowEvents(supabase, [{
+    opportunity_id: opportunityId,
+    bank_deal_id: row.bank_deal_id ?? (existing.bank_deal_id as number | null),
+    bank_slug: bankSlug,
+    workflow: 'dossier_claim',
+    step: 'anti-duplicado',
+    kind: 'antidup_blocked',
+    severity: 'warning',
+    message: `Envío bloqueado por anti-duplicado: ya se envió a las ${existing.claimed_at}; se libera a las ${releaseAt}`,
+    detail: { claimed_at: existing.claimed_at, release_at: releaseAt, source: row.source, workflow_id: row.workflow_id },
+    execution_id: row.execution_id,
+  }])
 
   return NextResponse.json({ allowed: false, reason: 'duplicate', claimed_at: existing.claimed_at })
 }
