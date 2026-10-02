@@ -44,6 +44,8 @@ interface ChatMessage {
   reportMsg?: string
   error?: boolean
   slack?: { destinatario: string; nombre: string; mensaje: string; state: 'draft' | 'sending' | 'sent' | 'error'; info?: string }
+  dbId?: string | null
+  feedback?: { rating: 'up' | 'down'; comment: string; state: 'editing' | 'sending' | 'sent' | 'error'; info?: string }
 }
 
 // ── Formato mínimo y seguro: **negrita**, [texto](url), viñetas y saltos de línea ─────────────
@@ -177,7 +179,7 @@ export default function AlmaChat({ apiBase = '/api/alma', envLabel }: { apiBase?
           else if (ev.type === 'technical') patch(botId, (m) => ({ ...m, technical: ev.resumen as string, report: 'idle' }))
           else if (ev.type === 'slack_draft') patch(botId, (m) => ({ ...m, slack: { destinatario: ev.destinatario as string, nombre: ev.nombre as string, mensaje: ev.mensaje as string, state: 'draft' } }))
           else if (ev.type === 'error') patch(botId, (m) => ({ ...m, text: m.text || (ev.message as string), status: null, error: true }))
-          else if (ev.type === 'done') patch(botId, (m) => ({ ...m, status: null }))
+          else if (ev.type === 'done') patch(botId, (m) => ({ ...m, status: null, dbId: (ev.message_id as string | null) ?? null }))
         }
       }
     } catch {
@@ -220,6 +222,26 @@ export default function AlmaChat({ apiBase = '/api/alma', envLabel }: { apiBase?
       patch(id, (m) => ({ ...m, slack: { ...slack, state: 'error', info: 'No se pudo enviar.' } }))
     }
   }, [apiBase, conversationId, patch])
+
+  const sendFeedback = useCallback(async (id: string, dbId: string, rating: 'up' | 'down', comment: string) => {
+    patch(id, (m) => ({ ...m, feedback: { rating, comment, state: 'sending' } }))
+    try {
+      const res = await fetch(`${apiBase}/feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message_id: dbId, rating, comment }),
+      })
+      const data = await res.json().catch(() => ({}))
+      patch(id, (m) => ({
+        ...m,
+        feedback: res.ok
+          ? { rating, comment, state: 'sent', info: rating === 'up' ? '¡Gracias! 💚' : '¡Gracias! Lo usaremos para que Alma mejore 💪' }
+          : { rating, comment, state: 'error', info: data.error || 'No se pudo guardar.' },
+      }))
+    } catch {
+      patch(id, (m) => ({ ...m, feedback: { rating, comment, state: 'error', info: 'No se pudo guardar.' } }))
+    }
+  }, [apiBase, patch])
 
   const reset = () => {
     setMessages([])
@@ -349,6 +371,69 @@ export default function AlmaChat({ apiBase = '/api/alma', envLabel }: { apiBase?
                               {m.slack.state === 'sending' ? 'Enviando…' : `Enviar a ${m.slack.nombre}`}
                             </button>
                           </>
+                        )}
+                      </div>
+                    )}
+                    {m.dbId && !m.status && !m.error && (
+                      <div className="text-[12px] text-gray-500">
+                        {!m.feedback || (m.feedback.state === 'error' && m.feedback.rating === 'up') ? (
+                          <div className="flex items-center gap-1">
+                            <span className="mr-1">¿Te ha servido?</span>
+                            <button
+                              type="button"
+                              onClick={() => m.dbId && sendFeedback(m.id, m.dbId, 'up', '')}
+                              className="rounded-md px-1.5 py-0.5 text-[14px] hover:bg-gray-200"
+                              aria-label="Respuesta útil"
+                              title="Respuesta útil"
+                            >
+                              👍
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => patch(m.id, (x) => ({ ...x, feedback: { rating: 'down', comment: '', state: 'editing' } }))}
+                              className="rounded-md px-1.5 py-0.5 text-[14px] hover:bg-gray-200"
+                              aria-label="Respuesta mejorable"
+                              title="Respuesta mejorable"
+                            >
+                              👎
+                            </button>
+                            {m.feedback?.state === 'error' && <span className="ml-1 text-red-700">{m.feedback.info}</span>}
+                          </div>
+                        ) : m.feedback.state === 'sent' ? (
+                          <p>{m.feedback.rating === 'up' ? '👍' : '👎'} {m.feedback.info}</p>
+                        ) : (
+                          <div className="rounded-xl bg-white px-3 py-2 ring-1 ring-black/10">
+                            <p className="font-medium text-gray-700">👎 ¿Qué ha fallado?</p>
+                            <textarea
+                              value={m.feedback.comment}
+                              onChange={(e) => {
+                                const value = e.target.value
+                                patch(m.id, (x) => (x.feedback ? { ...x, feedback: { ...x.feedback, comment: value } } : x))
+                              }}
+                              rows={3}
+                              autoFocus
+                              placeholder="Ej.: el dato está mal, no buscó bien al cliente, faltó decir…"
+                              className="mt-1.5 w-full resize-y rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-[12px] text-gray-800 focus:border-bayteca-green focus:outline-none"
+                            />
+                            {m.feedback.state === 'error' && <p className="mt-1 text-red-700">{m.feedback.info}</p>}
+                            <div className="mt-1.5 flex gap-2">
+                              <button
+                                type="button"
+                                disabled={m.feedback.state === 'sending' || !m.feedback.comment.trim()}
+                                onClick={() => m.dbId && m.feedback && sendFeedback(m.id, m.dbId, 'down', m.feedback.comment.trim())}
+                                className="rounded-lg bg-bayteca-green px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-50"
+                              >
+                                {m.feedback.state === 'sending' ? 'Enviando…' : 'Enviar'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => patch(m.id, (x) => ({ ...x, feedback: undefined }))}
+                                className="rounded-lg px-2 py-1.5 text-[12px] text-gray-500 hover:bg-gray-100"
+                              >
+                                Cancelar
+                              </button>
+                            </div>
+                          </div>
                         )}
                       </div>
                     )}

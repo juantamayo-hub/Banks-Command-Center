@@ -402,7 +402,6 @@
   "id": "saludo",
   "cat": "fuera",
   "q": "Hola Alma, ¿qué puedes hacer?",
-  "tools_none": true,
   "any": [
    "cliente",
    "envío",

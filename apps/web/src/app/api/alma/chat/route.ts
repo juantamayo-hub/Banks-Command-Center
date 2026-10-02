@@ -19,6 +19,7 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { almaAuth } from '@/lib/alma/auth'
 import { ALMA_DAILY_MESSAGE_LIMIT, ALMA_MODEL, almaEnv } from '@/lib/alma/config'
 import { ALMA_SYSTEM, almaContext } from '@/lib/alma/prompt'
+import { almaLessons } from '@/lib/alma/lessons'
 import { ALMA_TOOLS, runAlmaTool } from '@/lib/alma/tools'
 import { madridDayStart } from '@/lib/dossierSends'
 
@@ -95,6 +96,7 @@ export async function POST(req: Request) {
       const send = (obj: Record<string, unknown>) => controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`))
       send({ type: 'start', conversation_id: convId })
 
+      const lessons = await almaLessons(supabase)
       let answer = ''
       let technical: { resumen: string } | null = null
       const toolsUsed: Array<{ name: string; input: unknown; ok: boolean }> = []
@@ -108,16 +110,34 @@ export async function POST(req: Request) {
             max_tokens: 8000,
             system: [
               { type: 'text', text: ALMA_SYSTEM, cache_control: { type: 'ephemeral' } },
-              { type: 'text', text: almaContext(who.email, who.app) },
+              { type: 'text', text: [almaContext(who.email, who.app), lessons].filter(Boolean).join('\n\n') },
             ],
             tools: ALMA_TOOLS,
             messages,
           })
+          // El texto corto antes de usar una herramienta ("Voy a buscarlo…", a veces en inglés) no se muestra:
+          // se retiene hasta 160 caracteres y, si la ronda acaba en tool_use, se descarta.
+          let held = ''
+          let flushed = false
           s.on('text', (delta) => {
-            answer += delta
-            send({ type: 'text', delta })
+            if (flushed) {
+              answer += delta
+              send({ type: 'text', delta })
+              return
+            }
+            held += delta
+            if (held.length > 160) {
+              flushed = true
+              answer += held
+              send({ type: 'text', delta: held })
+              held = ''
+            }
           })
           const msg = await s.finalMessage()
+          if (!flushed && held && msg.stop_reason !== 'tool_use') {
+            answer += held
+            send({ type: 'text', delta: held })
+          }
           inTok += msg.usage.input_tokens
           outTok += msg.usage.output_tokens
 

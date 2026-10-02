@@ -7,6 +7,8 @@
 import { PLATFORM_BANKS } from '@/lib/platformDispatch'
 
 export const GMAIL_LIMIT_MB = 25
+// Bancos cuyo envío no pasa por la hoja (plataforma o Rastreator): sus filas de hoja no reflejan el envío
+const NON_SHEET_SLUGS = new Set(['santander', 'bankinter', 'sabadell', 'abanca', 'kutxabank', 'banca_360'])
 
 export interface Diagnosis {
   banco: string
@@ -161,7 +163,22 @@ function diagnoseSheetRow(row: Row, input: DiagnoseInput): Diagnosis {
     return { banco, estado: 'pendiente', motivo: 'not_requested', explicacion: 'Todavía no se ha puesto Enviar=Yes en la fila de este banco.', que_hacer: 'Cuando el expediente esté listo, poner Enviar=Yes.', es_tecnico: false, evidencias: ev }
   }
 
-  // 9) En curso o sin resultado
+  // 9) El flujo registró el envío (reserva anti-duplicado) pero la hoja no se marcó → probablemente salió
+  const claim = input.reservas_envio.find((r) => s(r.bank_slug) === slug)
+  if (claim && /procesando|enviando a n8n|enviado a n8n|esperando/i.test(proc)) {
+    const hace = (Date.now() - Date.parse(s(claim.claimed_at))) / 60000
+    if (hace > 20) {
+      ev.push(`Reserva de envío del flujo: ${fechaMadrid(claim.claimed_at)} ${new Date(Date.parse(s(claim.claimed_at))).toLocaleTimeString('es-ES', { timeZone: 'Europe/Madrid', hour: '2-digit', minute: '2-digit' })} (intentos ${s(claim.attempts)}, bloqueos ${s(claim.blocked_count)})`)
+      return {
+        banco, estado: 'desconocido', motivo: 'sent_not_marked',
+        explicacion: 'El flujo registró el envío a este banco (reserva anti-duplicado), pero la hoja sigue sin marcarse como enviada. Lo más probable es que el correo saliera y la fila no se actualizara (suele pasar con filas duplicadas o sin ITEM ID).',
+        que_hacer: 'Comprobar en Pipedrive que el deal bancario tiene la nota de enviado; si es así, marcar la fila como "Enviado ✅" y borrar la fila duplicada si la hay. No relanzar: se bloquearía como duplicado.',
+        es_tecnico: false, evidencias: ev,
+      }
+    }
+  }
+
+  // 10) En curso o sin resultado
   if (/esperando|procesando|enviando a n8n/i.test(proc)) {
     return { banco, estado: 'pendiente', motivo: 'in_progress', explicacion: 'El envío está en curso (el flujo espera al dossier o está procesando).', que_hacer: 'Esperar unos minutos. Si en 30 minutos no cambia, avisar.', es_tecnico: false, evidencias: ev }
   }
@@ -178,6 +195,7 @@ export function diagnose(input: DiagnoseInput, banco?: string | null): Diagnosis
 
   for (const row of input.filas_hoja) {
     if (row.is_discarded) continue
+    if (NON_SHEET_SLUGS.has(s(row.bank_slug))) continue
     if (!match(s(row.banco) || s(row.bank_slug))) continue
     out.push(diagnoseSheetRow(row, input))
   }
