@@ -12,6 +12,13 @@ import { almaAuth } from '@/lib/alma/auth'
 import { almaEnv } from '@/lib/alma/config'
 import { madridDayStart } from '@/lib/dossierSends'
 
+/** Markdown de Alma → formato de Slack (*negrita*, <url|texto>). */
+function toSlackMrkdwn(t: string): string {
+  return t
+    .replace(/\*{2,3}([^*]+?)\*{2,3}/g, '*$1*')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<$2|$1>')
+}
+
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: Request) {
@@ -51,7 +58,7 @@ export async function POST(req: Request) {
   const tools = (flagged.tools_used as Array<{ name: string; input: Record<string, unknown> }> | null) ?? []
   const mark = tools.find((t) => t.name === 'marcar_problema_tecnico')?.input ?? {}
   const resumen = String(mark.resumen ?? flagged.content).slice(0, 1500)
-  const transcript = (msgs ?? []).slice(-6).map((m) => `${m.role === 'user' ? '🙋' : '🤖'} ${String(m.content).slice(0, 500)}`).join('\n')
+  const transcript = (msgs ?? []).slice(-6).map((m) => `${m.role === 'user' ? '🙋' : '🤖'} ${toSlackMrkdwn(String(m.content).slice(0, 500))}`).join('\n')
   const env = almaEnv()
   const opportunityId = Number(mark.opportunity_id) || null
   const banco = (mark.banco as string) || null
