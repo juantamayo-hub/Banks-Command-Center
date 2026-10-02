@@ -195,7 +195,59 @@ export async function getClientRecords(supabase: Admin, opportunityId: number, b
     supabase.from('red_flag_events').select('bank_id, raw_text, normalized_reason').eq('opportunity_id', opportunityId).limit(20),
   ])
   const bankById = new Map((banks.data ?? []).map((b) => [b.id, b]))
+  const dealTxt = dealIds.map(String)
+  const sheetIds = (sheet.data ?? []).map((r) => r.id)
+  const [caixaEstado, caixaPeticiones, kutxaEstados, relaunches, notesSheet, notesPlatform, notesKutxa] = await Promise.all([
+    supabase
+      .from('caixa_processed')
+      .select('numero_peticion, deal_id, processed_at, estado_del_lead, motivo_pendiente, resolucion, resolution_text, marked_lost, error_message')
+      .in('deal_id', dealTxt)
+      .order('processed_at', { ascending: false })
+      .limit(10),
+    supabase.from('caixa_requests_responses').select('oportunidad_caixa, id_bayteca, processed_at, error_message').in('id_bayteca', dealTxt).limit(10),
+    supabase
+      .from('kutxabank_estados_processed')
+      .select('deal_id, bank_deal_id, estado_rastreator, otros_comentarios, marked_won, processed_at')
+      .or(`deal_id.in.(${dealIds.join(',')}),bank_deal_id.in.(${dealIds.join(',')})`)
+      .order('processed_at', { ascending: false })
+      .limit(10),
+    supabase
+      .from('event_log')
+      .select('event_type, bank_id, actor, payload, created_at')
+      .eq('opportunity_id', opportunityId)
+      .order('created_at', { ascending: false })
+      .limit(15),
+    sheetIds.length
+      ? supabase.from('submission_notes').select('sheet_row_id, content, created_at').in('sheet_row_id', sheetIds).order('created_at', { ascending: false }).limit(20)
+      : Promise.resolve({ data: [] as Array<{ sheet_row_id: string; content: string; created_at: string }> }),
+    supabase
+      .from('platform_dispatch_notes')
+      .select('content, created_at, platform_dispatches!inner(deal_id, bank_name)')
+      .eq('platform_dispatches.deal_id', opportunityId)
+      .order('created_at', { ascending: false })
+      .limit(20),
+    supabase
+      .from('kutxabank_submission_notes')
+      .select('content, created_at, kutxabank_submissions!inner(deal_id)')
+      .eq('kutxabank_submissions.deal_id', opportunityId)
+      .order('created_at', { ascending: false })
+      .limit(20),
+  ])
+  const sheetBank = new Map((sheet.data ?? []).map((r) => [r.id, bankById.get(r.bank_id)?.name ?? null]))
+  const notasEquipo = [
+    ...((notesSheet.data ?? []) as Array<{ sheet_row_id: string; content: string; created_at: string }>).map((n) => ({ banco: sheetBank.get(n.sheet_row_id) ?? null, origen: 'hoja', nota: n.content, fecha: n.created_at })),
+    ...((notesPlatform.data ?? []) as unknown as Array<{ content: string; created_at: string; platform_dispatches: { bank_name: string } }>).map((n) => ({ banco: n.platform_dispatches?.bank_name ?? null, origen: 'envío por plataforma', nota: n.content, fecha: n.created_at })),
+    ...((notesKutxa.data ?? []) as Array<{ content: string; created_at: string }>).map((n) => ({ banco: 'Kutxabank', origen: 'Kutxabank', nota: n.content, fecha: n.created_at })),
+  ].sort((a, b) => b.fecha.localeCompare(a.fecha))
   return {
+    notas_equipo_command_center: notasEquipo,
+    caixabank_estado_peticion: caixaEstado.data ?? [],
+    caixabank_peticiones_registradas: caixaPeticiones.data ?? [],
+    // Algunas filas antiguas tienen un DNI o un importe en vez del estado (Excel desplazado): no son estados reales
+    kutxabank_estados_rastreator: (kutxaEstados.data ?? []).filter((e) => /[a-záéíóú]{3}/i.test(e.estado_rastreator ?? '') && !/^[XYZ]?\d{6,9}[A-Z]$/i.test(e.estado_rastreator ?? '')),
+    historial_relanzamientos: (relaunches.data ?? [])
+      .filter((e) => e.event_type !== 'sync')
+      .map((e) => ({ ...e, banco: e.bank_id ? bankById.get(e.bank_id)?.name ?? null : null })),
     filas_hoja: (sheet.data ?? []).map((r) => ({ ...r, banco: bankById.get(r.bank_id)?.name ?? null, bank_slug: bankById.get(r.bank_id)?.slug ?? null })),
     envios_plataforma: platform.data ?? [],
     kutxabank: kutxa.data ?? [],
@@ -324,6 +376,82 @@ export async function getTickets(dealIds: number[]) {
   }
 }
 
+/** Cola de tickets abiertos de Request Hub (todo el equipo), con filtros opcionales. */
+export async function getOpenTickets(opts: { banco?: string | null; asignado?: string | null; solo_vencidos?: boolean }) {
+  const url = process.env.REQUEST_HUB_SUPABASE_URL
+  const key = process.env.REQUEST_HUB_SUPABASE_SERVICE_KEY
+  if (!url || !key) return { ok: false, error: 'Request Hub no configurado' }
+  const rh = createSupabase(url, key, { auth: { persistSession: false } })
+  const data: Array<Record<string, unknown> & { display_id: string; subject: string; status: string; priority: string; bank_name: string | null; client_name: string | null; pipedrive_deal_id: number | null; sla_deadline: string | null; created_at: string }> = []
+  for (let off = 0; off < 10000; off += 1000) {
+    const page = await rh
+      .from('tickets')
+      .select('display_id, subject, status, priority, bank_name, client_name, pipedrive_deal_id, sla_deadline, created_at, assignee:profiles!tickets_assignee_id_fkey(first_name, last_name, email), category:categories(name)')
+      .in('status', ['new', 'in_progress', 'waiting_on_employee'])
+      .order('created_at', { ascending: true })
+      .range(off, off + 999)
+    if (page.error) return { ok: false, error: page.error.message }
+    data.push(...(page.data as unknown as typeof data))
+    if ((page.data ?? []).length < 1000) break
+  }
+  const now = Date.now()
+  const norm = (x: string) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  const bancoQ = norm(opts.banco ?? '')
+  const asigQ = norm(opts.asignado ?? '')
+  const one = <T,>(v: T | T[] | null): T | null => (Array.isArray(v) ? v[0] ?? null : v)
+  const rows = data.map((t) => {
+    const a = one(t.assignee as unknown as { first_name: string | null; last_name: string | null; email: string | null } | null)
+    const c = one(t.category as unknown as { name: string } | null)
+    return {
+      ticket: t.display_id,
+      asunto: t.subject,
+      automatico: /^\[auto\]/i.test(t.subject ?? ''),
+      estado: RH_STATUS[t.status] ?? t.status,
+      prioridad: t.priority,
+      banco: t.bank_name,
+      cliente: t.client_name,
+      deal: t.pipedrive_deal_id,
+      categoria: c?.name ?? null,
+      asignado: a ? [a.first_name, a.last_name].filter(Boolean).join(' ') || a.email : null,
+      asignado_email: a?.email ?? null,
+      sla_vencido: t.sla_deadline ? Date.parse(t.sla_deadline) < now : false,
+      dias_abierto: Math.floor((now - Date.parse(t.created_at)) / 86400_000),
+    }
+  })
+  const filtered = rows.filter(
+    (t) =>
+      (!bancoQ || norm(t.banco ?? '').includes(bancoQ)) &&
+      (!asigQ || (asigQ === 'sin asignar' ? !t.asignado : norm(`${t.asignado ?? ''} ${t.asignado_email ?? ''}`).includes(asigQ))) &&
+      (!opts.solo_vencidos || t.sla_vencido),
+  )
+  const count = (f: (t: (typeof rows)[number]) => string) => {
+    const c: Record<string, number> = {}
+    for (const t of filtered) c[f(t)] = (c[f(t)] ?? 0) + 1
+    return Object.fromEntries(Object.entries(c).sort((a, b) => b[1] - a[1]))
+  }
+  const manuales = filtered.filter((t) => !t.automatico)
+  const brief = (t: (typeof rows)[number]) => {
+    const copy: Partial<typeof t> = { ...t }
+    delete copy.asignado_email
+    delete copy.automatico
+    return copy
+  }
+  return {
+    ok: true,
+    total_abiertos: filtered.length,
+    automaticos: filtered.length - manuales.length,
+    manuales: manuales.length,
+    sla_vencidos: filtered.filter((t) => t.sla_vencido).length,
+    por_estado: count((t) => t.estado),
+    por_asignado: count((t) => t.asignado ?? 'sin asignar'),
+    por_categoria: count((t) => t.categoria ?? 'sin categoría'),
+    por_banco: Object.fromEntries(Object.entries(count((t) => t.banco ?? 'sin banco')).slice(0, 12)),
+    manuales_mas_antiguos: manuales.slice(0, 12).map(brief),
+    manuales_mas_recientes: manuales.slice(-8).reverse().map(brief),
+    nota: 'Los tickets «[Auto] … Overdue» los crea el sistema cuando una tasación/FEIN pasa de plazo; los «manuales» los abre una persona.',
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Métricas
 // ─────────────────────────────────────────────────────────────────────────────
@@ -332,17 +460,60 @@ export async function getMetrics(supabase: Admin, dias: number) {
   const d = Math.min(Math.max(Math.round(dias) || 1, 1), 90)
   const from = madridDayStart(d)
   const to = madridDayStart(0)
-  const [envios, envios_hoy, respuestas] = await Promise.all([
+  const [envios, envios_hoy, respuestas, caixa, kutxa] = await Promise.all([
     dossierSends(supabase, from, to),
     dossierSends(supabase, to, new Date(Date.now() + 60_000)),
     supabase.rpc('bank_responses_summary', { p_since: from.toISOString() }),
+    caixaPipeline(supabase, from),
+    supabase.from('kutxabank_estados_processed').select('estado_rastreator').gte('processed_at', from.toISOString()).limit(1000),
   ])
+  const kutxaCount: Record<string, number> = {}
+  for (const r of kutxa.data ?? []) {
+    const e = String(r.estado_rastreator ?? '')
+    if (!/[a-záéíóú]{3}/i.test(e) || /^[XYZ]?\d{6,9}[A-Z]$/i.test(e)) continue
+    kutxaCount[e] = (kutxaCount[e] ?? 0) + 1
+  }
   return {
+    caixabank: caixa,
+    kutxabank_estados_rastreator_en_periodo: kutxaCount,
     periodo: `últimos ${d} día(s) completos (hora de Madrid) + hoy`,
     envios_dossier: { total: envios.total, por_banco: envios.por_banco },
     envios_hoy: { total: envios_hoy.total, por_banco: envios_hoy.por_banco },
     respuestas_bancos: respuestas.data ?? [],
     nota: `Los bancos por plataforma (${PLATFORM_BANKS.join(', ')}) cuentan lo marcado como enviado en "Envíos por plataforma".`,
+  }
+}
+
+/** Foto de las peticiones de CaixaBank (último estado conocido de cada una) y cambios de estado en el periodo. */
+async function caixaPipeline(supabase: Admin, from: Date) {
+  const rows: Array<{ numero_peticion: string; estado_del_lead: string | null; motivo_pendiente: string | null; resolucion: string | null; processed_at: string }> = []
+  for (let off = 0; off < 20000; off += 1000) {
+    const { data, error } = await supabase
+      .from('caixa_processed')
+      .select('numero_peticion, estado_del_lead, motivo_pendiente, resolucion, processed_at')
+      .order('processed_at', { ascending: true })
+      .range(off, off + 999)
+    if (error || !data) break
+    rows.push(...data)
+    if (data.length < 1000) break
+  }
+  const latest = new Map<string, (typeof rows)[number]>()
+  for (const r of rows) latest.set(r.numero_peticion, r)
+  const count = (list: Iterable<string>) => {
+    const c: Record<string, number> = {}
+    for (const k of list) c[k] = (c[k] ?? 0) + 1
+    return Object.fromEntries(Object.entries(c).sort((a, b) => b[1] - a[1]))
+  }
+  const actuales = [...latest.values()]
+  const enPeriodo = rows.filter((r) => Date.parse(r.processed_at) >= from.getTime())
+  return {
+    peticiones_total: latest.size,
+    estado_actual: count(actuales.map((r) => r.estado_del_lead || 'sin estado')),
+    motivos_pendientes_actuales_sia_en_curso: count(actuales.filter((r) => /SIA EN CURSO/i.test(r.estado_del_lead ?? '') && r.motivo_pendiente).map((r) => String(r.motivo_pendiente))),
+    cambios_de_estado_en_periodo: count(enPeriodo.map((r) => r.estado_del_lead || 'sin estado')),
+    motivos_cierre_en_periodo: count(enPeriodo.filter((r) => /CERRADA/i.test(r.estado_del_lead ?? '') && r.resolucion).map((r) => String(r.resolucion))),
+    ultima_actualizacion: rows.length ? rows[rows.length - 1].processed_at : null,
+    nota: 'Datos del Excel de CaixaBank subido en la página Caixa; solo cambia cuando alguien sube un Excel nuevo.',
   }
 }
 

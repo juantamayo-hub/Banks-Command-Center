@@ -88,6 +88,39 @@ NOTAS: "Falta <documentos>" (p. ej. "Falta Nuevo_Documento" en Ibercaja = docume
   (p. ej. asunto sin nº de expediente) aparece en «Requieren atención» para vincularlo a mano.
 - Las respuestas de los bancos por plataforma (Santander, Sabadell…) llegan por sus propios flujos.`,
   },
+  caixabank: {
+    titulo: 'CaixaBank: envíos y respuestas',
+    texto: `
+- CaixaBank se envía por plataforma (página «Envíos por plataforma» del Command Center; se marca a mano como enviado).
+- Las respuestas llegan en un Excel de CaixaBank que se sube en la página «Caixa» del Command Center. Cada fila es una
+  petición (nº de petición = deal) con «Estado del lead» y «Motivo pendiente» / «Resolución».
+- Estados del lead: 1 - SOLIC. INICIAL (recibida, aún sin estudio), 2 - SIA EN CURSO (en estudio; el «motivo pendiente»
+  dice qué falta: OK del cliente, onboarding, firma SUA, llamada, informe, tasación, documentación, FEIN, CIRBE, provisión
+  de fondos, aprobación CARP…), 3 - EN FIRMA (aprobada, camino de la firma), 4 - FORMALIZADA (firmada 🎉),
+  5 - CERRADA (no sigue; la «resolución» explica por qué: Competencia, cliente no localizado, registrado por otra
+  plataforma, ya tiene una simulación en CaixaBank, sin vivienda, DTI excedido, plazo fuera de límites, edad…).
+- Al procesar el Excel: se añade una nota en Pipedrive con el estado y, si está CERRADA con motivo de pérdida, el deal
+  bancario se marca perdido con el motivo equivalente. Si el estado no cambia, no se repite la nota.
+- «Peticiones registradas» (Caixa → Requests) = relación nº de oportunidad de CaixaBank ↔ deal de Bayteca, con nota en Pipedrive.`,
+  },
+  kutxabank: {
+    titulo: 'Kutxabank vía Rastreator',
+    texto: `
+- Kutxabank no se envía por correo al banco: se crea un ZIP cifrado con la documentación y se manda a Rastreator, que lo
+  estudia y lo pasa a Kutxabank. Página «Kutxabank» del Command Center (envíos, documentos que faltan, estados).
+- Antes de enviar se comprueban los documentos («Verificar documentos»); si faltan, el envío queda pendiente de documentos.
+- Rastreator responde por un Excel de estados con comentarios: «Pendiente de envío a Kutxabank», «Enviado a Kutxabank»,
+  «Denegada LTV», «Denegada endeudamiento», «Denegada perfil», «Oferta recibida». Cada estado nuevo se apunta en Pipedrive
+  y puede mover la etapa del deal.`,
+  },
+  plataforma: {
+    titulo: 'Envíos por plataforma (Santander, Sabadell, Bankinter, Abanca, CaixaBank)',
+    texto: `
+- Estos bancos no reciben el dossier por correo automático: el equipo lo sube a la plataforma del banco a mano.
+- Cuando un deal tiene uno de estos bancos en sus Bank 1–5 de Pipedrive y está en la etapa adecuada, aparece en
+  «Envíos por plataforma». Al subirlo, se pulsa «Marcar enviado» (o «Descartar» si no procede); se pueden añadir notas.
+- Que aparezca ahí pendiente es normal hasta que alguien lo sube: no es un fallo técnico.`,
+  },
   command_center: {
     titulo: 'Páginas del Command Center',
     texto: `

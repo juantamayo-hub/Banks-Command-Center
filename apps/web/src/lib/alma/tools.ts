@@ -5,7 +5,7 @@
 
 import type Anthropic from '@anthropic-ai/sdk'
 import { createAdminClient } from '@/lib/supabase/server'
-import { getClientRecords, getDealInfo, getMetrics, getPendingOffers, getPendingSends, getTickets, listDriveFolder, searchClients, summarizeDocs } from './data'
+import { getClientRecords, getDealInfo, getMetrics, getOpenTickets, getPendingOffers, getPendingSends, getTickets, listDriveFolder, searchClients, summarizeDocs } from './data'
 import { diagnose } from './diagnose'
 import { KNOWLEDGE, KNOWLEDGE_TOPICS } from './knowledge'
 import { TEAM, findMember } from './team'
@@ -23,7 +23,7 @@ export const ALMA_TOOLS: Anthropic.Tool[] = [
   },
   {
     name: 'ficha_cliente',
-    description: 'Ficha completa de un cliente por Opportunity ID: datos de Pipedrive (owner, deals bancarios, carpeta de Drive), estado de cada envío por banco con su diagnóstico, respuestas de los bancos, reservas anti-duplicado, red flags y eventos de los flujos.',
+    description: 'Ficha completa de un cliente por Opportunity ID: datos de Pipedrive (owner, deals bancarios, carpeta de Drive), estado de cada envío por banco con su diagnóstico, respuestas de los bancos (correos clasificados), historial de estados de la petición en CaixaBank (estado del lead, motivo pendiente, resolución), estados de Rastreator para Kutxabank, notas del equipo en el Command Center, relanzamientos solicitados, reservas anti-duplicado, red flags y eventos de los flujos.',
     input_schema: {
       type: 'object',
       properties: { opportunity_id: { type: 'integer', description: 'Opportunity ID (deal general de Pipedrive)' } },
@@ -65,8 +65,21 @@ export const ALMA_TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'tickets_abiertos',
+    description: 'Cola de tickets abiertos de Request Hub de todo el equipo (nuevos, en curso, esperando al empleado): totales por estado, asignado y banco, SLA vencidos y la lista de los más antiguos. Filtros opcionales por banco, asignado ("sin asignar" para los que no tienen) y solo SLA vencido. Para los tickets de un cliente concreto usa tickets_cliente.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        banco: { type: 'string' },
+        asignado: { type: 'string', description: 'Nombre o email de la persona asignada, o "sin asignar"' },
+        solo_vencidos: { type: 'boolean' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'metricas',
-    description: 'Cifras globales: envíos de dossier por banco (hojas + plataforma + Kutxabank) y respuestas de los bancos (ofertas, rechazos, más info) en los últimos N días.',
+    description: 'Cifras globales: envíos de dossier por banco (hojas + plataforma + Kutxabank), respuestas de los bancos (ofertas, rechazos, más info), foto de CaixaBank (peticiones por estado: en estudio, en firma, formalizadas, cerradas y sus motivos) y estados de Rastreator/Kutxabank en los últimos N días.',
     input_schema: {
       type: 'object',
       properties: { dias: { type: 'integer', description: 'Nº de días completos hacia atrás (1 = ayer). Máx. 90.' } },
@@ -214,6 +227,14 @@ export async function runAlmaTool(name: string, input: Record<string, unknown>):
         const ids = [opp, ...(deal?.deals_bancarios.map((d) => d.id) ?? [])]
         const t = await getTickets(ids)
         return { ok: t.ok, content: json(t.ok ? { deals_consultados: ids, tickets: t.tickets } : { error: t.error }) }
+      }
+      case 'tickets_abiertos': {
+        const t = await getOpenTickets({
+          banco: typeof input.banco === 'string' ? input.banco : null,
+          asignado: typeof input.asignado === 'string' ? input.asignado : null,
+          solo_vencidos: input.solo_vencidos === true,
+        })
+        return { ok: t.ok, content: json(t) }
       }
       case 'metricas':
         return { ok: true, content: json(await getMetrics(supabase, Number(input.dias) || 1)) }

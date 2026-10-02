@@ -17,6 +17,7 @@ const TOOL_LABELS: Record<string, string> = {
   explicar_envio: 'Revisando el envío, la hoja y Drive…',
   documentos_cliente: 'Mirando su carpeta de Drive…',
   tickets_cliente: 'Consultando Request Hub…',
+  tickets_abiertos: 'Revisando la cola de Request Hub…',
   metricas: 'Calculando cifras…',
   conocimiento: 'Repasando cómo funciona el proceso…',
   marcar_problema_tecnico: 'Preparando el reporte técnico…',
