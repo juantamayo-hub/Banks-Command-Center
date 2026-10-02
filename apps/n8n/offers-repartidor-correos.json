@@ -2,6 +2,14 @@
   "name": "OFFERS · Repartidor de correos bancarios",
   "nodes": [
     {
+      "id": "6827bb36-7dd1-430b-a3b0-b05ab8bfb2b5",
+      "name": "Cada 5 min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
       "parameters": {
         "rule": {
           "interval": [
@@ -11,20 +19,10 @@
             }
           ]
         }
-      },
-      "name": "Cada 5 min",
-      "type": "n8n-nodes-base.scheduleTrigger",
-      "typeVersion": 1.2,
-      "position": [
-        0,
-        0
-      ],
-      "id": "6827bb36-7dd1-430b-a3b0-b05ab8bfb2b5"
+      }
     },
     {
-      "parameters": {
-        "jsCode": "const banks = [{\"workflowId\": \"YqQIDjAozwsDAQR1\", \"banco\": \"CRSur_Offers_Received\", \"q\": \"from:@crsur.es -label:CR_Sur-Procesado in:inbox -label:n8n-visto newer_than:2d\"}, {\"workflowId\": \"d3S1y48F0qKoVc6O\", \"banco\": \"Bankinter_Offers_Received_v19\", \"q\": \"from:bankinter.com -label:Bankinter-Procesado in:inbox -label:n8n-visto newer_than:2d\"}, {\"workflowId\": \"IOIg26EPCqtgCSLv\", \"banco\": \"CRAragón_Offers_Received\", \"q\": \"from:@craragon.es -label:CRAragón-Procesado in:inbox -label:n8n-visto newer_than:2d\"}, {\"workflowId\": \"12m8gBooQnUpwG14\", \"banco\": \"CRAsturias_Offers_Received\", \"q\": \"from:@crasturias.com -label:CRAsturias-Procesado in:inbox -label:n8n-visto newer_than:2d\"}, {\"workflowId\": \"Yd82lkDzorla4x7T\", \"banco\": \"CRGranada_Offers_Received\", \"q\": \"from:@crgranada.com -label:CRGranada-Procesado in:inbox -label:n8n-visto newer_than:2d\"}, {\"workflowId\": \"eoxXdCBbq6zFL2me\", \"banco\": \"CRTeruel_Offers_Received_v3\", \"q\": \"from:@ruralteruel.com -label:CRTeruel-Procesado in:inbox -label:n8n-visto newer_than:2d\"}, {\"workflowId\": \"RezivFIqH10FdaB9\", \"banco\": \"CaixaBank_Offers_Received\", \"q\": \"from:caixabank.com -label:CaixaBank-Procesado in:inbox -label:n8n-visto newer_than:2d\"}, {\"workflowId\": \"O6V1P2efIYpyu1bC\", \"banco\": \"CaixaPopular_Offers_Received_v2\", \"q\": \"from:@caixapopular.es -label:CaixaPopular-Procesado in:inbox -label:n8n-visto newer_than:2d\"}, {\"workflowId\": \"sEQ8HDbHIB3HvPDY\", \"banco\": \"DeutscheBank_Offers_Received\", \"q\": \"from:db.com -label:Deutsche-Procesado in:inbox -label:n8n-visto newer_than:2d\"}, {\"workflowId\": \"qXIKYBEK2Yr7LWWs\", \"banco\": \"EuroCajaRural_Offers_Received\", \"q\": \"from:eurocajarural.es -label:EuroCajaRural-Procesado in:inbox -label:n8n-visto newer_than:2d\"}, {\"workflowId\": \"n35da7vAodC9XUsH\", \"banco\": \"Globalcaja_Offers_Received\", \"q\": \"from:@globalcaja.es -label:Globalcaja-Procesado in:inbox -label:n8n-visto newer_than:2d\"}, {\"workflowId\": \"IZpYM4yNvwza5ol7\", \"banco\": \"ING_Offers_Received\", \"q\": \"from:nnespana.com -label:ING-Procesado  in:inbox -label:n8n-visto newer_than:2d\"}, {\"workflowId\": \"VI1n8UQng6gAWV8B\", \"banco\": \"Ibercaja_Offers_Received\", \"q\": \"from:ibercaja.es -label:Ibercaja-Procesado in:inbox -label:n8n-visto newer_than:2d\"}, {\"workflowId\": \"iMzC4NjXDOlCbPuf\", \"banco\": \"LaboralKutxa_Offers_Received\", \"q\": \"from:laboralkutxa.com -label:Laboral-Kutxa-Procesado in:inbox -label:n8n-visto newer_than:2d\"}, {\"workflowId\": \"mxewpxzScRz3jHX2\", \"banco\": \"MyInvestor_Offers_Received_v2\", \"q\": \"from:myinvestor.es -label:MyInvestor-Procesado in:inbox -label:n8n-visto newer_than:2d\"}, {\"workflowId\": \"ZtErLRcQa0SwXfZb\", \"banco\": \"Sabadell_Offers_Received_v1\", \"q\": \"(from:gibobs.com OR from:gibobs.co OR from:bancsabadell.com) (subject:\\\"Oferta disponible de Banco Sabadell\\\" OR subject:\\\"Operación cerrada\\\") -label:Sabadell-Procesado in:inbox -label:n8n-visto newer_than:2d\"}, {\"workflowId\": \"pNOk4VBlVu9PLdKV\", \"banco\": \"UCI_Offers_Received\", \"q\": \"from:redext.uci.com -label:UCI-Procesado in:inbox -label:n8n-visto newer_than:2d\"}, {\"workflowId\": \"hY2DR1im7zSNx28E\", \"banco\": \"Unicaja_Offers_Received_v4\", \"q\": \"from:@unicaja.es -label:Unicaja-Procesado in:inbox -label:n8n-visto newer_than:2d\"}];\nreturn banks.map(b => ({ json: b }));"
-      },
+      "id": "8a5e3aa3-156e-47d2-861b-89f8ccac8539",
       "name": "Bancos",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -32,9 +30,20 @@
         220,
         0
       ],
-      "id": "8a5e3aa3-156e-47d2-861b-89f8ccac8539"
+      "parameters": {
+        "jsCode": "const banks = [{\"workflowId\": \"YqQIDjAozwsDAQR1\", \"banco\": \"CRSur_Offers_Received\", \"q\": \"from:@crsur.es -label:CR_Sur-Procesado in:inbox -label:n8n-visto newer_than:2d\"}, {\"workflowId\": \"d3S1y48F0qKoVc6O\", \"banco\": \"Bankinter_Offers_Received_v19\", \"q\": \"from:bankinter.com -label:Bankinter-Procesado in:inbox -label:n8n-visto newer_than:2d\"}, {\"workflowId\": \"IOIg26EPCqtgCSLv\", \"banco\": \"CRAragón_Offers_Received\", \"q\": \"(from:@craragon.es OR from:@caixarural.cat) -label:CRAragón-Procesado in:inbox -label:n8n-visto newer_than:2d\"}, {\"workflowId\": \"12m8gBooQnUpwG14\", \"banco\": \"CRAsturias_Offers_Received\", \"q\": \"from:@crasturias.com -label:CRAsturias-Procesado in:inbox -label:n8n-visto newer_than:2d\"}, {\"workflowId\": \"Yd82lkDzorla4x7T\", \"banco\": \"CRGranada_Offers_Received\", \"q\": \"from:@crgranada.com -label:CRGranada-Procesado in:inbox -label:n8n-visto newer_than:2d\"}, {\"workflowId\": \"eoxXdCBbq6zFL2me\", \"banco\": \"CRTeruel_Offers_Received_v3\", \"q\": \"from:@ruralteruel.com -label:CRTeruel-Procesado in:inbox -label:n8n-visto newer_than:2d\"}, {\"workflowId\": \"RezivFIqH10FdaB9\", \"banco\": \"CaixaBank_Offers_Received\", \"q\": \"from:caixabank.com -label:CaixaBank-Procesado in:inbox -label:n8n-visto newer_than:2d\"}, {\"workflowId\": \"O6V1P2efIYpyu1bC\", \"banco\": \"CaixaPopular_Offers_Received_v2\", \"q\": \"from:@caixapopular.es -label:CaixaPopular-Procesado in:inbox -label:n8n-visto newer_than:2d\"}, {\"workflowId\": \"sEQ8HDbHIB3HvPDY\", \"banco\": \"DeutscheBank_Offers_Received\", \"q\": \"from:db.com -label:Deutsche-Procesado in:inbox -label:n8n-visto newer_than:2d\"}, {\"workflowId\": \"qXIKYBEK2Yr7LWWs\", \"banco\": \"EuroCajaRural_Offers_Received\", \"q\": \"from:eurocajarural.es -label:EuroCajaRural-Procesado in:inbox -label:n8n-visto newer_than:2d\"}, {\"workflowId\": \"n35da7vAodC9XUsH\", \"banco\": \"Globalcaja_Offers_Received\", \"q\": \"from:@globalcaja.es -label:Globalcaja-Procesado in:inbox -label:n8n-visto newer_than:2d\"}, {\"workflowId\": \"IZpYM4yNvwza5ol7\", \"banco\": \"ING_Offers_Received\", \"q\": \"from:nnespana.com -label:ING-Procesado  in:inbox -label:n8n-visto newer_than:2d\"}, {\"workflowId\": \"VI1n8UQng6gAWV8B\", \"banco\": \"Ibercaja_Offers_Received\", \"q\": \"from:ibercaja.es -label:Ibercaja-Procesado in:inbox -label:n8n-visto newer_than:2d\"}, {\"workflowId\": \"iMzC4NjXDOlCbPuf\", \"banco\": \"LaboralKutxa_Offers_Received\", \"q\": \"from:laboralkutxa.com -label:Laboral-Kutxa-Procesado in:inbox -label:n8n-visto newer_than:2d\"}, {\"workflowId\": \"mxewpxzScRz3jHX2\", \"banco\": \"MyInvestor_Offers_Received_v2\", \"q\": \"from:myinvestor.es -label:MyInvestor-Procesado in:inbox -label:n8n-visto newer_than:2d\"}, {\"workflowId\": \"ZtErLRcQa0SwXfZb\", \"banco\": \"Sabadell_Offers_Received_v1\", \"q\": \"(from:gibobs.com OR from:gibobs.co OR from:bancsabadell.com) (subject:\\\"Oferta disponible de Banco Sabadell\\\" OR subject:\\\"Operación cerrada\\\") -label:Sabadell-Procesado in:inbox -label:n8n-visto newer_than:2d\"}, {\"workflowId\": \"pNOk4VBlVu9PLdKV\", \"banco\": \"UCI_Offers_Received\", \"q\": \"from:redext.uci.com -label:UCI-Procesado in:inbox -label:n8n-visto newer_than:2d\"}, {\"workflowId\": \"hY2DR1im7zSNx28E\", \"banco\": \"Unicaja_Offers_Received_v4\", \"q\": \"from:@unicaja.es -label:Unicaja-Procesado in:inbox -label:n8n-visto newer_than:2d\"}];\nreturn banks.map(b => ({ json: b }));"
+      }
     },
     {
+      "id": "22f3018a-52c5-4e29-98e7-10ba23fc3147",
+      "name": "Buscar correos pendientes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "onError": "continueRegularOutput",
+      "position": [
+        440,
+        0
+      ],
       "parameters": {
         "url": "https://gmail.googleapis.com/gmail/v1/users/me/messages",
         "authentication": "predefinedCredentialType",
@@ -54,26 +63,15 @@
         },
         "options": {}
       },
-      "name": "Buscar correos pendientes",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        440,
-        0
-      ],
-      "id": "22f3018a-52c5-4e29-98e7-10ba23fc3147",
       "credentials": {
         "gmailOAuth2": {
           "id": "sW0S8ksGFfOAk3zC",
           "name": "Hipotecas Bayteca"
         }
-      },
-      "onError": "continueRegularOutput"
+      }
     },
     {
-      "parameters": {
-        "jsCode": "// Un item por correo pendiente, con el workflow del banco que debe procesarlo\nconst banks = $('Bancos').all().map(i => i.json);\nconst res = $input.all().map(i => i.json);\nconst out = [];\nres.forEach((r, i) => {\n  for (const m of (r.messages || [])) out.push({ json: { id: m.id, threadId: m.threadId, workflowId: banks[i].workflowId, banco: banks[i].banco } });\n});\nreturn out;"
-      },
+      "id": "297797f0-fb19-41d9-afe0-8d616e00108a",
       "name": "Un item por correo",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -81,9 +79,19 @@
         660,
         0
       ],
-      "id": "297797f0-fb19-41d9-afe0-8d616e00108a"
+      "parameters": {
+        "jsCode": "// Un item por correo pendiente, con el workflow del banco que debe procesarlo\nconst banks = $('Bancos').all().map(i => i.json);\nconst res = $input.all().map(i => i.json);\nconst out = [];\nres.forEach((r, i) => {\n  for (const m of (r.messages || [])) out.push({ json: { id: m.id, threadId: m.threadId, workflowId: banks[i].workflowId, banco: banks[i].banco } });\n});\nreturn out;"
+      }
     },
     {
+      "id": "1c677732-c8b8-4fc1-a884-e747c5ad9044",
+      "name": "Marcar n8n-visto",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        0
+      ],
       "parameters": {
         "method": "POST",
         "url": "=https://gmail.googleapis.com/gmail/v1/users/me/messages/{{ $json.id }}/modify",
@@ -94,14 +102,6 @@
         "jsonBody": "={\"addLabelIds\":[\"Label_4\"]}",
         "options": {}
       },
-      "name": "Marcar n8n-visto",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        880,
-        0
-      ],
-      "id": "1c677732-c8b8-4fc1-a884-e747c5ad9044",
       "credentials": {
         "gmailOAuth2": {
           "id": "sW0S8ksGFfOAk3zC",
@@ -110,9 +110,7 @@
       }
     },
     {
-      "parameters": {
-        "jsCode": "// Recupera los datos del correo (el nodo anterior devuelve la respuesta de Gmail)\nreturn $('Un item por correo').all().map((it, i) => ({ json: it.json, pairedItem: { item: i } }));"
-      },
+      "id": "749f9739-2a07-4910-b1af-eb54e2a46201",
       "name": "Correos marcados",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -120,9 +118,20 @@
         1100,
         0
       ],
-      "id": "749f9739-2a07-4910-b1af-eb54e2a46201"
+      "parameters": {
+        "jsCode": "// Recupera los datos del correo (el nodo anterior devuelve la respuesta de Gmail)\nreturn $('Un item por correo').all().map((it, i) => ({ json: it.json, pairedItem: { item: i } }));"
+      }
     },
     {
+      "id": "a755241f-4fba-460d-a92b-2e3922b7dca1",
+      "name": "Procesar en el workflow del banco",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "onError": "continueRegularOutput",
+      "position": [
+        1320,
+        0
+      ],
       "parameters": {
         "workflowId": {
           "__rl": true,
@@ -137,16 +146,7 @@
         "options": {
           "waitForSubWorkflow": false
         }
-      },
-      "name": "Procesar en el workflow del banco",
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.2,
-      "position": [
-        1320,
-        0
-      ],
-      "id": "a755241f-4fba-460d-a92b-2e3922b7dca1",
-      "onError": "continueRegularOutput"
+      }
     }
   ],
   "connections": {
@@ -218,9 +218,10 @@
     }
   },
   "settings": {
-    "executionOrder": "v1",
-    "timezone": "Europe/Madrid",
     "errorWorkflow": "3dRzXNAhcsj7vsaV",
-    "callerPolicy": "workflowsFromSameOwner"
+    "timezone": "Europe/Madrid",
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": true
   }
 }

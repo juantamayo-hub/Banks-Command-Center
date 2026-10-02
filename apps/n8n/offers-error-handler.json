@@ -2,7 +2,7 @@
   "name": "OFFERS · Error handler (Slack + Command Center)",
   "nodes": [
     {
-      "parameters": {},
+      "id": "13deb2a3-0c41-4325-b00b-88e2cbfaa697",
       "name": "Error Trigger",
       "type": "n8n-nodes-base.errorTrigger",
       "typeVersion": 1,
@@ -10,12 +10,10 @@
         0,
         0
       ],
-      "id": "13deb2a3-0c41-4325-b00b-88e2cbfaa697"
+      "parameters": {}
     },
     {
-      "parameters": {
-        "jsCode": "// Fallo no controlado en un workflow de ofertas → Slack + Command Center (cola de atención)\nconst e = $input.first().json;\nconst wfName = e.workflow?.name || '';\nconst SLUGS = [\n  [/bankinter/i,'bankinter'],[/caixabank/i,'caixabank'],[/caixapopular/i,'caixa_popular'],[/cr ?arag/i,'cr_aragon'],\n  [/cr ?asturias/i,'cr_asturias'],[/cr ?granada/i,'cr_granada'],[/cr ?sur/i,'cr_del_sur'],[/cr ?teruel/i,'cr_teruel'],\n  [/deutsche/i,'deutsche_bank'],[/eurocaja/i,'eurocajarural'],[/globalcaja/i,'globalcaja'],[/^ing[_ ]/i,'ing'],\n  [/ibercaja/i,'ibercaja'],[/laboral/i,'laboral_kutxa'],[/myinvestor/i,'myinvestor'],[/sabadell/i,'sabadell'],\n  [/uci/i,'uci'],[/unicaja/i,'unicaja'],[/santander/i,'santander'],[/kutxabank/i,'kutxabank'],\n];\nconst slug = (SLUGS.find(([re]) => re.test(wfName)) || [])[1] || null;\nconst execId = e.execution?.id || null;\nconst url = e.execution?.url || (execId ? `https://huspy.app.n8n.cloud/workflow/${e.workflow?.id}/executions/${execId}` : '');\nconst msg = String(e.execution?.error?.message || e.trigger?.error?.message || 'Error desconocido').slice(0, 900);\nconst node = e.execution?.lastNodeExecuted || e.execution?.error?.node?.name || '—';\nreturn [{ json: {\n  slack: `🚨 *FALLO WORKFLOW OFERTAS* — ${wfName}\\n📍 Nodo: \\`${node}\\`\\n❌ ${msg}\\n🔗 <${url}|Ver ejecución>`,\n  registro: slug && execId ? {\n    bank_slug: slug, source: 'manual', external_id: `n8n-error-${execId}`,\n    subject: `Fallo en ${wfName}`, match_status: 'unmatched', classification: 'other', status: 'error',\n    error_step: node, error_message: msg, workflow_id: e.workflow?.id, execution_id: execId,\n    summary: 'Ejecución fallida sin manejo de error: revisar el correo del banco y procesarlo a mano',\n  } : null,\n} }];"
-      },
+      "id": "7c321db7-b8c0-46fb-95ea-aab61b52fafb",
       "name": "Preparar aviso",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -23,9 +21,21 @@
         220,
         0
       ],
-      "id": "7c321db7-b8c0-46fb-95ea-aab61b52fafb"
+      "parameters": {
+        "jsCode": "// Fallo no controlado en un workflow de ofertas → Slack + Command Center (cola de atención)\nreturn $input.all().map(({ json: e }) => {\nconst wfName = e.workflow?.name || '';\nconst SLUGS = [\n  [/bankinter/i,'bankinter'],[/caixabank/i,'caixabank'],[/caixapopular/i,'caixa_popular'],[/cr ?arag/i,'cr_aragon'],\n  [/cr ?asturias/i,'cr_asturias'],[/cr ?granada/i,'cr_granada'],[/cr ?sur/i,'cr_del_sur'],[/cr ?teruel/i,'cr_teruel'],\n  [/deutsche/i,'deutsche_bank'],[/eurocaja/i,'eurocajarural'],[/globalcaja/i,'globalcaja'],[/^ing[_ ]/i,'ing'],\n  [/ibercaja/i,'ibercaja'],[/laboral/i,'laboral_kutxa'],[/myinvestor/i,'myinvestor'],[/sabadell/i,'sabadell'],\n  [/uci/i,'uci'],[/unicaja/i,'unicaja'],[/santander/i,'santander'],[/kutxabank/i,'kutxabank'],\n];\nconst slug = (SLUGS.find(([re]) => re.test(wfName)) || [])[1] || null;\nconst execId = e.execution?.id || null;\nconst url = e.execution?.url || (execId ? `https://huspy.app.n8n.cloud/workflow/${e.workflow?.id}/executions/${execId}` : '');\nconst msg = String(e.execution?.error?.message || e.trigger?.error?.message || 'Error desconocido').slice(0, 900);\nconst node = e.execution?.lastNodeExecuted || e.execution?.error?.node?.name || '—';\nreturn { json: {\n  slack: `🚨 *FALLO WORKFLOW OFERTAS* — ${wfName}\\n📍 Nodo: \\`${node}\\`\\n❌ ${msg}\\n🔗 <${url}|Ver ejecución>`,\n  registro: slug && execId ? {\n    bank_slug: slug, source: 'manual', external_id: `n8n-error-${execId}`,\n    subject: `Fallo en ${wfName}`, match_status: 'unmatched', classification: 'other', status: 'error',\n    error_step: node, error_message: msg, workflow_id: e.workflow?.id, execution_id: execId,\n    summary: 'Ejecución fallida sin manejo de error: revisar el correo del banco y procesarlo a mano',\n  } : null,\n} };\n});"
+      }
     },
     {
+      "id": "efa9dfe6-d3a7-4c69-88c7-31ee7363715c",
+      "name": "Slack: Fallo workflow",
+      "webhookId": "54292ebb-be60-428f-9529-3bd230762871",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "onError": "continueRegularOutput",
+      "position": [
+        440,
+        -100
+      ],
       "parameters": {
         "select": "channel",
         "channelId": {
@@ -35,26 +45,31 @@
         },
         "text": "={{ $json.slack }}",
         "otherOptions": {
-          "mrkdwn": true
+          "mrkdwn": true,
+          "botProfile": {
+            "imageValues": {
+              "profilePhotoType": "image",
+              "icon_url": "https://avatars.slack-edge.com/2026-09-24/12138584226886_93ebfcd0afee7bfc313e_72.png"
+            }
+          }
         }
       },
-      "name": "Slack: Fallo workflow",
-      "type": "n8n-nodes-base.slack",
-      "typeVersion": 2,
-      "position": [
-        440,
-        -100
-      ],
-      "id": "efa9dfe6-d3a7-4c69-88c7-31ee7363715c",
       "credentials": {
         "slackApi": {
           "id": "DcJW5SNx5ydIUM5l",
           "name": "Smarta"
         }
-      },
-      "onError": "continueRegularOutput"
+      }
     },
     {
+      "id": "14b1a24f-5766-48cf-9cd1-b244039eee93",
+      "name": "¿Banco identificado?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        440,
+        100
+      ],
       "parameters": {
         "conditions": {
           "options": {
@@ -78,20 +93,10 @@
           "combinator": "and"
         },
         "options": {}
-      },
-      "name": "¿Banco identificado?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [
-        440,
-        100
-      ],
-      "id": "14b1a24f-5766-48cf-9cd1-b244039eee93"
+      }
     },
     {
-      "parameters": {
-        "jsCode": "return [{ json: $('Preparar aviso').first().json.registro }];"
-      },
+      "id": "7c1d8d56-c421-4416-a1f5-fbbcf54d72cc",
       "name": "Datos registro",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -99,9 +104,20 @@
         660,
         100
       ],
-      "id": "7c1d8d56-c421-4416-a1f5-fbbcf54d72cc"
+      "parameters": {
+        "jsCode": "return $input.all().map(i => ({ json: i.json.registro }));"
+      }
     },
     {
+      "id": "30af657f-53bc-4d3d-a709-5433b9de47a7",
+      "name": "Registrar en Command Center",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "onError": "continueRegularOutput",
+      "position": [
+        880,
+        100
+      ],
       "parameters": {
         "workflowId": {
           "__rl": true,
@@ -115,16 +131,82 @@
         "options": {
           "waitForSubWorkflow": false
         }
-      },
-      "name": "Registrar en Command Center",
-      "type": "n8n-nodes-base.executeWorkflow",
+      }
+    },
+    {
+      "id": "c320ac7e-e39f-4166-b07f-92d644214bde",
+      "name": "Cada 10 min (vigilancia)",
+      "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
-        880,
-        100
+        -440,
+        260
       ],
-      "id": "30af657f-53bc-4d3d-a709-5433b9de47a7",
-      "onError": "continueRegularOutput"
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 10
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "16acd65d-d49f-4ff2-be11-7970abe70d84",
+      "name": "Errores recientes (API n8n)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "position": [
+        -220,
+        260
+      ],
+      "parameters": {
+        "url": "https://huspy.app.n8n.cloud/api/v1/executions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "status",
+              "value": "error"
+            },
+            {
+              "name": "limit",
+              "value": "100"
+            },
+            {
+              "name": "includeData",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "hrakRabWjpdiv6Rp",
+          "name": "n8n API (revisión diaria)"
+        }
+      }
+    },
+    {
+      "id": "22f59052-53b9-4d7a-a308-e1cc53104424",
+      "name": "Fallos nuevos de bancos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        260
+      ],
+      "parameters": {
+        "jsCode": "// Vigilancia de fallos en los workflows de bancos.\n// Desde que el Repartidor los lanza como subflujos (modo \"integrated\"), n8n NO dispara el Error Trigger\n// cuando fallan. Este paso consulta cada 10 min las ejecuciones con error y las envía al mismo flujo de aviso.\nconst BANKS = {\"YqQIDjAozwsDAQR1\": \"CRSur_Offers_Received\", \"d3S1y48F0qKoVc6O\": \"Bankinter_Offers_Received_v19\", \"IOIg26EPCqtgCSLv\": \"CRAragón_Offers_Received\", \"12m8gBooQnUpwG14\": \"CRAsturias_Offers_Received\", \"Yd82lkDzorla4x7T\": \"CRGranada_Offers_Received\", \"eoxXdCBbq6zFL2me\": \"CRTeruel_Offers_Received_v3\", \"RezivFIqH10FdaB9\": \"CaixaBank_Offers_Received\", \"O6V1P2efIYpyu1bC\": \"CaixaPopular_Offers_Received_v2\", \"sEQ8HDbHIB3HvPDY\": \"DeutscheBank_Offers_Received\", \"qXIKYBEK2Yr7LWWs\": \"EuroCajaRural_Offers_Received\", \"n35da7vAodC9XUsH\": \"Globalcaja_Offers_Received\", \"IZpYM4yNvwza5ol7\": \"ING_Offers_Received\", \"VI1n8UQng6gAWV8B\": \"Ibercaja_Offers_Received\", \"iMzC4NjXDOlCbPuf\": \"LaboralKutxa_Offers_Received\", \"mxewpxzScRz3jHX2\": \"MyInvestor_Offers_Received_v2\", \"ZtErLRcQa0SwXfZb\": \"Sabadell_Offers_Received_v1\", \"pNOk4VBlVu9PLdKV\": \"UCI_Offers_Received\", \"hY2DR1im7zSNx28E\": \"Unicaja_Offers_Received_v4\"};\nconst sd = $getWorkflowStaticData('global');\nconst now = Date.now();\nconst first = !sd.seen;\nsd.seen = sd.seen || {};\nconst out = [];\nfor (const e of ($input.first().json.data || [])) {\n  if (!BANKS[e.workflowId] || sd.seen[e.id]) continue;\n  sd.seen[e.id] = now;\n  if (first) continue;   // primera ejecución: solo memoriza los fallos existentes, no avisa de errores antiguos\n  const rd = e.data?.resultData || {};\n  out.push({ json: {\n    workflow: { id: e.workflowId, name: BANKS[e.workflowId] },\n    execution: { id: e.id, url: `https://huspy.app.n8n.cloud/workflow/${e.workflowId}/executions/${e.id}`,\n                 lastNodeExecuted: rd.lastNodeExecuted || rd.error?.node?.name || null,\n                 error: { message: rd.error?.message || rd.error?.description || 'Error desconocido' } },\n  } });\n}\nfor (const [id, t] of Object.entries(sd.seen)) if (now - t > 3 * 24 * 3600e3) delete sd.seen[id];   // limpia memoria > 3 días\nreturn out;"
+      }
     }
   ],
   "connections": {
@@ -177,9 +259,43 @@
           }
         ]
       ]
+    },
+    "Cada 10 min (vigilancia)": {
+      "main": [
+        [
+          {
+            "node": "Errores recientes (API n8n)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Errores recientes (API n8n)": {
+      "main": [
+        [
+          {
+            "node": "Fallos nuevos de bancos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fallos nuevos de bancos": {
+      "main": [
+        [
+          {
+            "node": "Preparar aviso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
-    "executionOrder": "v1"
+    "executionOrder": "v1",
+    "availableInMCP": true
   }
 }

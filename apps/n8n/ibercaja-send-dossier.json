@@ -122,6 +122,9 @@
       "notes": "COL_K = motivo bloqueo",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
       "position": [
         2560,
         2288
@@ -786,6 +789,9 @@
       "name": "Sheets Error B",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
       "position": [
         6288,
         2448
@@ -1453,7 +1459,8 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
       "retryOnFail": true,
-      "maxTries": 2,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
       "position": [
         6944,
         2256
@@ -1858,6 +1865,9 @@
       "name": "Update redflags",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
       "position": [
         3184,
         1712
@@ -2153,6 +2163,9 @@
       "name": "Update redflags ok",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
       "position": [
         2080,
         2448
@@ -2411,6 +2424,9 @@
       "name": "Update redflags ok1",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
       "position": [
         3680,
         2304
@@ -2671,6 +2687,9 @@
       "name": "GET EMAILS",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.7,
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
       "position": [
         4256,
         2080
@@ -3116,6 +3135,9 @@
       "name": "Update redflags1",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
       "position": [
         3184,
         1888
@@ -3495,6 +3517,9 @@
       "name": "SheetsFaltaAutoBanco",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
       "position": [
         1184,
         2100
@@ -3763,6 +3788,9 @@
       "name": "SheetsFaltaAutoBanco3",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
       "position": [
         1072,
         1968
@@ -4066,6 +4094,9 @@
       "name": "Update redflags ok2",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
       "position": [
         4128,
         2272

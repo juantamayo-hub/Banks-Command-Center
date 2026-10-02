@@ -14,37 +14,38 @@
               "expression": "0 17 * * 1-5"
             }
           ]
-        },
-        "timezone": "Europe/Madrid"
+        }
       },
       "id": "schedule-trigger",
       "name": "Schedule (13:00 & 17:00 Mon-Fri)",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [0, 300]
+      "position": [
+        0,
+        304
+      ]
     },
     {
       "parameters": {
-        "operation": "download",
-        "fileId": {
-          "__rl": true,
-          "value": "1M-gqoiozJZz7nXgnVSPLtG253tLtgsoLgd7uTm3i_e8",
-          "mode": "id"
-        },
+        "url": "https://docs.google.com/spreadsheets/d/1M-gqoiozJZz7nXgnVSPLtG253tLtgsoLgd7uTm3i_e8/export?format=xlsx",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
         "options": {
-          "fileName": "=Kutxabank_{{ $now.format('yyyy-MM-dd_HHmm') }}.xlsx",
-          "googleFileConversion": {
-            "conversion": {
-              "docsToFormat": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          "response": {
+            "response": {
+              "responseFormat": "file"
             }
           }
         }
       },
-      "id": "download-sheet",
       "name": "Descargar Sheet como XLSX",
-      "type": "n8n-nodes-base.googleDrive",
-      "typeVersion": 2,
-      "position": [240, 300],
+      "id": "download-sheet",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        224,
+        304
+      ],
       "credentials": {
         "googleDriveOAuth2Api": {
           "id": "YgHXlMGu6BPZkHAh",
@@ -54,55 +55,87 @@
     },
     {
       "parameters": {
-        "sendTo": "juan.tamayo@huspy.io",
+        "sendTo": "formalizacion.hipotecas@servicios.rastreator.com, Joseluis.Rueda@rastreator.com, Carlos.Carrion@rastreator.com ",
         "subject": "=Kutxabank — {{ $now.setZone('Europe/Madrid').toFormat('d/M/yyyy') }} ({{ $now.setZone('Europe/Madrid').hour < 14 ? '13:00' : '17:00' }})",
-        "message": "<p>={{ $now.setZone('Europe/Madrid').hour < 14 ? 'Buenos días' : 'Buenas tardes' }},</p><p>A continuación encontrarás el Excel con el estado actualizado de los casos de Kutxabank a fecha de hoy, <strong>{{ $now.setZone('Europe/Madrid').toFormat('d/M/yyyy') }}</strong>.</p><p>El archivo adjunto incluye las siguientes pestañas:</p><ul><li><strong>1º Filtro</strong> — Casos pendientes de respuesta de Rastreator</li><li><strong>Ops. Enviadas</strong> — Operaciones enviadas y su estado actual</li></ul><p>Un saludo,<br><em>Equipo Hipotecas Bayteca</em></p>",
+        "message": "=<p>{{ $now.setZone('Europe/Madrid').hour < 14 ? 'Buenos días' : 'Buenas tardes' }},</p><p>A continuación encontrarás el Excel con el estado actualizado de los casos de Kutxabank a fecha de hoy, <strong>{{ $now.setZone('Europe/Madrid').toFormat('d/M/yyyy') }}</strong>.</p><p>El archivo adjunto incluye las siguientes pestañas:</p><ul><li><strong>1º Filtro</strong> — Casos pendientes de respuesta de Rastreator</li><li><strong>Ops. Enviadas</strong> — Operaciones enviadas y su estado actual</li></ul><p>Un saludo,<br><em>Equipo Hipotecas Bayteca</em></p>",
         "options": {
+          "appendAttribution": false,
           "attachmentsUi": {
             "attachmentsBinary": [
-              {
-                "property": "data"
-              }
+              {}
             ]
           },
-          "appendAttribution": false,
-          "emailType": "html"
+          "ccList": "Joaquin.Corredoyra@rastreator.com, Nayim.Tristante@rastreator.com, juan.tamayo@huspy.io, silvia.amigo@bayteca.com"
         }
       },
       "id": "send-email",
       "name": "Send Email con adjunto",
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.1,
-      "position": [480, 300],
+      "position": [
+        672,
+        304
+      ],
+      "webhookId": "591f7a0a-1606-4d7f-ad5a-de22323ea02b",
       "credentials": {
         "gmailOAuth2": {
           "id": "sW0S8ksGFfOAk3zC",
           "name": "Hipotecas Bayteca"
         }
       }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nfor (const item of items) {\n  if (item.binary?.data) {\n    item.binary.data.fileName = `Kutxabank_${$now.setZone(\"Europe/Madrid\").toFormat(\"yyyy-MM-dd_HHmm\")}.xlsx`;\n    item.binary.data.mimeType = \"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet\";\n  }\n}\nreturn items;"
+      },
+      "name": "Renombrar archivo",
+      "id": "rename-file-001",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        304
+      ]
     }
   ],
   "connections": {
     "Schedule (13:00 & 17:00 Mon-Fri)": {
       "main": [
         [
-          { "node": "Descargar Sheet como XLSX", "type": "main", "index": 0 }
+          {
+            "node": "Descargar Sheet como XLSX",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
     "Descargar Sheet como XLSX": {
       "main": [
         [
-          { "node": "Send Email con adjunto", "type": "main", "index": 0 }
+          {
+            "node": "Renombrar archivo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Renombrar archivo": {
+      "main": [
+        [
+          {
+            "node": "Send Email con adjunto",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     }
   },
   "settings": {
     "executionOrder": "v1",
-    "timezone": "Europe/Madrid"
-  },
-  "meta": {
-    "instanceId": "kutxabank-daily-email"
+    "binaryMode": "separate",
+    "availableInMCP": true
   }
 }
