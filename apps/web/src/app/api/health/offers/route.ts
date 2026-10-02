@@ -76,6 +76,22 @@ export async function GET(req: Request) {
     }
   }
 
+  // Estado en el Command Center de correos concretos (?message_ids=id1,id2…, IDs de Gmail):
+  // la revisión diaria descarta así los correos sin etiqueta "Procesado" que ya están resueltos.
+  const messageIds = (new URL(req.url).searchParams.get('message_ids') ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => /^[0-9a-f]{8,32}$/i.test(s))
+    .slice(0, 200)
+  let messageStatus: Record<string, string> = {}
+  if (messageIds.length) {
+    const { data } = await supabase
+      .from('bank_responses')
+      .select('external_id, status')
+      .in('external_id', messageIds)
+    messageStatus = Object.fromEntries((data ?? []).map((r) => [r.external_id, r.status]))
+  }
+
   const kutxaRows = kutxa.data ?? []
   return NextResponse.json({
     generated_at: new Date().toISOString(),
@@ -91,5 +107,6 @@ export async function GET(req: Request) {
     platform: { pending_dispatches: platform.count ?? null },
     misplaced_bank_deals_in_opportunity: misplaced,
     misplaced_error: misplacedError,
+    message_status: messageStatus,
   })
 }
