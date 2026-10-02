@@ -282,7 +282,10 @@ export async function listDriveFolder(folderLink: string | null): Promise<{ ok: 
   const url = process.env.ALMA_N8N_DOCS_URL
   const secret = process.env.OFFERS_API_SECRET
   if (!folderLink) return { ok: false, error: 'El deal no tiene carpeta de Drive (campo "Documents link" vacío).', files: [] }
-  if (!url || !secret) return { ok: false, error: 'Consulta de Drive no configurada (ALMA_N8N_DOCS_URL).', files: [] }
+  if (!url || !secret) {
+    const missing = [!url && 'ALMA_N8N_DOCS_URL', !secret && 'OFFERS_API_SECRET'].filter(Boolean).join(' y ')
+    return { ok: false, error: `Consulta de Drive no configurada (falta ${missing}).`, files: [] }
+  }
   try {
     const res = await fetch(url, {
       method: 'POST',
