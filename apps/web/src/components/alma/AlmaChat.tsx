@@ -27,6 +27,18 @@ const TOOL_LABELS: Record<string, string> = {
   preparar_mensaje_slack: 'Preparando el mensaje de Slack…',
 }
 
+// Guía «Cómo usarme»: vídeo corto + ejemplos que se pueden lanzar con un clic
+const GUIDE_EXAMPLES: Array<{ tema: string; q: string }> = [
+  { tema: 'Envíos', q: '¿Por qué no ha salido el envío de <cliente> a <banco>?' },
+  { tema: 'Documentos', q: '¿Qué documentos tiene <cliente>? ¿Cuánto pesa su dossier?' },
+  { tema: 'CaixaBank', q: '¿Cómo va la petición de CaixaBank del <nº de deal>?' },
+  { tema: 'Kutxabank', q: '¿Qué ha dicho Rastreator de <cliente>?' },
+  { tema: 'Colas', q: '¿Qué envíos tenemos pendientes de Santander?' },
+  { tema: 'Ofertas', q: '¿Han llegado ofertas hoy? ¿De qué bancos?' },
+  { tema: 'Request Hub', q: '¿Cuántos tickets abiertos hay y cuántos con SLA vencido?' },
+  { tema: 'Slack', q: 'Escríbele a Oscar que revise el envío de <cliente>' },
+]
+
 const SUGGESTIONS = [
   '¿Por qué no ha salido el envío de…?',
   '¿Qué documentos tiene…?',
@@ -118,6 +130,7 @@ export default function AlmaChat({ apiBase = '/api/alma', envLabel }: { apiBase?
   const [conversationId, setConversationId] = useState<string | null>(saved.conversationId)
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
+  const [guide, setGuide] = useState(false)
   const listRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
@@ -294,11 +307,52 @@ export default function AlmaChat({ apiBase = '/api/alma', envLabel }: { apiBase?
               </p>
               <p className="truncate text-[11px] text-white/70">Te cuento qué pasa con tus clientes y envíos</p>
             </div>
-            <button type="button" onClick={reset} className="rounded-md px-2 py-1 text-[11px] font-medium text-white/80 hover:bg-white/10 hover:text-white" title="Nueva conversación">
+            <button
+              type="button"
+              onClick={() => setGuide((g) => !g)}
+              className={`rounded-md px-2 py-1 text-[11px] font-medium hover:bg-white/10 hover:text-white ${guide ? 'bg-white/15 text-white' : 'text-white/80'}`}
+              title="Aprende a usar Alma"
+            >
+              {guide ? 'Volver' : 'Cómo usarme'}
+            </button>
+            <button type="button" onClick={() => { reset(); setGuide(false) }} className="rounded-md px-2 py-1 text-[11px] font-medium text-white/80 hover:bg-white/10 hover:text-white" title="Nueva conversación">
               Nueva
             </button>
           </div>
 
+          {guide ? (
+            <div className="flex-1 space-y-3 overflow-y-auto bg-gray-50 px-4 py-4 text-[13px] leading-relaxed text-gray-800">
+              <p className="font-semibold text-gray-900">Así se usa Alma en 40 segundos 🎬</p>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={`${apiBase}/tutorial`} alt="Ejemplo de conversación con Alma" className="w-full rounded-xl shadow-sm ring-1 ring-black/10" />
+              <p className="font-semibold text-gray-900">Prueba a preguntarle</p>
+              <div className="space-y-1.5">
+                {GUIDE_EXAMPLES.map((e) => (
+                  <button
+                    key={e.q}
+                    type="button"
+                    onClick={() => {
+                      setInput(e.q)
+                      setGuide(false)
+                      setTimeout(() => inputRef.current?.focus(), 0)
+                    }}
+                    className="block w-full rounded-xl bg-white px-3 py-2 text-left text-[12px] text-gray-700 shadow-sm ring-1 ring-black/10 hover:ring-bayteca-green"
+                  >
+                    <span className="font-semibold text-bayteca-green">{e.tema} · </span>
+                    {e.q}
+                  </button>
+                ))}
+              </div>
+              <p className="font-semibold text-gray-900">Trucos</p>
+              <ul className="space-y-1 text-[12px] text-gray-700">
+                <li>• Busca por nombre, nº de deal o DNI (con o sin tildes).</li>
+                <li>• Solo consulta: no cambia nada en la hoja, Pipedrive ni los flujos.</li>
+                <li>• Si es un fallo técnico, te sale el botón «Enviar reporte a Juanjo».</li>
+                <li>• Puede preparar un Slack para Oscar, Flor, Silvia, Ceci o Juanjo; tú lo revisas y lo envías.</li>
+                <li>• Dale 👍 o 👎 a cada respuesta (con 👎 cuéntale por qué): así aprende.</li>
+              </ul>
+            </div>
+          ) : (
           <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto bg-gray-50 px-3 py-4">
             {messages.length === 0 && (
               <div className="space-y-3 px-1">
@@ -307,6 +361,9 @@ export default function AlmaChat({ apiBase = '/api/alma', envLabel }: { apiBase?
                   documentos tiene, sus tickets… Yo miro la hoja, Pipedrive, Drive y Request Hub por ti. Lo que no puedo es
                   cambiar nada (soy de mirar, no de tocar 😇).
                 </div>
+                <button type="button" onClick={() => setGuide(true)} className="text-[12px] font-medium text-bayteca-green underline underline-offset-2">
+                  ¿Primera vez? Mira cómo usarme en 40 segundos 🎬
+                </button>
                 <div className="flex flex-wrap gap-1.5">
                   {SUGGESTIONS.map((s) => (
                     <button
@@ -464,6 +521,7 @@ export default function AlmaChat({ apiBase = '/api/alma', envLabel }: { apiBase?
               ),
             )}
           </div>
+          )}
 
           <form
             onSubmit={(e) => {
