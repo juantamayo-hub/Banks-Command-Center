@@ -27,7 +27,7 @@ export function almaAllowedFor(email: string | null | undefined): boolean {
 
 /** Límite de mensajes por usuario y día (protege el coste). */
 // En staging el límite es alto: ahí solo prueba Juanjo y se lanzan las evaluaciones (decenas de preguntas por pasada)
-export const ALMA_DAILY_MESSAGE_LIMIT = Number(process.env.ALMA_DAILY_MESSAGE_LIMIT || (process.env.ALMA_ENV && process.env.ALMA_ENV !== 'production' ? 1000 : 150))
+export const ALMA_DAILY_MESSAGE_LIMIT = Number(process.env.ALMA_DAILY_MESSAGE_LIMIT || ((process.env.ALMA_ENV || (process.env.VERCEL_ENV === 'production' ? 'production' : 'staging')) !== 'production' ? 1000 : 150))
 
 /** Juanjo en Slack (destinatario de los reportes técnicos). */
 export const JUANJO_SLACK_ID = 'U0A6ZSLGC1Y'
