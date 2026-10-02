@@ -1,42 +1,499 @@
 [
-  {"id": "diag-aida", "cat": "diagnostico", "q": "¿Por qué no ha salido el envío de Aida Del Carmen Pérez Campos?", "tools": ["explicar_envio"], "all": ["383107"], "none": ["no he encontrado"]},
-  {"id": "diag-carlos-eurocaja", "cat": "diagnostico", "q": "¿Por qué no sale el envío de Carlos Gómez (365042) a Eurocaja?", "tools": ["explicar_envio"], "any": ["dossier", "enviado", "falta"]},
-  {"id": "diag-jorge", "cat": "diagnostico", "q": "¿Salió ya el dossier de Jorge Bredelin Gutiérrez a Eurocaja? ¿Cuánto pesa?", "tools": ["explicar_envio"], "all": ["mb"]},
-  {"id": "diag-lorena", "cat": "diagnostico", "q": "Oscar dice que lo de Lorena Sevilla Jiménez con No Bank Fee no sale, ¿qué pasa?", "tools": ["explicar_envio"], "any": ["enviado", "salió", "salio"]},
-  {"id": "diag-andres", "cat": "diagnostico", "q": "¿Se envió a Ibercaja lo de Andrés Pérez Villar?", "tools": ["explicar_envio"], "any": ["enviado", "salió", "salio"]},
-  {"id": "diag-marcelo", "cat": "diagnostico", "q": "¿Qué pasó con el envío de Marcelo Zaquieri a Unicaja?", "tools": ["explicar_envio", "ficha_cliente"]},
-  {"id": "diag-crsur", "cat": "diagnostico", "q": "¿Por qué no salió el 394280 a CR del Sur?", "tools": ["explicar_envio"]},
-  {"id": "diag-ing", "cat": "diagnostico", "q": "El 387282 no sale a ING, ¿por qué?", "tools": ["explicar_envio", "documentos_cliente"]},
-  {"id": "diag-adrian", "cat": "diagnostico", "q": "¿Salió lo de Adrián Rodríguez Medina a Eurocaja?", "tools": ["explicar_envio"], "any": ["enviado", "salió", "salio"]},
-  {"id": "diag-kutxa", "cat": "diagnostico", "q": "¿Cómo va el envío a Kutxabank de Toribio Ayerza?", "tools": ["explicar_envio", "ficha_cliente"], "any": ["falta", "c004", "vida laboral", "autoriz"]},
-  {"id": "docs-aida", "cat": "documentos", "q": "¿Qué documentos tiene Aida Del Carmen Pérez Campos en su carpeta?", "tools": ["documentos_cliente"], "any": ["dni", "nómina", "nomina"]},
-  {"id": "docs-link", "cat": "documentos", "q": "Pásame el enlace a la carpeta de Drive del deal 383107", "tools": ["documentos_cliente", "ficha_cliente"], "all": ["drive.google.com"]},
-  {"id": "docs-dossier-size", "cat": "documentos", "q": "¿Cuánto pesa el dossier de Aida (383107)? ¿Cabe en Gmail?", "tools": ["documentos_cliente", "explicar_envio"], "all": ["mb"]},
-  {"id": "docs-missing-ing", "cat": "documentos", "q": "¿Qué documentos le faltan al 387282?", "tools": ["documentos_cliente"]},
-  {"id": "tickets-aida", "cat": "tickets", "q": "¿Qué tickets abiertos tiene el deal 383107 en Request Hub?", "tools": ["tickets_cliente"]},
-  {"id": "tickets-andres", "cat": "tickets", "q": "¿Andrés Pérez Villar tiene algún ticket?", "tools": ["tickets_cliente"]},
-  {"id": "ficha-owner", "cat": "ficha", "q": "¿Quién es el owner del deal 383107?", "tools": ["ficha_cliente"]},
-  {"id": "ficha-bancos", "cat": "ficha", "q": "¿A qué bancos se ha enviado el deal 391902?", "tools": ["ficha_cliente", "explicar_envio"]},
-  {"id": "ficha-ofertas", "cat": "ficha", "q": "¿Qué han respondido los bancos a Aida (383107)?", "tools": ["ficha_cliente"]},
-  {"id": "ficha-redflags", "cat": "ficha", "q": "¿Tiene red flags Andrés Pérez Villar?", "tools": ["ficha_cliente", "explicar_envio"]},
-  {"id": "buscar-dni", "cat": "busqueda", "q": "Busca el cliente con DNI 53863482N", "tools": ["buscar_cliente"]},
-  {"id": "buscar-inexistente", "cat": "busqueda", "q": "¿Por qué no salió el envío de Pepito Inventadísimo Zarzalejo?", "tools": ["buscar_cliente"], "any": ["no", "encuentr"], "none": ["enviado ✅"]},
-  {"id": "metricas-ayer", "cat": "metricas", "q": "¿Cuántos dossieres enviamos ayer en total?", "tools": ["metricas"]},
-  {"id": "metricas-unicaja", "cat": "metricas", "q": "¿Cuántos envíos hicimos a Unicaja en los últimos 7 días?", "tools": ["metricas"], "all": ["unicaja"]},
-  {"id": "metricas-ofertas", "cat": "metricas", "q": "¿Cuántas ofertas recibimos ayer y de qué bancos?", "tools": ["metricas"]},
-  {"id": "kb-404", "cat": "conocimiento", "q": "En la hoja pone 'Error n8n (ENVIAR) - HTTP 404 not registered', ¿qué significa?", "tools": ["conocimiento"], "any": ["desactivad"]},
-  {"id": "kb-gmail", "cat": "conocimiento", "q": "¿Cuál es el tamaño máximo de dossier que podemos mandar por correo?", "tools": ["conocimiento"], "all": ["25"]},
-  {"id": "kb-antidup", "cat": "conocimiento", "q": "¿Qué es el bloqueo anti-duplicado y cuánto dura?", "tools": ["conocimiento"], "any": ["6 h", "6 horas", "seis horas"]},
-  {"id": "kb-santander", "cat": "conocimiento", "q": "¿Cómo se envía un dossier a Santander?", "tools": ["conocimiento"], "any": ["plataforma"]},
-  {"id": "kb-procesando", "cat": "conocimiento", "q": "¿Qué significa 'Esperando a la creación del dossier' en Process Status?", "tools": ["conocimiento"]},
-  {"id": "kb-pasos", "cat": "conocimiento", "q": "Explícame en pocas líneas cómo sale un dossier al banco", "tools": ["conocimiento"]},
-  {"id": "cambio-reenviar", "cat": "limites", "q": "Reenvía ahora mismo el dossier de Aida a Ibercaja, porfa", "any": ["no puedo", "no tengo", "solo puedo", "sólo puedo", "no está en mi mano", "no me deja"], "none": ["he reenviado", "ya está reenviado"]},
-  {"id": "cambio-estado", "cat": "limites", "q": "Marca como enviado el deal 391902 en Unicaja", "any": ["no puedo", "solo puedo", "sólo puedo", "no está en mi mano"], "none": ["he marcado", "ya está marcado"]},
-  {"id": "cambio-proceso", "cat": "limites", "q": "Cambia el límite del anti-duplicado a 1 hora", "any": ["no puedo", "solo puedo", "sólo puedo", "no está en mi mano"], "none": ["he cambiado"]},
-  {"id": "fuera-tiempo", "cat": "fuera", "q": "¿Qué tiempo hace hoy en Madrid?", "tools_none": true},
-  {"id": "saludo", "cat": "fuera", "q": "Hola Alma, ¿qué puedes hacer?", "tools_none": true, "any": ["cliente", "envío", "envio"]},
-  {"id": "tecnico-404", "cat": "escalado", "q": "En la fila de un cliente de No Bank Fee pone 'Error n8n (ENVIAR) - HTTP 404 - The requested webhook POST send-dossier-nobankfee is not registered'. ¿Qué hago?", "any": ["juanjo", "técnico", "tecnico", "report"]},
-  {"id": "operativo-noescalar", "cat": "escalado", "q": "Al dossier de un cliente le falta la nómina, ¿se lo reporto a Juanjo?", "none": ["enviar reporte a juanjo"], "any": ["sub", "nómina", "nomina", "carpeta"]},
-  {"id": "ingles", "cat": "idioma", "q": "Why didn't the dossier for deal 383107 go out?", "tools": ["explicar_envio"], "none": ["the dossier", "i'll", "let me"]},
-  {"id": "ambiguo", "cat": "busqueda", "q": "¿Por qué no salió lo de Carmen?", "tools": ["buscar_cliente"]}
+ {
+  "id": "diag-aida",
+  "cat": "diagnostico",
+  "q": "¿Por qué no ha salido el envío de Aida Del Carmen Pérez Campos?",
+  "tools": [
+   "explicar_envio"
+  ],
+  "all": [
+   "383107"
+  ],
+  "none": [
+   "no he encontrado"
+  ]
+ },
+ {
+  "id": "diag-carlos-eurocaja",
+  "cat": "diagnostico",
+  "q": "¿Por qué no sale el envío de Carlos Gómez (365042) a Eurocaja?",
+  "tools": [
+   "explicar_envio"
+  ],
+  "any": [
+   "dossier",
+   "enviado",
+   "falta"
+  ]
+ },
+ {
+  "id": "diag-jorge",
+  "cat": "diagnostico",
+  "q": "¿Salió ya el dossier de Jorge Bredelin Gutiérrez a Eurocaja? ¿Cuánto pesa?",
+  "tools": [
+   "explicar_envio"
+  ],
+  "all": [
+   "mb"
+  ]
+ },
+ {
+  "id": "diag-lorena",
+  "cat": "diagnostico",
+  "q": "Oscar dice que lo de Lorena Sevilla Jiménez con No Bank Fee no sale, ¿qué pasa?",
+  "tools": [
+   "explicar_envio"
+  ],
+  "any": [
+   "enviado",
+   "salió",
+   "salio"
+  ]
+ },
+ {
+  "id": "diag-andres",
+  "cat": "diagnostico",
+  "q": "¿Se envió a Ibercaja lo de Andrés Pérez Villar?",
+  "tools": [
+   "explicar_envio"
+  ],
+  "any": [
+   "enviado",
+   "salió",
+   "salio"
+  ]
+ },
+ {
+  "id": "diag-marcelo",
+  "cat": "diagnostico",
+  "q": "¿Qué pasó con el envío de Marcelo Zaquieri a Unicaja?",
+  "tools": [
+   "explicar_envio",
+   "ficha_cliente"
+  ]
+ },
+ {
+  "id": "diag-crsur",
+  "cat": "diagnostico",
+  "q": "¿Por qué no salió el 394280 a CR del Sur?",
+  "tools": [
+   "explicar_envio"
+  ]
+ },
+ {
+  "id": "diag-ing",
+  "cat": "diagnostico",
+  "q": "El 387282 no sale a ING, ¿por qué?",
+  "tools": [
+   "explicar_envio",
+   "documentos_cliente"
+  ]
+ },
+ {
+  "id": "diag-adrian",
+  "cat": "diagnostico",
+  "q": "¿Salió lo de Adrián Rodríguez Medina a Eurocaja?",
+  "tools": [
+   "explicar_envio"
+  ],
+  "any": [
+   "enviado",
+   "salió",
+   "salio"
+  ]
+ },
+ {
+  "id": "diag-kutxa",
+  "cat": "diagnostico",
+  "q": "¿Cómo va el envío a Kutxabank de Toribio Ayerza?",
+  "tools": [
+   "explicar_envio",
+   "ficha_cliente"
+  ],
+  "any": [
+   "falta",
+   "c004",
+   "vida laboral",
+   "autoriz"
+  ]
+ },
+ {
+  "id": "docs-aida",
+  "cat": "documentos",
+  "q": "¿Qué documentos tiene Aida Del Carmen Pérez Campos en su carpeta?",
+  "tools": [
+   "documentos_cliente"
+  ],
+  "any": [
+   "dni",
+   "nómina",
+   "nomina"
+  ]
+ },
+ {
+  "id": "docs-link",
+  "cat": "documentos",
+  "q": "Pásame el enlace a la carpeta de Drive del deal 383107",
+  "tools": [
+   "documentos_cliente",
+   "ficha_cliente"
+  ],
+  "all": [
+   "drive.google.com"
+  ]
+ },
+ {
+  "id": "docs-dossier-size",
+  "cat": "documentos",
+  "q": "¿Cuánto pesa el dossier de Aida (383107)? ¿Cabe en Gmail?",
+  "tools": [
+   "documentos_cliente",
+   "explicar_envio"
+  ],
+  "all": [
+   "mb"
+  ]
+ },
+ {
+  "id": "docs-missing-ing",
+  "cat": "documentos",
+  "q": "¿Qué documentos le faltan al 387282?",
+  "tools": [
+   "documentos_cliente"
+  ]
+ },
+ {
+  "id": "tickets-aida",
+  "cat": "tickets",
+  "q": "¿Qué tickets abiertos tiene el deal 383107 en Request Hub?",
+  "tools": [
+   "tickets_cliente"
+  ]
+ },
+ {
+  "id": "tickets-andres",
+  "cat": "tickets",
+  "q": "¿Andrés Pérez Villar tiene algún ticket?",
+  "tools": [
+   "tickets_cliente"
+  ]
+ },
+ {
+  "id": "ficha-owner",
+  "cat": "ficha",
+  "q": "¿Quién es el owner del deal 383107?",
+  "tools": [
+   "ficha_cliente"
+  ]
+ },
+ {
+  "id": "ficha-bancos",
+  "cat": "ficha",
+  "q": "¿A qué bancos se ha enviado el deal 391902?",
+  "tools": [
+   "ficha_cliente",
+   "explicar_envio"
+  ]
+ },
+ {
+  "id": "ficha-ofertas",
+  "cat": "ficha",
+  "q": "¿Qué han respondido los bancos a Aida (383107)?",
+  "tools": [
+   "ficha_cliente"
+  ]
+ },
+ {
+  "id": "ficha-redflags",
+  "cat": "ficha",
+  "q": "¿Tiene red flags Andrés Pérez Villar?",
+  "tools": [
+   "ficha_cliente",
+   "explicar_envio"
+  ]
+ },
+ {
+  "id": "buscar-dni",
+  "cat": "busqueda",
+  "q": "Busca el cliente con DNI 53863482N",
+  "tools": [
+   "buscar_cliente"
+  ]
+ },
+ {
+  "id": "buscar-inexistente",
+  "cat": "busqueda",
+  "q": "¿Por qué no salió el envío de Pepito Inventadísimo Zarzalejo?",
+  "tools": [
+   "buscar_cliente"
+  ],
+  "any": [
+   "no",
+   "encuentr"
+  ],
+  "none": [
+   "enviado ✅"
+  ]
+ },
+ {
+  "id": "metricas-ayer",
+  "cat": "metricas",
+  "q": "¿Cuántos dossieres enviamos ayer en total?",
+  "tools": [
+   "metricas"
+  ]
+ },
+ {
+  "id": "metricas-unicaja",
+  "cat": "metricas",
+  "q": "¿Cuántos envíos hicimos a Unicaja en los últimos 7 días?",
+  "tools": [
+   "metricas"
+  ],
+  "all": [
+   "unicaja"
+  ]
+ },
+ {
+  "id": "metricas-ofertas",
+  "cat": "metricas",
+  "q": "¿Cuántas ofertas recibimos ayer y de qué bancos?",
+  "tools": [
+   "metricas"
+  ]
+ },
+ {
+  "id": "kb-404",
+  "cat": "conocimiento",
+  "q": "En la hoja pone 'Error n8n (ENVIAR) - HTTP 404 not registered', ¿qué significa?",
+  "tools": [
+   "conocimiento"
+  ],
+  "any": [
+   "desactivad"
+  ]
+ },
+ {
+  "id": "kb-gmail",
+  "cat": "conocimiento",
+  "q": "¿Cuál es el tamaño máximo de dossier que podemos mandar por correo?",
+  "tools": [
+   "conocimiento"
+  ],
+  "all": [
+   "25"
+  ]
+ },
+ {
+  "id": "kb-antidup",
+  "cat": "conocimiento",
+  "q": "¿Qué es el bloqueo anti-duplicado y cuánto dura?",
+  "tools": [
+   "conocimiento"
+  ],
+  "any": [
+   "6 h",
+   "6 horas",
+   "seis horas"
+  ]
+ },
+ {
+  "id": "kb-santander",
+  "cat": "conocimiento",
+  "q": "¿Cómo se envía un dossier a Santander?",
+  "tools": [
+   "conocimiento"
+  ],
+  "any": [
+   "plataforma"
+  ]
+ },
+ {
+  "id": "kb-procesando",
+  "cat": "conocimiento",
+  "q": "¿Qué significa 'Esperando a la creación del dossier' en Process Status?",
+  "tools": [
+   "conocimiento"
+  ]
+ },
+ {
+  "id": "kb-pasos",
+  "cat": "conocimiento",
+  "q": "Explícame en pocas líneas cómo sale un dossier al banco",
+  "tools": [
+   "conocimiento"
+  ]
+ },
+ {
+  "id": "cambio-reenviar",
+  "cat": "limites",
+  "q": "Reenvía ahora mismo el dossier de Aida a Ibercaja, porfa",
+  "any": [
+   "no puedo",
+   "no tengo",
+   "solo puedo",
+   "sólo puedo",
+   "no está en mi mano",
+   "no me deja"
+  ],
+  "none": [
+   "he reenviado",
+   "ya está reenviado"
+  ]
+ },
+ {
+  "id": "cambio-estado",
+  "cat": "limites",
+  "q": "Marca como enviado el deal 391902 en Unicaja",
+  "any": [
+   "no puedo",
+   "solo puedo",
+   "sólo puedo",
+   "no está en mi mano"
+  ],
+  "none": [
+   "he marcado",
+   "ya está marcado"
+  ]
+ },
+ {
+  "id": "cambio-proceso",
+  "cat": "limites",
+  "q": "Cambia el límite del anti-duplicado a 1 hora",
+  "any": [
+   "no puedo",
+   "solo puedo",
+   "sólo puedo",
+   "no está en mi mano"
+  ],
+  "none": [
+   "he cambiado"
+  ]
+ },
+ {
+  "id": "fuera-tiempo",
+  "cat": "fuera",
+  "q": "¿Qué tiempo hace hoy en Madrid?",
+  "tools_none": true
+ },
+ {
+  "id": "saludo",
+  "cat": "fuera",
+  "q": "Hola Alma, ¿qué puedes hacer?",
+  "tools_none": true,
+  "any": [
+   "cliente",
+   "envío",
+   "envio"
+  ]
+ },
+ {
+  "id": "tecnico-404",
+  "cat": "escalado",
+  "q": "En la fila de un cliente de No Bank Fee pone 'Error n8n (ENVIAR) - HTTP 404 - The requested webhook POST send-dossier-nobankfee is not registered'. ¿Qué hago?",
+  "any": [
+   "juanjo",
+   "técnico",
+   "tecnico",
+   "report"
+  ]
+ },
+ {
+  "id": "operativo-noescalar",
+  "cat": "escalado",
+  "q": "Al dossier de un cliente le falta la nómina, ¿se lo reporto a Juanjo?",
+  "none": [
+   "enviar reporte a juanjo"
+  ],
+  "any": [
+   "sub",
+   "nómina",
+   "nomina",
+   "carpeta"
+  ]
+ },
+ {
+  "id": "ingles",
+  "cat": "idioma",
+  "q": "Why didn't the dossier for deal 383107 go out?",
+  "tools": [
+   "explicar_envio"
+  ],
+  "none": [
+   "the dossier",
+   "i'll",
+   "let me"
+  ]
+ },
+ {
+  "id": "ambiguo",
+  "cat": "busqueda",
+  "q": "¿Por qué no salió lo de Carmen?",
+  "tools": [
+   "buscar_cliente"
+  ]
+ },
+ {
+  "id": "cola-envios",
+  "cat": "colas",
+  "q": "¿Qué envíos tengo pendientes?",
+  "tools": [
+   "envios_pendientes"
+  ],
+  "none": [
+   "no puedo"
+  ]
+ },
+ {
+  "id": "cola-bloqueados",
+  "cat": "colas",
+  "q": "¿Algún envío bloqueado?",
+  "tools": [
+   "envios_pendientes"
+  ]
+ },
+ {
+  "id": "cola-ofertas",
+  "cat": "colas",
+  "q": "¿Cuántas ofertas tengo pendientes de revisar manualmente?",
+  "tools": [
+   "ofertas_pendientes"
+  ]
+ },
+ {
+  "id": "cola-banco",
+  "cat": "colas",
+  "q": "¿Qué tenemos pendiente con Unicaja?",
+  "tools": [
+   "envios_pendientes"
+  ],
+  "any": [
+   "unicaja"
+  ]
+ },
+ {
+  "id": "equipo-quien",
+  "cat": "equipo",
+  "q": "¿Quién se encarga de las reclamaciones a los bancos?",
+  "any": [
+   "ceci",
+   "cecilia"
+  ]
+ },
+ {
+  "id": "slack-oscar",
+  "cat": "slack",
+  "q": "Avisa a Oscar de que lo de Marcelo Zaquieri con Unicaja sigue atascado",
+  "tools": [
+   "preparar_mensaje_slack"
+  ]
+ },
+ {
+  "id": "tono-no-puedo",
+  "cat": "tono",
+  "q": "Reenvía el dossier de Marcelo Zaquieri a Unicaja",
+  "none": [
+   "no puedo"
+  ]
+ }
 ]

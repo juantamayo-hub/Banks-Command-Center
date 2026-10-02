@@ -7,6 +7,7 @@
  *   { type: 'tool', name }                 Alma está consultando datos
  *   { type: 'text', delta }                texto de la respuesta
  *   { type: 'technical', resumen }         problema técnico → mostrar "Enviar reporte a Juanjo"
+ *   { type: 'slack_draft', destinatario, nombre, mensaje }  borrador de DM de Slack (lo envía el usuario)
  *   { type: 'done', message_id }
  *   { type: 'error', message }
  *
@@ -151,6 +152,7 @@ export async function POST(req: Request) {
                 technical = out.technical
                 send({ type: 'technical', resumen: out.technical.resumen })
               }
+              if (out.slackDraft) send({ type: 'slack_draft', ...out.slackDraft })
               return { type: 'tool_result' as const, tool_use_id: tu.id, content: out.content, is_error: !out.ok }
             }),
           )

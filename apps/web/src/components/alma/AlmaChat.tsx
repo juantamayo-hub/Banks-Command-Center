@@ -20,12 +20,17 @@ const TOOL_LABELS: Record<string, string> = {
   metricas: 'Calculando cifras…',
   conocimiento: 'Repasando cómo funciona el proceso…',
   marcar_problema_tecnico: 'Preparando el reporte técnico…',
+  envios_pendientes: 'Revisando la cola de envíos del equipo…',
+  ofertas_pendientes: 'Revisando las ofertas por revisar…',
+  equipo: 'Mirando quién lleva qué…',
+  preparar_mensaje_slack: 'Preparando el mensaje de Slack…',
 }
 
 const SUGGESTIONS = [
   '¿Por qué no ha salido el envío de…?',
   '¿Qué documentos tiene…?',
   '¿Qué tickets abiertos tiene…?',
+  '¿Qué envíos tenemos bloqueados?',
   '¿Cuántos dossieres enviamos ayer?',
 ]
 
@@ -38,6 +43,7 @@ interface ChatMessage {
   report?: 'idle' | 'sending' | 'sent' | 'error'
   reportMsg?: string
   error?: boolean
+  slack?: { destinatario: string; nombre: string; mensaje: string; state: 'draft' | 'sending' | 'sent' | 'error'; info?: string }
 }
 
 // ── Formato mínimo y seguro: **negrita**, [texto](url), viñetas y saltos de línea ─────────────
@@ -169,6 +175,7 @@ export default function AlmaChat({ apiBase = '/api/alma', envLabel }: { apiBase?
           else if (ev.type === 'text') patch(botId, (m) => ({ ...m, text: m.text + (ev.delta as string), status: null }))
           else if (ev.type === 'tool') patch(botId, (m) => ({ ...m, status: TOOL_LABELS[ev.name as string] ?? 'Consultando datos…' }))
           else if (ev.type === 'technical') patch(botId, (m) => ({ ...m, technical: ev.resumen as string, report: 'idle' }))
+          else if (ev.type === 'slack_draft') patch(botId, (m) => ({ ...m, slack: { destinatario: ev.destinatario as string, nombre: ev.nombre as string, mensaje: ev.mensaje as string, state: 'draft' } }))
           else if (ev.type === 'error') patch(botId, (m) => ({ ...m, text: m.text || (ev.message as string), status: null, error: true }))
           else if (ev.type === 'done') patch(botId, (m) => ({ ...m, status: null }))
         }
@@ -196,6 +203,21 @@ export default function AlmaChat({ apiBase = '/api/alma', envLabel }: { apiBase?
       else patch(id, (m) => ({ ...m, report: 'error', reportMsg: data.error || 'No se pudo enviar el reporte.' }))
     } catch {
       patch(id, (m) => ({ ...m, report: 'error', reportMsg: 'No se pudo enviar el reporte.' }))
+    }
+  }, [apiBase, conversationId, patch])
+
+  const sendSlack = useCallback(async (id: string, slack: NonNullable<ChatMessage['slack']>) => {
+    patch(id, (m) => ({ ...m, slack: { ...slack, state: 'sending' } }))
+    try {
+      const res = await fetch(`${apiBase}/slack`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversation_id: conversationId, destinatario: slack.destinatario, mensaje: slack.mensaje }),
+      })
+      const data = await res.json().catch(() => ({}))
+      patch(id, (m) => ({ ...m, slack: { ...slack, state: res.ok ? 'sent' : 'error', info: res.ok ? `¡Enviado a ${slack.nombre} por Slack!` : data.error || 'No se pudo enviar.' } }))
+    } catch {
+      patch(id, (m) => ({ ...m, slack: { ...slack, state: 'error', info: 'No se pudo enviar.' } }))
     }
   }, [apiBase, conversationId, patch])
 
@@ -298,6 +320,35 @@ export default function AlmaChat({ apiBase = '/api/alma', envLabel }: { apiBase?
                             </span>
                             {m.status}
                           </p>
+                        )}
+                      </div>
+                    )}
+                    {m.slack && (
+                      <div className="rounded-xl bg-sky-50 px-3 py-2 text-[12px] text-sky-950 ring-1 ring-sky-200">
+                        <p className="font-medium">💬 Mensaje para {m.slack.nombre} por Slack</p>
+                        {m.slack.state === 'sent' ? (
+                          <p className="mt-1">{m.slack.info}</p>
+                        ) : (
+                          <>
+                            <textarea
+                              value={m.slack.mensaje}
+                              onChange={(e) => {
+                                const value = e.target.value
+                                patch(m.id, (x) => (x.slack ? { ...x, slack: { ...x.slack, mensaje: value } } : x))
+                              }}
+                              rows={4}
+                              className="mt-1.5 w-full resize-y rounded-lg border border-sky-200 bg-white px-2 py-1.5 text-[12px] text-gray-800 focus:border-sky-400 focus:outline-none"
+                            />
+                            {m.slack.state === 'error' && <p className="mt-1 text-red-700">{m.slack.info}</p>}
+                            <button
+                              type="button"
+                              disabled={m.slack.state === 'sending' || !m.slack.mensaje.trim()}
+                              onClick={() => m.slack && sendSlack(m.id, m.slack)}
+                              className="mt-1.5 rounded-lg bg-sky-600 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-sky-700 disabled:opacity-60"
+                            >
+                              {m.slack.state === 'sending' ? 'Enviando…' : `Enviar a ${m.slack.nombre}`}
+                            </button>
+                          </>
                         )}
                       </div>
                     )}

@@ -345,3 +345,101 @@ export async function getMetrics(supabase: Admin, dias: number) {
     nota: `Los bancos por plataforma (${PLATFORM_BANKS.join(', ')}) cuentan lo marcado como enviado en "Envíos por plataforma".`,
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Colas del equipo (no por persona: "lo mío" = lo del equipo)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const OPEN_SHEET_STATUSES = ['pending_ready', 'sending', 'failed', 'blocked_red_flag', 'blocked_missing_docs', 'blocked_validation', 'relaunch_requested', 'unknown']
+
+/** Envíos que se pidieron (Enviar=Yes/Autorización) y no constan enviados, por plataforma pendientes y Kutxabank pendientes. */
+export async function getPendingSends(
+  supabase: Admin,
+  opts: { banco?: string | null; owner?: string | null; dias?: number },
+  diagnoseRow: (row: Record<string, unknown>) => { motivo: string; explicacion: string; es_tecnico: boolean },
+) {
+  const dias = Math.min(Math.max(Math.round(opts.dias ?? 21) || 21, 1), 90)
+  const since = new Date(Date.now() - dias * 86400_000).toISOString()
+  const bancoQ = (opts.banco || '').trim().toLowerCase()
+  const ownerQ = (opts.owner || '').trim().toLowerCase()
+
+  const [banks, sheet, platform, kutxa] = await Promise.all([
+    supabase.from('banks').select('id, slug, name'),
+    supabase
+      .from('sheet_rows')
+      .select('bank_id, opportunity_id, nombre_cliente, owner, status, status_raw, process_status, notas, send_trigger, autorizacion, autorizacion_red_flag, red_flags_raw, uid, timestamp_sent, created_at, is_discarded, pipedrive_lost')
+      .in('status', OPEN_SHEET_STATUSES)
+      .is('timestamp_sent', null)
+      .gte('created_at', since)
+      .limit(1000),
+    supabase.from('platform_dispatches').select('bank_name, deal_id, person_name, created_at').is('sent_at', null).is('dismissed_at', null).gte('created_at', since).limit(500),
+    supabase.from('kutxabank_submissions').select('deal_id, nombre_cliente, missing_docs, created_at').is('sent_at', null).is('dismissed_at', null).gte('created_at', since).limit(200),
+  ])
+  const bankById = new Map((banks.data ?? []).map((b) => [b.id, b]))
+
+  type Item = { cliente: string | null; opportunity_id: number; banco: string; motivo: string; detalle: string; tecnico: boolean; owner: string | null; desde: string }
+  const items: Item[] = []
+  for (const r of sheet.data ?? []) {
+    if (r.is_discarded || r.pipedrive_lost) continue
+    if (!r.send_trigger && !String(r.autorizacion ?? '').toLowerCase().startsWith('yes')) continue // no se ha pedido el envío
+    const b = bankById.get(r.bank_id)
+    const banco = b?.name ?? String(r.bank_id)
+    if (bancoQ && !banco.toLowerCase().includes(bancoQ) && !(b?.slug ?? '').includes(bancoQ)) continue
+    if (ownerQ && !String(r.owner ?? '').toLowerCase().includes(ownerQ)) continue
+    const d = diagnoseRow({ ...r, banco, bank_slug: b?.slug })
+    items.push({ cliente: r.nombre_cliente, opportunity_id: r.opportunity_id, banco, motivo: d.motivo, detalle: d.explicacion, tecnico: d.es_tecnico, owner: r.owner, desde: r.created_at })
+  }
+  for (const p of platform.data ?? []) {
+    if (bancoQ && !String(p.bank_name).toLowerCase().includes(bancoQ)) continue
+    if (ownerQ) continue // la plataforma no guarda owner
+    items.push({ cliente: p.person_name, opportunity_id: p.deal_id, banco: p.bank_name, motivo: 'platform_pending', detalle: 'Pendiente de enviar por la plataforma del banco y marcar en "Envíos por plataforma".', tecnico: false, owner: null, desde: p.created_at })
+  }
+  for (const k of kutxa.data ?? []) {
+    if (bancoQ && !'kutxabank'.includes(bancoQ)) continue
+    if (ownerQ) continue
+    const missing = (k.missing_docs as string[] | null) ?? []
+    items.push({ cliente: k.nombre_cliente, opportunity_id: k.deal_id, banco: 'Kutxabank', motivo: missing.length ? 'missing_docs' : 'platform_pending', detalle: missing.length ? `Faltan: ${missing.join(', ')}` : 'Pendiente de enviar a Rastreator.', tecnico: false, owner: null, desde: k.created_at })
+  }
+
+  const count = (key: (i: Item) => string) => Object.entries(items.reduce<Record<string, number>>((acc, i) => ((acc[key(i)] = (acc[key(i)] ?? 0) + 1), acc), {})).sort((a, b) => b[1] - a[1]).map(([k, n]) => ({ [k]: n }))
+  const BLOQUEO = new Set(['dossier_too_big', 'gmail_error', 'n8n_flow_inactive', 'n8n_error', 'apps_script_error', 'sheet_blocked', 'antidup_blocked', 'red_flag', 'missing_docs', 'no_result'])
+  const sorted = items.sort((a, b) => Number(BLOQUEO.has(b.motivo)) - Number(BLOQUEO.has(a.motivo)) || a.desde.localeCompare(b.desde))
+  return {
+    periodo: `filas creadas en los últimos ${dias} días`,
+    total: items.length,
+    bloqueados: items.filter((i) => BLOQUEO.has(i.motivo)).length,
+    por_motivo: count((i) => i.motivo),
+    por_banco: count((i) => i.banco),
+    lista: sorted.slice(0, 40).map((i) => ({ ...i, desde: i.desde.slice(0, 10), enlace: pipedriveUrl(i.opportunity_id) })),
+    nota: items.length > 40 ? `Se muestran 40 de ${items.length}; filtra por banco u owner para ver el resto.` : undefined,
+  }
+}
+
+/** Cola «Requieren atención» de Ofertas recibidas (respuestas sin vincular, con error o en revisión manual). */
+export async function getPendingOffers(supabase: Admin, opts: { banco?: string | null }) {
+  const bancoQ = (opts.banco || '').trim().toLowerCase()
+  const { data, error } = await supabase
+    .from('bank_responses')
+    .select('bank_slug, client_name, subject, classification, status, match_status, error_message, received_at, bank_deal_id, general_deal_id')
+    .neq('status', 'resolved')
+    .or('status.in.(error,manual_review),match_status.neq.matched')
+    .order('received_at', { ascending: false })
+    .limit(200)
+  if (error) return { error: error.message }
+  const rows = (data ?? []).filter((r) => !bancoQ || r.bank_slug.includes(bancoQ.replace(/\s+/g, '_')))
+  const porBanco = Object.entries(rows.reduce<Record<string, number>>((a, r) => ((a[r.bank_slug] = (a[r.bank_slug] ?? 0) + 1), a), {})).sort((a, b) => b[1] - a[1])
+  return {
+    total: rows.length,
+    por_banco: porBanco.map(([b, n]) => ({ [b]: n })),
+    lista: rows.slice(0, 30).map((r) => ({
+      banco: r.bank_slug,
+      cliente: r.client_name,
+      asunto: r.subject,
+      tipo: r.classification,
+      motivo: r.status === 'error' ? `error: ${r.error_message ?? ''}`.slice(0, 160) : r.match_status !== 'matched' ? 'sin vincular a un deal' : (r.error_message ?? 'revisión manual').slice(0, 160),
+      recibido: r.received_at?.slice(0, 16),
+      deal: r.bank_deal_id ?? r.general_deal_id,
+    })),
+    donde: 'Command Center → Ofertas recibidas → «Requieren atención»',
+  }
+}

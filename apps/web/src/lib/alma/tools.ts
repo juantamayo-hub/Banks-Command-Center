@@ -5,9 +5,10 @@
 
 import type Anthropic from '@anthropic-ai/sdk'
 import { createAdminClient } from '@/lib/supabase/server'
-import { getClientRecords, getDealInfo, getMetrics, getTickets, listDriveFolder, searchClients, summarizeDocs } from './data'
+import { getClientRecords, getDealInfo, getMetrics, getPendingOffers, getPendingSends, getTickets, listDriveFolder, searchClients, summarizeDocs } from './data'
 import { diagnose } from './diagnose'
 import { KNOWLEDGE, KNOWLEDGE_TOPICS } from './knowledge'
+import { TEAM, findMember } from './team'
 
 export const ALMA_TOOLS: Anthropic.Tool[] = [
   {
@@ -84,6 +85,46 @@ export const ALMA_TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'envios_pendientes',
+    description: 'Cola del EQUIPO de envíos de dossier que se pidieron y no constan enviados (hoja, plataforma y Kutxabank), con el motivo de cada uno (bloqueado por red flag, faltan documentos, dossier pesado, flujo caído, pendiente de plataforma…). Úsala para "¿qué envíos tenemos/tengo pendientes?", "¿hay algo bloqueado?". Filtros opcionales por banco u owner (MC).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        banco: { type: 'string', description: 'Filtrar por banco (opcional)' },
+        owner: { type: 'string', description: 'Filtrar por owner/MC (opcional)' },
+        dias: { type: 'integer', description: 'Antigüedad máxima de las filas en días (por defecto 21)' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'ofertas_pendientes',
+    description: 'Cola del EQUIPO de respuestas de bancos que hay que revisar a mano («Requieren atención» en Ofertas recibidas): sin vincular a un deal, con error o en revisión manual. Filtro opcional por banco.',
+    input_schema: {
+      type: 'object',
+      properties: { banco: { type: 'string', description: 'Filtrar por banco (opcional)' } },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'equipo',
+    description: 'Quién es quién en Bank Ops (Oscar, Flor, Silvia, Juanjo, Ceci): rol y de qué temas se encarga cada uno. Úsala para saber a quién derivar algo.',
+    input_schema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'preparar_mensaje_slack',
+    description: 'Prepara un borrador de mensaje directo de Slack para una persona del equipo (oscar, flor, silvia, juanjo, ceci). NO lo envía: el usuario lo revisa y pulsa "Enviar". Úsala cuando haya que avisar o pedir algo a alguien, o cuando el usuario te lo pida. Escribe el mensaje en primera persona del usuario, breve y con el contexto necesario (cliente, deal, banco, qué se necesita).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        destinatario: { type: 'string', enum: TEAM.map((m) => m.clave) },
+        mensaje: { type: 'string', description: 'Texto del mensaje (máx. ~800 caracteres)' },
+      },
+      required: ['destinatario', 'mensaje'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'marcar_problema_tecnico',
     description: 'Úsala SOLO cuando los datos muestran un problema técnico (flujo de n8n caído o con error, fallo de Supabase/Apps Script/sincronización, o un proceso mal diseñado), nunca para problemas operativos (documentos, red flags, dossier pesado…). No envía nada: muestra al usuario el botón para enviar el reporte a Juanjo.',
     input_schema: {
@@ -103,6 +144,7 @@ export interface ToolOutcome {
   content: string
   ok: boolean
   technical?: { resumen: string; opportunity_id?: number; banco?: string }
+  slackDraft?: { destinatario: string; nombre: string; mensaje: string }
 }
 
 const MAX_RESULT_CHARS = 14_000
@@ -178,6 +220,29 @@ export async function runAlmaTool(name: string, input: Record<string, unknown>):
       case 'conocimiento': {
         const k = KNOWLEDGE[String(input.tema)]
         return k ? { ok: true, content: `${k.titulo}\n${k.texto}` } : { ok: false, content: `Tema desconocido. Temas: ${KNOWLEDGE_TOPICS.join(', ')}` }
+      }
+      case 'envios_pendientes': {
+        const res = await getPendingSends(
+          supabase,
+          { banco: (input.banco as string) || null, owner: (input.owner as string) || null, dias: Number(input.dias) || 21 },
+          (row) => diagnose({ filas_hoja: [row], envios_plataforma: [], kutxabank: [], reservas_envio: [], eventos_flujo: [], red_flags: [] })[0] ?? { motivo: 'unknown', explicacion: '', es_tecnico: false },
+        )
+        return { ok: true, content: json(res) }
+      }
+      case 'ofertas_pendientes':
+        return { ok: true, content: json(await getPendingOffers(supabase, { banco: (input.banco as string) || null })) }
+      case 'equipo':
+        return { ok: true, content: json(TEAM.map(({ clave, nombre, apodo, rol, temas }) => ({ clave, nombre, apodo, rol, temas }))) }
+      case 'preparar_mensaje_slack': {
+        const m = findMember(String(input.destinatario ?? ''))
+        const mensaje = String(input.mensaje ?? '').trim().slice(0, 1500)
+        if (!m) return { ok: false, content: `Destinatario desconocido. Opciones: ${TEAM.map((t) => t.clave).join(', ')}` }
+        if (!mensaje) return { ok: false, content: 'Falta el mensaje.' }
+        return {
+          ok: true,
+          content: `Borrador listo para ${m.apodo}. El usuario lo verá en el chat, podrá editarlo y pulsar "Enviar". Dile que lo revise; no digas que ya está enviado.`,
+          slackDraft: { destinatario: m.clave, nombre: m.apodo, mensaje },
+        }
       }
       case 'marcar_problema_tecnico': {
         const resumen = String(input.resumen ?? '').slice(0, 1500)
