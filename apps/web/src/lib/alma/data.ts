@@ -58,7 +58,8 @@ export async function searchClients(supabase: Admin, q: string): Promise<ClientH
   if (!term) return []
   const n = /^\d{4,9}$/.test(term) ? Number(term) : null
   const isDni = /^[XYZ]?\d{7,8}[A-Z]$/i.test(term.replace(/[\s-]/g, ''))
-  const like = `%${term.replace(/[%_]/g, '')}%`
+  // Insensible a tildes y mayúsculas: "Pérez" encuentra "Perez" y viceversa (vocales y n/ñ pasan a comodín de 1 carácter)
+  const like = `%${term.replace(/[%_]/g, '').replace(/[aáàäeéèëiíìïoóòöuúùünñ]/gi, '_')}%`
 
   const [{ data: banks }, sheet, platform, kutxa] = await Promise.all([
     supabase.from('banks').select('id, name'),

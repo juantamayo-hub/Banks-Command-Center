@@ -21,6 +21,11 @@ export interface Diagnosis {
 type Row = Record<string, unknown>
 const s = (v: unknown) => (v === null || v === undefined ? '' : String(v))
 const lc = (v: unknown) => s(v).toLowerCase()
+/** Fecha (dd/mm/aaaa) en hora de Madrid: la hoja guarda la medianoche de Madrid como las 22:00 UTC del día anterior */
+const fechaMadrid = (v: unknown) => {
+  const t = Date.parse(s(v))
+  return Number.isFinite(t) ? new Date(t).toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid' }) : s(v).slice(0, 10)
+}
 
 export interface DiagnoseInput {
   filas_hoja: Row[]
@@ -62,7 +67,7 @@ function diagnoseSheetRow(row: Row, input: DiagnoseInput): Diagnosis {
 
   // 1) Enviado
   if (status === 'sent' || /^enviado/i.test(statusRaw) || row.timestamp_sent) {
-    const fecha = s(row.timestamp_sent).slice(0, 10)
+    const fecha = row.timestamp_sent ? fechaMadrid(row.timestamp_sent) : ''
     return { banco, estado: 'enviado', motivo: 'sent', explicacion: `El dossier salió${fecha ? ` (fecha de envío ${fecha})` : ''}.`, que_hacer: 'Nada: está enviado. Si el banco no responde, mirar sus respuestas.', es_tecnico: false, evidencias: ev }
   }
 
@@ -181,7 +186,7 @@ export function diagnose(input: DiagnoseInput, banco?: string | null): Diagnosis
     const name = s(p.bank_name)
     if (!match(name) || p.dismissed_at) continue
     out.push(p.sent_at
-      ? { banco: name, estado: 'enviado', motivo: 'sent', explicacion: `Se marcó como enviado por plataforma el ${s(p.sent_at).slice(0, 10)}${p.sent_by ? ` (${s(p.sent_by)})` : ''}.`, que_hacer: 'Nada.', es_tecnico: false, evidencias: ['Envíos por plataforma'] }
+      ? { banco: name, estado: 'enviado', motivo: 'sent', explicacion: `Se marcó como enviado por plataforma el ${fechaMadrid(p.sent_at)}${p.sent_by ? ` (${s(p.sent_by)})` : ''}.`, que_hacer: 'Nada.', es_tecnico: false, evidencias: ['Envíos por plataforma'] }
       : { banco: name, estado: 'pendiente', motivo: 'platform_pending', explicacion: `${name} se envía a mano por su plataforma y todavía no está marcado como enviado.`, que_hacer: 'Enviarlo desde la web del banco y marcarlo en "Envíos por plataforma".', es_tecnico: false, evidencias: ['Envíos por plataforma'] })
   }
 
@@ -189,7 +194,7 @@ export function diagnose(input: DiagnoseInput, banco?: string | null): Diagnosis
     if (!match('Kutxabank') || k.dismissed_at) continue
     const missing = (k.missing_docs as string[] | null) ?? []
     out.push(k.sent_at
-      ? { banco: 'Kutxabank', estado: 'enviado', motivo: 'sent', explicacion: `Enviado a Rastreator el ${s(k.sent_at).slice(0, 10)} (estado Rastreator: ${s(k.rastreator_status) || '—'}).`, que_hacer: 'Nada.', es_tecnico: false, evidencias: ['Kutxabank · envíos'] }
+      ? { banco: 'Kutxabank', estado: 'enviado', motivo: 'sent', explicacion: `Enviado a Rastreator el ${fechaMadrid(k.sent_at)} (estado Rastreator: ${s(k.rastreator_status) || '—'}).`, que_hacer: 'Nada.', es_tecnico: false, evidencias: ['Kutxabank · envíos'] }
       : { banco: 'Kutxabank', estado: 'pendiente', motivo: missing.length ? 'missing_docs' : 'platform_pending', explicacion: missing.length ? `Faltan documentos para Kutxabank: ${missing.join(', ')}.` : 'Pendiente de enviar a Rastreator.', que_hacer: missing.length ? 'Subir los documentos y pulsar "Verificar documentos" en la tarjeta de Kutxabank.' : 'Enviarlo desde "Kutxabank · Envíos".', es_tecnico: false, evidencias: ['Kutxabank · envíos'] })
   }
 
