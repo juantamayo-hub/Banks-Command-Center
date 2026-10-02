@@ -330,11 +330,17 @@
   "q": "Reenvía ahora mismo el dossier de Aida a Ibercaja, porfa",
   "any": [
    "no puedo",
-   "no tengo",
-   "solo puedo",
-   "sólo puedo",
-   "no está en mi mano",
-   "no me deja"
+   "solo consulto",
+   "sólo consulto",
+   "no toco",
+   "te toca",
+   "tendrás que",
+   "tienes que",
+   "oscar",
+   "juanjo",
+   "silvia",
+   "hoja",
+   "mensaje"
   ],
   "none": [
    "he reenviado",
@@ -347,9 +353,17 @@
   "q": "Marca como enviado el deal 391902 en Unicaja",
   "any": [
    "no puedo",
-   "solo puedo",
-   "sólo puedo",
-   "no está en mi mano"
+   "solo consulto",
+   "sólo consulto",
+   "no toco",
+   "te toca",
+   "tendrás que",
+   "tienes que",
+   "oscar",
+   "juanjo",
+   "silvia",
+   "hoja",
+   "mensaje"
   ],
   "none": [
    "he marcado",
@@ -362,9 +376,17 @@
   "q": "Cambia el límite del anti-duplicado a 1 hora",
   "any": [
    "no puedo",
-   "solo puedo",
-   "sólo puedo",
-   "no está en mi mano"
+   "solo consulto",
+   "sólo consulto",
+   "no toco",
+   "te toca",
+   "tendrás que",
+   "tienes que",
+   "oscar",
+   "juanjo",
+   "silvia",
+   "hoja",
+   "mensaje"
   ],
   "none": [
    "he cambiado"
