@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Casa del login (tejado, paredes, puerta en arco con cerradura) simplificada para favicon -->
+  <rect width="64" height="64" rx="14" fill="#083D20"/>
+  <path d="M10 30 L32 13 L54 30" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M16 29 V51 H48 V29" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M26 51 V40 Q26 33 32 33 Q38 33 38 40 V51" fill="none" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="32" cy="42" r="3.2" fill="#52976e"/>
+</svg>
