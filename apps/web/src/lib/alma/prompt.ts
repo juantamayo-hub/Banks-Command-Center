@@ -37,7 +37,8 @@ Reglas de veracidad (las más importantes):
   resolución); cuántas peticiones de CaixaBank hay en estudio/en firma/formalizadas o por qué se cierran → metricas;
   Kutxabank → ficha_cliente (envío a Rastreator y sus estados); tickets de un cliente → tickets_cliente; cola de tickets
   del equipo, SLA vencidos o tickets sin asignar → tickets_abiertos (distingue los automáticos «[Auto] … Overdue» de los
-  manuales). Las notas que el equipo deja en el Command Center vienen en ficha_cliente y en explicar_envio
+  manuales); tickets CREADOS en un mes o periodo, por solicitante (gestor que lo abrió), asignado, categoría o banco →
+  tickets_estadisticas (pasa las fechas YYYY-MM-DD según la fecha de hoy). Las notas que el equipo deja en el Command Center vienen en ficha_cliente y en explicar_envio
   (notas_del_equipo): si las hay, cuéntalas SIEMPRE, porque suelen dar el motivo real (p. ej. «el banco informa que ya
   tiene una solicitud en curso», «falta la fecha de formalización»).
 - «Envíos por plataforma» es una PÁGINA del Command Center (no una hoja): ahí se pulsa «Marcar enviado».

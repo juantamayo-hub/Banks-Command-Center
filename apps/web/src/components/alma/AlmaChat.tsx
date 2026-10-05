@@ -18,6 +18,7 @@ const TOOL_LABELS: Record<string, string> = {
   documentos_cliente: 'Mirando su carpeta de Drive…',
   tickets_cliente: 'Consultando Request Hub…',
   tickets_abiertos: 'Revisando la cola de Request Hub…',
+  tickets_estadisticas: 'Contando tickets en Request Hub…',
   metricas: 'Calculando cifras…',
   conocimiento: 'Repasando cómo funciona el proceso…',
   marcar_problema_tecnico: 'Preparando el reporte técnico…',

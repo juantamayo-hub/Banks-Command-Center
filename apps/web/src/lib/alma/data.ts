@@ -455,6 +455,103 @@ export async function getOpenTickets(opts: { banco?: string | null; asignado?: s
   }
 }
 
+/** Medianoche de Madrid (YYYY-MM-DD) como instante UTC. */
+function madridMidnight(day: string): Date {
+  const [y, m, d] = day.split('-').map(Number)
+  for (const off of [2, 1]) {
+    const t = new Date(Date.UTC(y, m - 1, d, -off))
+    const h = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Madrid', hour: '2-digit', hourCycle: 'h23' }).format(t))
+    if (h === 0) return t
+  }
+  return new Date(Date.UTC(y, m - 1, d))
+}
+
+/** «laura.guillen@bayteca.com» → «Laura Guillen» cuando el perfil no tiene apellido. */
+function personName(p: { first_name?: string | null; last_name?: string | null; email?: string | null } | null): string {
+  if (!p) return 'Sistema'
+  const full = [p.first_name, p.last_name].filter((x) => x && String(x).trim()).join(' ')
+  if (p.last_name && String(p.last_name).trim()) return full
+  const local = (p.email ?? '').split('@')[0]
+  if (local.includes('.')) return local.split('.').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+  return full || p.email || 'Sin nombre'
+}
+
+/**
+ * Estadísticas de tickets de Request Hub por periodo de CREACIÓN (abiertos y cerrados), agrupadas por
+ * solicitante (quien lo abrió), asignado, categoría, banco o estado. Los automáticos («[Auto] …») se separan.
+ */
+export async function getTicketStats(opts: {
+  desde: string
+  hasta: string
+  agrupar_por: 'solicitante' | 'asignado' | 'categoria' | 'banco' | 'estado'
+  categoria?: string | null
+  banco?: string | null
+  incluir_automaticos?: boolean
+}) {
+  const url = process.env.REQUEST_HUB_SUPABASE_URL
+  const key = process.env.REQUEST_HUB_SUPABASE_SERVICE_KEY
+  if (!url || !key) return { ok: false, error: 'Request Hub no configurado' }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(opts.desde) || !/^\d{4}-\d{2}-\d{2}$/.test(opts.hasta)) return { ok: false, error: 'Fechas en formato YYYY-MM-DD' }
+  const from = madridMidnight(opts.desde)
+  const [hy, hm, hd] = opts.hasta.split('-').map(Number)
+  const toExact = madridMidnight(new Date(Date.UTC(hy, hm - 1, hd + 1)).toISOString().slice(0, 10)) // inicio del día siguiente a «hasta»
+  const rh = createSupabase(url, key, { auth: { persistSession: false } })
+  type P = { first_name: string | null; last_name: string | null; email: string | null }
+  type Row = { display_id: string; subject: string; status: string; bank_name: string | null; created_at: string; creator: P | P[] | null; assignee: P | P[] | null; category: { name: string } | { name: string }[] | null }
+  const rows: Row[] = []
+  for (let off = 0; off < 30000; off += 1000) {
+    const page = await rh
+      .from('tickets')
+      .select('display_id, subject, status, bank_name, created_at, creator:profiles!tickets_created_by_fkey(first_name, last_name, email), assignee:profiles!tickets_assignee_id_fkey(first_name, last_name, email), category:categories(name)')
+      .gte('created_at', from.toISOString())
+      .lt('created_at', toExact.toISOString())
+      .order('created_at', { ascending: true })
+      .range(off, off + 999)
+    if (page.error) return { ok: false, error: page.error.message }
+    rows.push(...(page.data as unknown as Row[]))
+    if ((page.data ?? []).length < 1000) break
+  }
+  const one = <T,>(v: T | T[] | null): T | null => (Array.isArray(v) ? v[0] ?? null : v)
+  const norm = (x: string) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  const catQ = norm(opts.categoria ?? '')
+  const bancoQ = norm(opts.banco ?? '')
+  const all = rows.map((t) => ({
+    auto: /^\[auto\]/i.test(t.subject ?? ''),
+    solicitante: personName(one(t.creator)),
+    asignado: one(t.assignee) ? personName(one(t.assignee)) : 'sin asignar',
+    categoria: one(t.category)?.name ?? 'sin categoría',
+    banco: t.bank_name ?? 'sin banco',
+    estado: RH_STATUS[t.status] ?? t.status,
+    abierto: ['new', 'in_progress', 'waiting_on_employee'].includes(t.status),
+  }))
+  const auto = all.filter((t) => t.auto).length
+  const sel = all.filter(
+    (t) => (opts.incluir_automaticos || !t.auto) && (!catQ || norm(t.categoria).includes(catQ)) && (!bancoQ || norm(t.banco).includes(bancoQ)),
+  )
+  const groups = new Map<string, { total: number; abiertos: number; por_categoria: Record<string, number> }>()
+  for (const t of sel) {
+    const k = t[opts.agrupar_por]
+    const g = groups.get(k) ?? { total: 0, abiertos: 0, por_categoria: {} }
+    g.total += 1
+    if (t.abierto) g.abiertos += 1
+    g.por_categoria[t.categoria] = (g.por_categoria[t.categoria] ?? 0) + 1
+    groups.set(k, g)
+  }
+  const ranking = [...groups.entries()].sort((a, b) => b[1].total - a[1].total).map(([k, g]) => ({ [opts.agrupar_por]: k, ...g }))
+  return {
+    ok: true,
+    periodo: `${opts.desde} a ${opts.hasta} (fecha de creación, hora de Madrid)`,
+    total_creados_en_periodo: all.length,
+    automaticos_en_periodo: auto,
+    total_tras_filtros: sel.length,
+    filtros: { categoria: opts.categoria ?? null, banco: opts.banco ?? null, incluir_automaticos: !!opts.incluir_automaticos },
+    agrupado_por: opts.agrupar_por,
+    grupos: ranking.length,
+    ranking: ranking.slice(0, 60),
+    nota: ranking.length > 60 ? `Se muestran 60 de ${ranking.length} grupos.` : undefined,
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Métricas
 // ─────────────────────────────────────────────────────────────────────────────

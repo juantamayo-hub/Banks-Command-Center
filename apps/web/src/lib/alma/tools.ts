@@ -5,7 +5,7 @@
 
 import type Anthropic from '@anthropic-ai/sdk'
 import { createAdminClient } from '@/lib/supabase/server'
-import { getClientRecords, getDealInfo, getMetrics, getOpenTickets, getPendingOffers, getPendingSends, getTickets, listDriveFolder, searchClients, summarizeDocs } from './data'
+import { getClientRecords, getDealInfo, getMetrics, getOpenTickets, getTicketStats, getPendingOffers, getPendingSends, getTickets, listDriveFolder, searchClients, summarizeDocs } from './data'
 import { diagnose } from './diagnose'
 import { KNOWLEDGE, KNOWLEDGE_TOPICS } from './knowledge'
 import { TEAM, findMember } from './team'
@@ -74,6 +74,23 @@ export const ALMA_TOOLS: Anthropic.Tool[] = [
         asignado: { type: 'string', description: 'Nombre o email de la persona asignada, o "sin asignar"' },
         solo_vencidos: { type: 'boolean' },
       },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'tickets_estadisticas',
+    description: 'Estadísticas de tickets de Request Hub CREADOS en un periodo (abiertos y cerrados), agrupadas por solicitante (el gestor que abrió el ticket), asignado, categoría, banco o estado. Úsala para preguntas por mes o periodo («¿cuántos tickets de nuevo envío abrió cada gestor en septiembre?»). Por defecto excluye los automáticos «[Auto] …». Para la cola abierta de hoy usa tickets_abiertos.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        desde: { type: 'string', description: 'YYYY-MM-DD (incluido, hora de Madrid)' },
+        hasta: { type: 'string', description: 'YYYY-MM-DD (incluido, hora de Madrid)' },
+        agrupar_por: { type: 'string', enum: ['solicitante', 'asignado', 'categoria', 'banco', 'estado'] },
+        categoria: { type: 'string', description: 'Filtrar por categoría, p. ej. «Nuevo envío», «Contactar con el cliente»' },
+        banco: { type: 'string' },
+        incluir_automaticos: { type: 'boolean' },
+      },
+      required: ['desde', 'hasta', 'agrupar_por'],
       additionalProperties: false,
     },
   },
@@ -249,6 +266,19 @@ export async function runAlmaTool(name: string, input: Record<string, unknown>):
           banco: typeof input.banco === 'string' ? input.banco : null,
           asignado: typeof input.asignado === 'string' ? input.asignado : null,
           solo_vencidos: input.solo_vencidos === true,
+        })
+        return { ok: t.ok, content: json(t) }
+      }
+      case 'tickets_estadisticas': {
+        const grp = String(input.agrupar_por)
+        if (!['solicitante', 'asignado', 'categoria', 'banco', 'estado'].includes(grp)) return { ok: false, content: 'agrupar_por no válido' }
+        const t = await getTicketStats({
+          desde: String(input.desde ?? ''),
+          hasta: String(input.hasta ?? ''),
+          agrupar_por: grp as 'solicitante',
+          categoria: typeof input.categoria === 'string' ? input.categoria : null,
+          banco: typeof input.banco === 'string' ? input.banco : null,
+          incluir_automaticos: input.incluir_automaticos === true,
         })
         return { ok: t.ok, content: json(t) }
       }
