@@ -9,6 +9,7 @@
 import { timingSafeEqual } from 'crypto'
 import { requireAuth } from '@/lib/auth/requireAuth'
 import { almaAllowedFor, almaEnabled } from './config'
+import { isAlmaAdmin } from './admins'
 
 const ALLOWED_DOMAINS = ['huspy.io', 'bayteca.com']
 
@@ -27,12 +28,12 @@ export async function almaAuth(req: Request): Promise<{ ok: true; email: string;
     const email = (req.headers.get('x-alma-user-email') || '').trim().toLowerCase()
     const domainOk = ALLOWED_DOMAINS.includes(email.split('@')[1] ?? '')
     if (!shared || !safeEqual(given, shared) || !domainOk) return { ok: false, response: Response.json({ error: 'Unauthorized' }, { status: 401 }) }
-    if (!almaAllowedFor(email)) return { ok: false, response: Response.json({ error: 'Forbidden' }, { status: 403 }) }
+    if (!almaAllowedFor(email) || !(await isAlmaAdmin(email))) return { ok: false, response: Response.json({ error: 'Alma solo está disponible para administradores.' }, { status: 403 }) }
     return { ok: true, email, app: 'request_hub' }
   }
 
   const auth = await requireAuth()
   if (!auth.ok) return { ok: false, response: auth.response }
-  if (!almaAllowedFor(auth.user.email)) return { ok: false, response: Response.json({ error: 'Forbidden' }, { status: 403 }) }
+  if (!almaAllowedFor(auth.user.email) || !(await isAlmaAdmin(auth.user.email))) return { ok: false, response: Response.json({ error: 'Alma solo está disponible para administradores.' }, { status: 403 }) }
   return { ok: true, email: auth.user.email.toLowerCase(), app: 'command_center' }
 }

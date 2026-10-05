@@ -90,8 +90,8 @@ function renderInline(text: string, keyBase: string): ReactNode[] {
   return out
 }
 
-function RichText({ text }: { text: string }) {
-  const lines = text.split('\n')
+function RichText({ text }: { text: unknown }) {
+  const lines = (typeof text === 'string' ? text : String(text ?? '')).split('\n')
   return (
     <div className="space-y-1">
       {lines.map((line, i) => {
@@ -117,7 +117,9 @@ function loadSaved(): { conversationId: string | null; messages: ChatMessage[] }
     const raw = sessionStorage.getItem(STORAGE_KEY)
     if (!raw) return { conversationId: null, messages: [] }
     const parsed = JSON.parse(raw) as { conversationId: string | null; messages: ChatMessage[] }
-    return { conversationId: parsed.conversationId ?? null, messages: (parsed.messages ?? []).map((m) => ({ ...m, status: null })) }
+    return { conversationId: parsed.conversationId ?? null, messages: (Array.isArray(parsed.messages) ? parsed.messages : [])
+        .filter((m) => m && typeof m === 'object' && typeof m.id === 'string')
+        .map((m) => ({ ...m, text: typeof m.text === 'string' ? m.text : '', status: null })) }
   } catch {
     return { conversationId: null, messages: [] }
   }
@@ -171,7 +173,7 @@ export default function AlmaChat({ apiBase = '/api/alma', envLabel }: { apiBase?
       })
       if (!res.ok || !res.body) {
         const err = await res.json().catch(() => ({}))
-        patch(botId, (m) => ({ ...m, text: err.error || 'Ahora mismo no puedo responder. Prueba en un momento.', status: null, error: true }))
+        patch(botId, (m) => ({ ...m, text: typeof err.error === 'string' && err.error ? err.error : 'Ahora mismo no puedo responder. Prueba en un momento.', status: null, error: true }))
         return
       }
       const reader = res.body.getReader()
@@ -193,11 +195,11 @@ export default function AlmaChat({ apiBase = '/api/alma', envLabel }: { apiBase?
             continue
           }
           if (ev.type === 'start') setConversationId(ev.conversation_id as string)
-          else if (ev.type === 'text') patch(botId, (m) => ({ ...m, text: m.text + (ev.delta as string), status: null }))
+          else if (ev.type === 'text') patch(botId, (m) => ({ ...m, text: m.text + (typeof ev.delta === 'string' ? ev.delta : ''), status: null }))
           else if (ev.type === 'tool') patch(botId, (m) => ({ ...m, status: TOOL_LABELS[ev.name as string] ?? 'Consultando datos…' }))
           else if (ev.type === 'technical') patch(botId, (m) => ({ ...m, technical: ev.resumen as string, report: 'idle' }))
           else if (ev.type === 'slack_draft') patch(botId, (m) => ({ ...m, slack: { destinatario: ev.destinatario as string, nombre: ev.nombre as string, mensaje: ev.mensaje as string, state: 'draft' } }))
-          else if (ev.type === 'error') patch(botId, (m) => ({ ...m, text: m.text || (ev.message as string), status: null, error: true }))
+          else if (ev.type === 'error') patch(botId, (m) => ({ ...m, text: m.text || (typeof ev.message === 'string' && ev.message ? ev.message : 'Algo ha fallado. ¿Lo intentas otra vez?'), status: null, error: true }))
           else if (ev.type === 'done') patch(botId, (m) => ({ ...m, status: null, dbId: (ev.message_id as string | null) ?? null }))
         }
       }
