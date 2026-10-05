@@ -84,7 +84,10 @@ export async function GET(req: Request) {
   }
 
   const supabase = await createAdminClient()
-  const since24 = new Date(Date.now() - 24 * 3600_000).toISOString()
+  // ?hours=N (1–168, por defecto 24): ventana de respuestas. La revisión de las 18:00 pide 72 h los lunes (fin de semana).
+  const hoursParam = Number(new URL(req.url).searchParams.get('hours'))
+  const hours = Number.isFinite(hoursParam) && hoursParam >= 1 && hoursParam <= 168 ? Math.round(hoursParam) : 24
+  const since24 = new Date(Date.now() - hours * 3600_000).toISOString()
 
   const [summary, attention, kutxa, platform] = await Promise.all([
     supabase.rpc('bank_responses_summary', { p_since: since24 }),
@@ -145,14 +148,16 @@ export async function GET(req: Request) {
 
   // Envíos de dossier: ayer (día completo de Madrid) y últimos 7 días
   const today = madridDayStart(0)
-  const [sendsYesterday, sends7d] = await Promise.all([
+  const [sendsYesterday, sends7d, sendsToday] = await Promise.all([
     dossierSends(supabase, madridDayStart(1), today),
     dossierSends(supabase, madridDayStart(7), today),
+    dossierSends(supabase, today, new Date(Date.now() + 60_000)),
   ])
 
   const kutxaRows = kutxa.data ?? []
   return NextResponse.json({
-    dossier_sends: { yesterday: sendsYesterday, last7d: sends7d },
+    dossier_sends: { today: sendsToday, yesterday: sendsYesterday, last7d: sends7d },
+    responses_window_hours: hours,
     generated_at: new Date().toISOString(),
     responses: {
       last24h_by_bank: summary.data ?? [],
