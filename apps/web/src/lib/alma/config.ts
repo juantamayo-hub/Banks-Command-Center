@@ -9,7 +9,7 @@
 export const ALMA_MODEL = 'claude-opus-5'
 
 export function almaEnabled(): boolean {
-  return process.env.ALMA_ENABLED === 'true'
+  return (process.env.ALMA_ENABLED || '').trim().toLowerCase() === 'true'
 }
 
 export function almaEnv(): string {
