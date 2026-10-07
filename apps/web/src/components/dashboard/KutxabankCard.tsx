@@ -29,18 +29,20 @@ interface Props {
 }
 
 const DOC_LABELS: Record<string, string> = {
+  // Nomenclatura real de los archivos del dossier en Drive
   C003: 'DNI/NIE 1er Titular',
   C004: 'Vida Laboral 1er Titular',
-  C005: 'Mov. Cuenta 1er Titular',
-  C006: 'Nómina 1er Titular',
-  C007: 'Contrato 1er Titular',
-  C008: 'Renta 1er Titular',
+  C005: 'Nóminas 1er Titular',
+  C006: 'Contrato de trabajo 1er Titular',
+  C007: 'IRPF 1er Titular',
+  C008: 'Movimientos de cuenta 1er Titular',
   D003: 'DNI/NIE 2do Titular',
   D004: 'Vida Laboral 2do Titular',
-  D005: 'Mov. Cuenta 2do Titular',
-  D006: 'Nómina 2do Titular',
-  D007: 'Contrato 2do Titular',
-  D008: 'Renta 2do Titular',
+  D005: 'Nóminas 2do Titular',
+  D006: 'Contrato de trabajo 2do Titular',
+  D007: 'IRPF 2do Titular',
+  D008: 'Movimientos de cuenta 2do Titular',
+  F006: 'Otros',
   F016: 'Otros',
   AUTH_KUTXABANK: 'Autorización Kutxabank',
   AUTH_BAYTECA: 'Autorización Bayteca',
