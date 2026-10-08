@@ -5,7 +5,7 @@
 
 import type Anthropic from '@anthropic-ai/sdk'
 import { createAdminClient } from '@/lib/supabase/server'
-import { getClientRecords, getDealInfo, getMetrics, getOpenTickets, getTicketStats, getPendingOffers, getPendingSends, getTickets, listDriveFolder, searchClients, summarizeDocs } from './data'
+import { getClientRecords, getDealInfo, getMetrics, getOpenTickets, getTicketStats, getPendingOffers, getPendingSends, getTickets, listDriveFolder, revisarAutorizaciones, searchClients, summarizeDocs } from './data'
 import { diagnose } from './diagnose'
 import { KNOWLEDGE, KNOWLEDGE_TOPICS } from './knowledge'
 import { TEAM, findMember } from './team'
@@ -23,7 +23,7 @@ export const ALMA_TOOLS: Anthropic.Tool[] = [
   },
   {
     name: 'ficha_cliente',
-    description: 'Ficha completa de un cliente por Opportunity ID: datos de Pipedrive (owner, deals bancarios, carpeta de Drive), estado de cada envío por banco con su diagnóstico, respuestas de los bancos (correos clasificados), historial de estados de la petición en CaixaBank (estado del lead, motivo pendiente, resolución), estados de Rastreator para Kutxabank, notas del equipo en el Command Center, relanzamientos solicitados, reservas anti-duplicado, red flags y eventos de los flujos.',
+    description: 'Ficha completa de un cliente por Opportunity ID: datos de Pipedrive (owner, DNI/NIE de los titulares, deals bancarios, carpeta de Drive), estado de cada envío por banco con su diagnóstico, respuestas de los bancos (correos clasificados), historial de estados de la petición en CaixaBank (estado del lead, motivo pendiente, resolución), estados de Rastreator para Kutxabank, notas del equipo en el Command Center, relanzamientos solicitados, reservas anti-duplicado, red flags y eventos de los flujos.',
     input_schema: {
       type: 'object',
       properties: { opportunity_id: { type: 'integer', description: 'Opportunity ID (deal general de Pipedrive)' } },
@@ -46,7 +46,7 @@ export const ALMA_TOOLS: Anthropic.Tool[] = [
   },
   {
     name: 'documentos_cliente',
-    description: 'Lista en vivo los documentos de la carpeta de Drive del cliente: qué hay y qué falta por código (C003…D008), tamaños, archivos vacíos, dossieres generados (con su peso) y autorizaciones, con enlaces.',
+    description: 'Lista en vivo los documentos de la carpeta de Drive del cliente: qué hay y qué falta por código (C003…D008), tamaños, archivos vacíos, dossieres generados (con su peso) y autorizaciones, con enlaces. Incluye revision_autorizaciones: compara cada autorización con el DNI del 1er titular de Pipedrive y el formato que buscan los flujos ("Autorizaciones <Banco> <DNI>.pdf") y marca las mal nombradas con el nombre correcto. Úsala para "¿están bien las autorizaciones?" o "¿por qué no encuentra la autorización?".',
     input_schema: {
       type: 'object',
       properties: { opportunity_id: { type: 'integer' } },
@@ -238,6 +238,10 @@ export async function runAlmaTool(name: string, input: Record<string, unknown>):
               ? { kutxabank_estados_rastreator: records.kutxabank_estados_rastreator }
               : {}),
             dossieres_en_drive: docs?.dossieres ?? `No se pudo consultar Drive: ${drive.error}`,
+            // Una autorización mal nombrada hace que el flujo la dé por faltante y no envíe
+            ...(drive.ok
+              ? { revision_autorizaciones: revisarAutorizaciones(drive.files, deal?.dni_1t ?? null, deal?.dni_2t ?? null, (deal?.deals_bancarios ?? []).map((b) => b.banco ?? '').filter(Boolean)) }
+              : {}),
             enlace_pipedrive: deal?.enlace_pipedrive,
           }),
         }
@@ -251,7 +255,15 @@ export async function runAlmaTool(name: string, input: Record<string, unknown>):
           const { data } = await supabase.from('flow_events').select('detail, created_at').eq('opportunity_id', opp).eq('kind', 'docs_snapshot').order('created_at', { ascending: false }).limit(1)
           return { ok: !!data?.length, content: json({ aviso: `No se pudo consultar Drive en vivo: ${drive.error}`, ultima_foto: data?.[0] ?? null, carpeta: deal?.carpeta_drive ?? null }) }
         }
-        return { ok: true, content: json({ cliente: deal?.cliente, carpeta: deal?.carpeta_drive, ...summarizeDocs(drive.files) }) }
+        return {
+          ok: true,
+          content: json({
+            cliente: deal?.cliente,
+            carpeta: deal?.carpeta_drive,
+            revision_autorizaciones: revisarAutorizaciones(drive.files, deal?.dni_1t ?? null, deal?.dni_2t ?? null, (deal?.deals_bancarios ?? []).map((b) => b.banco ?? '').filter(Boolean)),
+            ...summarizeDocs(drive.files),
+          }),
+        }
       }
       case 'tickets_cliente': {
         const opp = intArg(input.opportunity_id)

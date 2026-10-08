@@ -19,7 +19,10 @@ export const KNOWLEDGE: Record<string, { titulo: string; texto: string }> = {
 3. En la hoja "[Bayteca] Dossier - Envío a Bancos" hay una pestaña por banco. Al poner Enviar=Yes en la fila del cliente,
    Apps Script llama al flujo "Send Dossier <banco>" de n8n.
 4. El flujo comprueba: que existan el dossier y la autorización Bayteca (y la del banco si aplica) en Drive, el chequeo de
-   red flags (IRPF, etc.), y la reserva anti-duplicado. Si todo está bien envía el correo desde hipotecas@bayteca.com con
+   red flags (IRPF, etc.), y la reserva anti-duplicado. Las autorizaciones se buscan en Drive POR NOMBRE con el DNI del
+   1er titular del deal general de Pipedrive: deben llamarse "Autorizaciones <Banco> <DNI 1T>.pdf" (p. ej.
+   "Autorizaciones Kutxabank 45950399X.pdf"). Si el DNI no coincide, falta, es el del 2º titular, pone "Kutxa" en vez de
+   "Kutxabank" o no es PDF, el flujo la da por faltante aunque el archivo esté en la carpeta. Si todo está bien envía el correo desde hipotecas@bayteca.com con
    el dossier adjunto, marca la hoja "Enviado ✅", mueve el deal bancario a "Bank Submission" (70) y deja nota en Pipedrive.
 5. Envíos por plataforma (Santander, CaixaBank, Sabadell, Bankinter, Abanca): no van por la hoja; se envían a mano desde la
    web del banco y se marcan como enviados en la página "Envíos por plataforma" del Command Center.

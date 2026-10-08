@@ -121,11 +121,14 @@ export interface DealInfo {
   etapa_id: number | null
   estado: string | null
   md: string | null
+  // DNI/NIE de Pipedrive: los flujos buscan las autorizaciones por el del 1er titular
+  dni_1t: string | null
+  dni_2t: string | null
   carpeta_drive: string | null
   dossier_creado: string | null
   enlace_dossier_pipedrive: string | null
   enlace_pipedrive: string
-  deals_bancarios: Array<{ id: number; titulo: string | null; etapa_id: number | null; estado: string | null; bank_mail: string | null; enlace: string }>
+  deals_bancarios: Array<{ id: number; banco: string | null; titulo: string | null; etapa_id: number | null; estado: string | null; bank_mail: string | null; enlace: string }>
 }
 
 export async function getDealInfo(opportunityId: number): Promise<DealInfo | null> {
@@ -138,9 +141,12 @@ export async function getDealInfo(opportunityId: number): Promise<DealInfo | nul
   })
   const bankDeals = await Promise.all([...bankIds].slice(0, 6).map(async (id) => {
     const b = await pipedriveGet(`deals/${id}`)
+    const titulo = (b?.title as string) ?? null
     return {
       id,
-      titulo: (b?.title as string) ?? null,
+      // Los deals bancarios se titulan "<Banco> - P1 - …" (a veces "<Banco>-P1 - …")
+      banco: titulo?.split(' - ')[0]?.replace(/\s*-\s*P\d+$/i, '').trim() || null,
+      titulo,
       etapa_id: num(b?.stage_id),
       estado: (b?.status as string) ?? null,
       bank_mail: (val(b?.[F.bankMail]) as string) || null,
@@ -157,6 +163,8 @@ export async function getDealInfo(opportunityId: number): Promise<DealInfo | nul
     etapa_id: num(d.stage_id),
     estado: (d.status as string) ?? null,
     md: (val(d[F.md]) as string) || null,
+    dni_1t: String(val(d[F.dni1]) ?? '').trim() || null,
+    dni_2t: String(val(d[F.dni2]) ?? '').trim() || null,
     carpeta_drive: (val(d[F.folder]) as string) || null,
     dossier_creado: (val(d[F.dossierCreado]) as string) || null,
     enlace_dossier_pipedrive: (val(d[F.linkDossier]) as string) || null,
@@ -331,6 +339,63 @@ export function summarizeDocs(files: DriveFile[]) {
     dossieres: files.filter((f) => f.is_dossier).map((f) => ({ nombre: f.name, mb: f.size_mb, creado: f.created, enlace: f.link, supera_limite_gmail_25mb: (f.size_mb ?? 0) > 25 })),
     autorizaciones: files.filter((f) => /autorizaci/i.test(f.name)).map((f) => ({ nombre: f.name, mb: f.size_mb, enlace: f.link })),
     otros: files.filter((f) => !f.code && !f.is_dossier && !/autorizaci/i.test(f.name)).map((f) => ({ nombre: f.name, mb: f.size_mb, enlace: f.link })),
+  }
+}
+
+// Bancos tal como aparecen en los nombres de las autorizaciones (Laboral Kutxa antes que Kutxabank)
+const AUTH_BANKS: Array<[string, RegExp]> = [
+  ['Bayteca', /bayteca/], ['Laboral Kutxa', /laboral ?kutxa/], ['Kutxabank', /kutxa/], ['Caixa Popular', /caixa ?popular/],
+  ['CaixaBank', /caixa ?bank/], ['Ibercaja', /ibercaja/], ['Unicaja', /unicaja/], ['Bankinter', /bankinter/], ['Sabadell', /sabadell/],
+  ['Santander', /santander/], ['Abanca', /abanca/], ['ING', /\bing\b/], ['Deutsche Bank', /deutsche/], ['MyInvestor', /my ?investor/],
+  ['Globalcaja', /global ?caja/], ['Eurocaja Rural', /euro ?caja/], ['Cajamar', /cajamar/], ['Ruralnostra', /rural ?nostra/],
+  ['Pichincha', /pichincha/], ['No Bank Fee', /no ?bank ?fee/], ['CR Aragón', /aragon/], ['CR Asturias', /asturias/],
+  ['CR Granada', /granada/], ['CR Teruel', /teruel/], ['CR del Sur', /del sur|crsur/], ['UCI', /\buci\b|hipotecas\.com/], ['EVO', /\bevo\b/],
+]
+const foldName = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[_\s]+/g, ' ').trim()
+const authBank = (s: string) => AUTH_BANKS.find(([, re]) => re.test(foldName(s)))?.[0] ?? null
+const compactDni = (s: string | null) => (s ?? '').toUpperCase().replace(/[\s.-]/g, '')
+
+/**
+ * Revisa que las autorizaciones de la carpeta estén nombradas como las buscan los flujos de n8n:
+ * "Autorizaciones <Banco> <DNI del 1er titular>.pdf". Los flujos buscan banco + DNI 1T del deal general de Pipedrive
+ * (Kutxabank y Laboral Kutxa, solo en PDF); "Kutxa" a secas no la encuentra el flujo de Kutxabank.
+ */
+export function revisarAutorizaciones(files: DriveFile[], dni1: string | null, dni2: string | null, bancosCliente: string[]) {
+  const d1 = compactDni(dni1)
+  const d2 = compactDni(dni2)
+  const autos = files.filter((f) => /autoriz/i.test(f.name)).map((f) => {
+    const banco = authBank(f.name)
+    const sinExt = f.name.replace(/\.pdf$/i, '').trim()
+    const plano = compactDni(f.name)
+    const problemas: string[] = []
+    if (!banco) problemas.push('no indica el banco')
+    if (banco === 'Kutxabank' && !/kutxabank/i.test(f.name)) problemas.push('pone "Kutxa": el flujo de Kutxabank busca "Kutxabank <DNI>"')
+    if (d1 && !plano.includes(d1)) {
+      const otro = f.name.toUpperCase().match(/\b[XYZ]?\d{7,9}[A-Z]\b/)?.[0]
+      if (d2 && plano.includes(d2)) problemas.push(`lleva el DNI del 2º titular; los flujos buscan el del 1er titular (${dni1})`)
+      else if (otro) problemas.push(`el DNI del nombre (${otro}) no coincide con el del 1er titular en Pipedrive (${dni1})`)
+      else problemas.push(`no lleva el DNI del 1er titular (${dni1})`)
+    }
+    // "_" o dobles espacios no importan: la búsqueda de Drive los encuentra igual (comprobado con ejecuciones reales)
+    if (!/\.pdf$/i.test(f.name) && f.mime !== 'application/pdf') problemas.push('no es PDF (Kutxabank y Laboral Kutxa solo buscan PDF)')
+    if (/^copia de/i.test(f.name)) problemas.push('es una copia ("Copia de …")')
+    if (f.size_mb === 0) problemas.push('el archivo está vacío')
+    const sugerido = banco && dni1 ? `Autorizaciones ${banco} ${dni1}.pdf` : null
+    const estandar = !!sugerido && foldName(sinExt) === foldName(sugerido.replace(/\.pdf$/, ''))
+    const estado = problemas.length ? 'revisar' : d1 ? 'ok' : 'sin_comprobar'
+    return { nombre: f.name, banco, estado, problemas, ...(problemas.length || !estandar ? { nombre_correcto: sugerido } : {}), enlace: f.link }
+  })
+  const bancos = [...new Set(['Bayteca', ...bancosCliente.map((b) => authBank(b) ?? b)])]
+  return {
+    formato_esperado: 'Autorizaciones <Banco> <DNI 1er titular>.pdf',
+    dni_1t: dni1 ?? 'VACÍO en Pipedrive: ningún flujo podrá encontrar las autorizaciones',
+    autorizaciones: autos,
+    por_banco: bancos.map((b) => {
+      const suyas = autos.filter((a) => a.banco === b)
+      const hay = (e: string) => suyas.some((a) => a.estado === e)
+      return { banco: b, estado: hay('ok') ? 'ok' : hay('sin_comprobar') ? 'sin_comprobar' : suyas.length ? 'mal_nombrada' : 'no_encontrada' }
+    }),
+    nota: 'No todos los bancos exigen autorización propia (algunos solo en plan Basic y otros nunca); la de Bayteca la piden casi todos.',
   }
 }
 
