@@ -14,7 +14,7 @@ import {
   gmailThreadUrl,
   RESPONSE_BANKS,
 } from '@/lib/bankResponses'
-import ResponseReviewActions from '@/components/ofertas/ResponseReviewActions'
+import ResponseReviewActions, { type ThreadSibling } from '@/components/ofertas/ResponseReviewActions'
 import OfertasSearch from '@/components/ofertas/OfertasSearch'
 import PreserveScroll from '@/components/ofertas/PreserveScroll'
 
@@ -112,7 +112,26 @@ export default async function OfertasPage({ searchParams }: OfertasPageProps) {
   if (vista) query = query.neq('status', 'resolved').or('status.in.(error,manual_review),match_status.neq.matched')
   const { data, error: listError } = await query
   const list = (data ?? []) as BankResponse[]
-  const error = summaryError ?? listError
+
+  // Pendientes agrupados por banco + hilo de Gmail (sin filtros de fecha/banco), para poder
+  // resolver de una vez los correos de un mismo caso.
+  const { data: pendingData, error: pendingError } = await supabase
+    .from('bank_responses')
+    .select('id, bank_slug, thread_id, received_at, client_name, subject')
+    .not('thread_id', 'is', null)
+    .neq('status', 'resolved')
+    .or('status.in.(error,manual_review),match_status.neq.matched')
+    .order('received_at', { ascending: true })
+    .limit(500)
+  const pendingByThread = new Map<string, Array<ThreadSibling & { bank_slug: string }>>()
+  for (const p of (pendingData ?? []) as Array<ThreadSibling & { bank_slug: string; thread_id: string }>) {
+    const key = `${p.bank_slug}|${p.thread_id}`
+    pendingByThread.set(key, [...(pendingByThread.get(key) ?? []), p])
+  }
+  const threadSiblings = (r: BankResponse): ThreadSibling[] =>
+    r.thread_id ? (pendingByThread.get(`${r.bank_slug}|${r.thread_id}`) ?? []).filter((p) => p.id !== r.id) : []
+
+  const error = summaryError ?? listError ?? pendingError
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -297,7 +316,7 @@ export default async function OfertasPage({ searchParams }: OfertasPageProps) {
                     {generalUrl && <a href={generalUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Deal general ↗</a>}
                     {mailUrl && <a href={mailUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Abrir correo ↗</a>}
                   </div>
-                  {attn && <ResponseReviewActions id={r.id} unmatched={r.match_status !== 'matched'} />}
+                  {attn && <ResponseReviewActions id={r.id} unmatched={r.match_status !== 'matched'} threadSiblings={threadSiblings(r)} />}
                 </div>
               </div>
             )

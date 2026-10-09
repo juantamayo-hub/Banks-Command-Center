@@ -31,6 +31,7 @@
 
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
+import { ownerMention } from '@/lib/pipedrive'
 
 const PIPEDRIVE_TOKEN = process.env.PIPEDRIVE_API_TOKEN!
 const PIPEDRIVE_BASE  = 'https://api.pipedrive.com/v1'
@@ -271,9 +272,10 @@ export async function POST(req: Request) {
 
     // Add note if Otros comentarios has content
     if (bankDealId && comentario) {
+      const mention = await ownerMention(bankDealId, PIPEDRIVE_TOKEN)
       const noteAdded = await addPipedriveNote(
         bankDealId,
-        `📊 Kutxabank Estado: ${estado}\n${comentario}`
+        `${mention}📊 Kutxabank Estado: ${estado}<br>${comentario.replace(/\n/g, '<br>')}`
       )
       result.note_added = noteAdded
     }

@@ -22,6 +22,7 @@
 
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
+import { ownerMention } from '@/lib/pipedrive'
 
 const PIPEDRIVE_TOKEN = process.env.PIPEDRIVE_API_TOKEN!
 const PIPEDRIVE_BASE  = 'https://api.pipedrive.com/v1'
@@ -388,9 +389,10 @@ export async function POST(req: Request) {
       if (effectiveBankDealId) {
         lostOk = await markDealLost(effectiveBankDealId)
         if (lostOk) {
+          const mention = await ownerMention(effectiveBankDealId, PIPEDRIVE_TOKEN)
           await addPipedriveNote(
             effectiveBankDealId,
-            `❌ Kutxabank — Rastreator rechazó el envío\nDNI: ${dni}\nDeal general: ${generalDealId}`
+            `${mention}❌ Kutxabank — Rastreator rechazó el envío<br>DNI: ${dni}<br>Deal general: ${generalDealId}`
           )
         }
       }
