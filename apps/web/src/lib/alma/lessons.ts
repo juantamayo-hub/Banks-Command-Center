@@ -1,5 +1,5 @@
 /**
- * Lecciones aprendidas de Alma (tabla alma_lessons, curadas a partir del feedback 👎).
+ * Lecciones aprendidas de Alma (tabla alma_lessons, curadas a partir del feedback: 👎 y 👍 con nota).
  * Se cachean 5 minutos por instancia. Nunca lanza: si falla, Alma sigue sin lecciones.
  */
 
@@ -18,7 +18,7 @@ export async function almaLessons(supabase: SupabaseClient): Promise<string> {
       .limit(60)
     if (error) throw error
     const rows = (data ?? []).map((r) => `- ${String(r.texto).trim()}`).filter((l) => l.length > 2)
-    const text = rows.length ? `Lecciones aprendidas del feedback del equipo (síguelas):\n${rows.join('\n')}` : ''
+    const text = rows.length ? `Lecciones aprendidas del feedback del equipo (qué evitar y qué repetir; síguelas):\n${rows.join('\n')}` : ''
     cache = { at: Date.now(), text }
     return text
   } catch {

@@ -256,7 +256,7 @@ export default function AlmaChat({ apiBase = '/api/alma', envLabel }: { apiBase?
       patch(id, (m) => ({
         ...m,
         feedback: res.ok
-          ? { rating, comment, state: 'sent', info: rating === 'up' ? '¡Gracias! 💚' : '¡Gracias! Lo usaremos para que Alma mejore 💪' }
+          ? { rating, comment, state: 'sent', info: rating === 'down' ? '¡Gracias! Lo usaremos para que Alma mejore 💪' : comment ? '¡Gracias! Lo revisaremos para que Alma lo recuerde 💚' : '¡Gracias! 💚' }
           : { rating, comment, state: 'error', info: data.error || 'No se pudo guardar.' },
       }))
     } catch {
@@ -441,7 +441,7 @@ export default function AlmaChat({ apiBase = '/api/alma', envLabel }: { apiBase?
                     )}
                     {m.dbId && !m.status && !m.error && (
                       <div className="text-[12px] text-gray-500">
-                        {!m.feedback || (m.feedback.state === 'error' && m.feedback.rating === 'up') ? (
+                        {!m.feedback || (m.feedback.state === 'error' && m.feedback.rating === 'up' && !m.feedback.comment) ? (
                           <div className="flex items-center gap-1">
                             <span className="mr-1">¿Te ha servido?</span>
                             <button
@@ -465,10 +465,23 @@ export default function AlmaChat({ apiBase = '/api/alma', envLabel }: { apiBase?
                             {m.feedback?.state === 'error' && <span className="ml-1 text-red-700">{m.feedback.info}</span>}
                           </div>
                         ) : m.feedback.state === 'sent' ? (
-                          <p>{m.feedback.rating === 'up' ? '👍' : '👎'} {m.feedback.info}</p>
+                          <p>
+                            {m.feedback.rating === 'up' ? '👍' : '👎'} {m.feedback.info}
+                            {m.feedback.rating === 'up' && !m.feedback.comment && (
+                              <button
+                                type="button"
+                                onClick={() => patch(m.id, (x) => ({ ...x, feedback: { rating: 'up', comment: '', state: 'editing' } }))}
+                                className="ml-1.5 text-bayteca-green underline-offset-2 hover:underline"
+                              >
+                                ¿Algo que deba recordar para la próxima? Añadir nota
+                              </button>
+                            )}
+                          </p>
                         ) : (
                           <div className="rounded-xl bg-white px-3 py-2 ring-1 ring-black/10">
-                            <p className="font-medium text-gray-700">👎 ¿Qué ha fallado?</p>
+                            <p className="font-medium text-gray-700">
+                              {m.feedback.rating === 'up' ? '👍 ¿Qué debería recordar o repetir la próxima vez?' : '👎 ¿Qué ha fallado?'}
+                            </p>
                             <textarea
                               value={m.feedback.comment}
                               onChange={(e) => {
@@ -477,7 +490,11 @@ export default function AlmaChat({ apiBase = '/api/alma', envLabel }: { apiBase?
                               }}
                               rows={3}
                               autoFocus
-                              placeholder="Ej.: el dato está mal, no buscó bien al cliente, faltó decir…"
+                              placeholder={
+                                m.feedback.rating === 'up'
+                                  ? 'Ej.: para Kutxabank ve directo a los envíos; este formato de resumen me sirve; responde más corto…'
+                                  : 'Ej.: el dato está mal, no buscó bien al cliente, faltó decir…'
+                              }
                               className="mt-1.5 w-full resize-y rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-[12px] text-gray-800 focus:border-bayteca-green focus:outline-none"
                             />
                             {m.feedback.state === 'error' && <p className="mt-1 text-red-700">{m.feedback.info}</p>}
@@ -485,14 +502,19 @@ export default function AlmaChat({ apiBase = '/api/alma', envLabel }: { apiBase?
                               <button
                                 type="button"
                                 disabled={m.feedback.state === 'sending' || !m.feedback.comment.trim()}
-                                onClick={() => m.dbId && m.feedback && sendFeedback(m.id, m.dbId, 'down', m.feedback.comment.trim())}
+                                onClick={() => m.dbId && m.feedback && sendFeedback(m.id, m.dbId, m.feedback.rating, m.feedback.comment.trim())}
                                 className="rounded-lg bg-bayteca-green px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-50"
                               >
                                 {m.feedback.state === 'sending' ? 'Enviando…' : 'Enviar'}
                               </button>
                               <button
                                 type="button"
-                                onClick={() => patch(m.id, (x) => ({ ...x, feedback: undefined }))}
+                                onClick={() =>
+                                  patch(m.id, (x) => ({
+                                    ...x,
+                                    feedback: x.feedback?.rating === 'up' ? { rating: 'up', comment: '', state: 'sent', info: '¡Gracias! 💚' } : undefined,
+                                  }))
+                                }
                                 className="rounded-lg px-2 py-1.5 text-[12px] text-gray-500 hover:bg-gray-100"
                               >
                                 Cancelar

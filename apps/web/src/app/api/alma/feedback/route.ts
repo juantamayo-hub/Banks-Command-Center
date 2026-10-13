@@ -1,9 +1,10 @@
 /**
  * POST /api/alma/feedback — 👍/👎 sobre una respuesta de Alma.
  *
- * Body: { message_id, rating: 'up'|'down', comment? }  (con 'down' el comentario es obligatorio)
+ * Body: { message_id, rating: 'up'|'down', comment? }  (con 'down' el comentario es obligatorio; con 'up' es
+ * opcional: qué debe recordar o repetir Alma la próxima vez)
  * Solo sobre respuestas de conversaciones de la propia persona. Se puede cambiar de opinión (sobrescribe).
- * El feedback se revisa con scripts/alma-feedback.ts y lo útil se convierte en alma_lessons.
+ * El feedback (👎 y 👍 con nota) se revisa con scripts/alma-feedback.ts y lo útil se convierte en alma_lessons.
  */
 
 import { createAdminClient } from '@/lib/supabase/server'

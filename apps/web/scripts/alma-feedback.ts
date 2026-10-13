@@ -2,7 +2,8 @@
  * Revisión del feedback de Alma (👍/👎) para convertir lo útil en lecciones (tabla alma_lessons).
  * Uso: cd apps/web && npx tsx --env-file=.env.local scripts/alma-feedback.ts [días=7]
  *
- * Muestra cada 👎 con la pregunta, la respuesta, las herramientas usadas y el comentario.
+ * Muestra cada 👎 y cada 👍 con nota (qué recordar o repetir) con la pregunta, la respuesta, las herramientas
+ * usadas y el comentario.
  * Las lecciones se añaden a mano (SQL editor) tras revisarlas — nunca se copian comentarios tal cual:
  *   insert into alma_lessons (texto, origen_message_id, created_by) values ('…', '<id>', 'juan.tamayo@huspy.io');
  */
@@ -23,7 +24,7 @@ async function main() {
   const rows = data ?? []
   const up = rows.filter((r) => r.feedback_rating === 'up').length
   console.log(`Últimos ${dias} días: 👍 ${up} · 👎 ${rows.length - up}\n`)
-  for (const r of rows.filter((x) => x.feedback_rating === 'down')) {
+  for (const r of rows.filter((x) => x.feedback_rating === 'down' || (x.feedback_rating === 'up' && x.feedback_comment))) {
     const { data: prev } = await sb
       .from('alma_messages')
       .select('content')
@@ -34,7 +35,7 @@ async function main() {
       .limit(1)
     const tools = ((r.tools_used as Array<{ name: string }>) ?? []).map((t) => t.name).join(', ') || '—'
     console.log('━'.repeat(70))
-    console.log(`👎 ${r.feedback_at} · ${r.feedback_by} · ${JSON.stringify(r.alma_conversations)} · id ${r.id}`)
+    console.log(`${r.feedback_rating === 'up' ? '👍' : '👎'} ${r.feedback_at} · ${r.feedback_by} · ${JSON.stringify(r.alma_conversations)} · id ${r.id}`)
     console.log(`Pregunta: ${prev?.[0]?.content ?? '?'}`)
     console.log(`Herramientas: ${tools}`)
     console.log(`Respuesta: ${String(r.content).slice(0, 800)}`)
