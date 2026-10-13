@@ -60,7 +60,8 @@ export default function LoginForm() {
       provider: 'google',
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
-        queryParams: { hd: 'huspy.io' },
+        // select_account: Google muestra siempre el selector (si no, reutiliza la cuenta abierta en el navegador)
+        queryParams: { hd: 'huspy.io', prompt: 'select_account' },
       },
     })
 
