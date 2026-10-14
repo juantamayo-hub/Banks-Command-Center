@@ -3,8 +3,8 @@
 /**
  * Server Actions: gestión manual de envíos a entidades de préstamo (lender_submissions).
  *
- * - markLenderSubmissionSent: el caso se envió a mano (fuera del flujo automático).
  * - dismissLenderSubmission: el caso no se va a enviar (descartado).
+ * El estado "enviado" lo registra siempre el flujo automático (POST /api/lender-submissions).
  *
  * Solo actúan sobre casos pendientes (pending_docs / error) y registran quién lo hizo en
  * lender_submission_events. NO envían nada a la entidad ni tocan Pipedrive.
@@ -28,9 +28,8 @@ async function currentUserEmail(): Promise<string | null> {
 
 async function closePending(
   id: string,
-  status: 'sent' | 'dismissed',
+  status: 'dismissed',
   detail: (email: string) => string,
-  extra: Record<string, unknown> = {},
 ): Promise<LenderActionResult> {
   if (!UUID_RE.test(id)) return { ok: false, error: 'ID inválido' }
   const email = await currentUserEmail()
@@ -39,7 +38,7 @@ async function closePending(
   const supabase = await createAdminClient()
   const { data: updated, error } = await supabase
     .from('lender_submissions')
-    .update({ status, ...extra })
+    .update({ status })
     .eq('id', id)
     .in('status', ['pending_docs', 'error'])
     .select('id, lender, source, deal_id')
@@ -57,14 +56,6 @@ async function closePending(
   })
   revalidatePath('/dashboard/prestamos')
   return { ok: true }
-}
-
-export async function markLenderSubmissionSent(id: string): Promise<LenderActionResult> {
-  return closePending(id, 'sent', (email) => `Marcado como enviado a mano por ${email}`, {
-    sent_at: new Date().toISOString(),
-    missing_docs: [],
-    error_message: null,
-  })
 }
 
 export async function dismissLenderSubmission(id: string, reason: string): Promise<LenderActionResult> {

@@ -225,7 +225,7 @@ export default async function PrestamosPage({ searchParams }: PrestamosPageProps
                     {dealUrl && <a href={dealUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Deal ↗</a>}
                     {bankUrl && <a href={bankUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Deal bancario ↗</a>}
                   </div>
-                  {action && <LenderSubmissionActions id={s.id} lenderName={lenderName} />}
+                  {action && <LenderSubmissionActions id={s.id} />}
                 </div>
               </div>
             )

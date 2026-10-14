@@ -1,17 +1,16 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { dismissLenderSubmission, markLenderSubmissionSent } from '@/app/actions/lenderSubmissions'
+import { dismissLenderSubmission } from '@/app/actions/lenderSubmissions'
 
 interface Props {
   id: string
-  lenderName: string
 }
 
-export default function LenderSubmissionActions({ id, lenderName }: Props) {
+export default function LenderSubmissionActions({ id }: Props) {
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
-  const [mode, setMode] = useState<'idle' | 'confirm_sent' | 'dismiss'>('idle')
+  const [mode, setMode] = useState<'idle' | 'dismiss'>('idle')
   const [reason, setReason] = useState('')
 
   function run(action: () => Promise<{ ok: boolean; error?: string }>) {
@@ -38,38 +37,11 @@ export default function LenderSubmissionActions({ id, lenderName }: Props) {
           <button
             type="button"
             disabled={pending}
-            onClick={() => setMode('confirm_sent')}
-            className="rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-          >
-            Marcar enviado
-          </button>
-          <button
-            type="button"
-            disabled={pending}
             onClick={() => setMode('dismiss')}
             className="rounded-md px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 disabled:opacity-50"
           >
             Descartar
           </button>
-        </div>
-      )}
-
-      {mode === 'confirm_sent' && (
-        <div className="max-w-xs rounded-lg bg-white px-3 py-2 text-xs ring-1 ring-black/10 sm:text-right">
-          <p className="text-gray-700">¿Confirmas que ya se envió a {lenderName} por otra vía? No se envía nada desde aquí.</p>
-          <div className="mt-1.5 flex justify-end gap-2">
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => run(() => markLenderSubmissionSent(id))}
-              className="rounded-md bg-gray-800 px-2.5 py-1 font-medium text-white hover:bg-gray-700 disabled:opacity-50"
-            >
-              {pending ? '…' : 'Sí, marcar enviado'}
-            </button>
-            <button type="button" onClick={() => setMode('idle')} className="rounded-md px-2 py-1 text-gray-500 hover:bg-gray-100">
-              Cancelar
-            </button>
-          </div>
         </div>
       )}
 
