@@ -61,7 +61,7 @@ async function closePending(
 /** Flujos n8n de envío por entidad + origen (las URLs no son secretas; la llamada va firmada con x-offers-secret). */
 const SEND_WEBHOOKS: Record<string, string> = {
   'cofidis:no_bank_fee': 'https://huspy.app.n8n.cloud/webhook/cofidis-loans-d2bb9862891b44388e49e224d95d3435',
-  'cofidis:loans_pipeline': 'https://huspy.app.n8n.cloud/webhook/cofidis-new-loan-123456789%3F',
+  'cofidis:loans_pipeline': 'https://huspy.app.n8n.cloud/webhook/cofidis-prestamo-7c41e9d2',
 }
 
 export async function relaunchLenderSubmission(id: string): Promise<LenderActionResult> {
