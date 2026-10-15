@@ -14,7 +14,6 @@ const TOP_NAV: NavItem[] = [
   { label: 'Pendientes', href: '/dashboard?tab=pendientes' },
   { label: 'Enviados', href: '/dashboard?tab=enviados' },
   { label: 'Envíos por plataforma', href: '/dashboard/envios-plataforma' },
-  { label: 'Préstamos', href: '/dashboard/prestamos' },
   { label: 'Ofertas recibidas', href: '/dashboard/ofertas' },
   { label: 'Nuevo envío', href: '/dashboard/nuevo-envio' },
   { label: 'Métricas', href: '/dashboard/metricas' },
@@ -119,6 +118,33 @@ export default function SidebarNav() {
             }
           >
             Procesar Estados
+          </Link>
+        </div>
+      </div>
+
+      {/* Préstamos section (Cofidis) */}
+      <div className="mt-6">
+        <p className={SECTION_LABEL}>Préstamos</p>
+        <div className="flex flex-col gap-0.5">
+          <Link
+            href="/dashboard/prestamos"
+            className={
+              pathname === '/dashboard/prestamos' && !searchParams.get('vista')
+                ? 'sidebar-link sidebar-link-sm sidebar-link-active'
+                : 'sidebar-link sidebar-link-sm'
+            }
+          >
+            Pendientes
+          </Link>
+          <Link
+            href="/dashboard/prestamos?vista=enviados"
+            className={
+              pathname === '/dashboard/prestamos' && searchParams.get('vista') === 'enviados'
+                ? 'sidebar-link sidebar-link-sm sidebar-link-active'
+                : 'sidebar-link sidebar-link-sm'
+            }
+          >
+            Enviados
           </Link>
         </div>
       </div>
