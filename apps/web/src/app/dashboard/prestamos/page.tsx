@@ -103,7 +103,7 @@ export default async function PrestamosPage({ searchParams }: PrestamosPageProps
     <div className="flex flex-col gap-6 p-6">
       <PageHeader
         title="Préstamos"
-        subtitle="Envíos a Cofidis (préstamo personal y reunificación de deudas): casos que no salieron y su historial."
+        subtitle="Envíos a Cofidis (préstamo personal y reunificación de deudas): pendientes, enviados, historial y relanzamientos."
         breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }]}
       />
 
@@ -225,7 +225,9 @@ export default async function PrestamosPage({ searchParams }: PrestamosPageProps
                     {dealUrl && <a href={dealUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Deal ↗</a>}
                     {bankUrl && <a href={bankUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Deal bancario ↗</a>}
                   </div>
-                  {action && <LenderSubmissionActions id={s.id} />}
+                  {(action || s.status === 'sent') && (
+                    <LenderSubmissionActions id={s.id} status={s.status as 'pending_docs' | 'error' | 'sent'} lenderName={lenderName} />
+                  )}
                 </div>
               </div>
             )
