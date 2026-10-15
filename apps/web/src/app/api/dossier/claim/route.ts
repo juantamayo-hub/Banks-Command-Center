@@ -27,8 +27,9 @@ export const dynamic = 'force-dynamic'
 
 const DUPLICATE_WINDOW_MS = 6 * 60 * 60 * 1000
 const RETRY_AFTER_MS = 15 * 60 * 1000
-// Etapas previas al envío: pipeline 7 → 77 (Pre Bank Submission), pipeline 10 → 104 (Pre-Underwriting)
-const PRE_SUBMISSION_STAGES = new Set([77, 104])
+// Etapas previas al envío: pipeline 7 → 77 (Pre Bank Submission), pipeline 10 → 104 (Pre-Underwriting),
+// pipeline 16 Loans → 151 (Pre Bank Submission, préstamos Cofidis)
+const PRE_SUBMISSION_STAGES = new Set([77, 104, 151])
 
 const int = (v: unknown): number | null => {
   const n = typeof v === 'number' ? v : parseInt(String(v ?? ''), 10)
