@@ -327,14 +327,14 @@ export async function POST(req: Request) {
     // Try by deal_id first, then by bank_deal_id (Excel may have either)
     let { data: sub } = await supabase
       .from('kutxabank_submissions')
-      .select('id, deal_id, bank_deal_id, nombre_cliente, plan, drive_folder_id, zip_file_id, zip_drive_link, rastreator_status')
+      .select('id, deal_id, bank_deal_id, nombre_cliente, plan, drive_folder_id, zip_file_id, zip_drive_link, rastreator_status, sent_at')
       .eq('deal_id', excelDealId)
       .single()
 
     if (!sub) {
       const { data: subByBank } = await supabase
         .from('kutxabank_submissions')
-        .select('id, deal_id, bank_deal_id, nombre_cliente, plan, drive_folder_id, zip_file_id, zip_drive_link, rastreator_status')
+        .select('id, deal_id, bank_deal_id, nombre_cliente, plan, drive_folder_id, zip_file_id, zip_drive_link, rastreator_status, sent_at')
         .eq('bank_deal_id', excelDealId)
         .single()
       if (subByBank) sub = subByBank
@@ -365,7 +365,9 @@ export async function POST(req: Request) {
             plan,
             drive_folder_id: driveFolderId,
             dni: dni || null,
-            rastreator_status: 'approved',
+            // El Excel de Rastreator acumula filas antiguas: un caso ya enviado NUNCA vuelve a 'approved'
+            // (si no, reaparece como "Listo para enviar" y se podría mandar dos veces).
+            rastreator_status: sub?.rastreator_status === 'sent' || sub?.sent_at ? 'sent' : 'approved',
             ...(sub ? {} : { missing_docs: [] }),
           },
           { onConflict: 'deal_id' }

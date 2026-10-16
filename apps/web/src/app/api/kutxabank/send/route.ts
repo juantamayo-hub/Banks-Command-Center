@@ -44,6 +44,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Submission no encontrada' }, { status: 404 })
   }
 
+  // Anti-duplicado: un caso con fecha de envío ya salió a Rastreator, aunque su estado diga otra cosa
+  if (sub.sent_at) {
+    return NextResponse.json(
+      { error: `Ya enviado el ${new Date(sub.sent_at).toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })}. No se reenvía.` },
+      { status: 409 }
+    )
+  }
+
   if (sub.rastreator_status !== 'approved') {
     return NextResponse.json(
       { error: `No se puede enviar: estado actual = ${sub.rastreator_status}` },
