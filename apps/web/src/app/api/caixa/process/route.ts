@@ -146,6 +146,11 @@ const RESOLUCION_LOOKUP: Record<string, number> = (() => {
   return Object.fromEntries(entries)
 })()
 
+// Same table keyed by normText() so badly-encoded resolutions still match
+const RESOLUCION_LOOKUP_NORM: Record<string, number> = Object.fromEntries(
+  Object.entries(RESOLUCION_LOOKUP).map(([k, v]) => [normText(k), v])
+)
+
 const PIPEDRIVE_LOST_REASON_FIELD = '5af7c8a4d8341bfe53526b6a7b4e2fc793503a90'
 const PIPEDRIVE_EXTERNAL_ID_FIELD = '4673f6bf937722b6dee1afa5537f22136a396b69'
 
@@ -213,6 +218,33 @@ function extractDealId(numeroPeticion: string): string {
   return numeroPeticion.toString().replace(/\D/g, '').substring(0, 6)
 }
 
+/**
+ * Petition version: "389586" → 0, "389586001" → 1, "389586002" → 2.
+ * When Caixa re-opens an operation it issues a new petition with a higher
+ * suffix; only the highest one reflects the real state of the deal.
+ */
+function petitionSuffix(numeroPeticion: string): number {
+  const digits = numeroPeticion.toString().replace(/\D/g, '')
+  return parseInt(digits.substring(6) || '0', 10)
+}
+
+/**
+ * Normalizes Caixa free text for comparisons. The daily file sometimes arrives
+ * with broken encoding ("Relaci�n", "RelaciÃ³n" instead of "Relación"), so all
+ * non-ASCII characters are dropped — every variant becomes "relacin".
+ */
+function normText(s: string): string {
+  return (s ?? '')
+    .normalize('NFC')
+    .replace(/[^\x00-\x7F]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+// Pipeline order of the stages this route can write (IDs are not monotonic: 79 sits between 71 and 72)
+const STAGE_ORDER = [77, 70, 71, 79, 72, 73, 74, 75]
+
 function buildNoteContent(row: ParsedCaixaRow, fechaProcesado: string): string {
   return [
     `📋 Respuesta Caixa — ${fechaProcesado}`,
@@ -227,9 +259,9 @@ function buildNoteContent(row: ParsedCaixaRow, fechaProcesado: string): string {
 
 async function matchLostReason(resolutionText: string): Promise<number> {
   // 1. Deterministic lookup (normalized) — no AI call needed for known resolutions
-  const normalized = resolutionText.trim().toLowerCase()
-  if (normalized && RESOLUCION_LOOKUP[normalized] !== undefined) {
-    return RESOLUCION_LOOKUP[normalized]
+  const normalized = normText(resolutionText)
+  if (normalized && RESOLUCION_LOOKUP_NORM[normalized] !== undefined) {
+    return RESOLUCION_LOOKUP_NORM[normalized]
   }
 
   // 2. Claude fallback for unknown resolutions
@@ -272,8 +304,8 @@ async function matchLostReason(resolutionText: string): Promise<number> {
   }
 }
 
-/** Returns the deal status ('open','won','lost','deleted') or null if not found. */
-async function pipedriveDealStatus(dealId: string): Promise<string | null> {
+/** Returns the deal status ('open','won','lost','deleted') and current stage, or null if not found. */
+async function pipedriveDealStatus(dealId: string): Promise<{ status: string | null; stageId: number | null } | null> {
   const token = process.env.PIPEDRIVE_API_TOKEN
   if (!token) throw new Error('PIPEDRIVE_API_TOKEN no configurado')
 
@@ -287,7 +319,8 @@ async function pipedriveDealStatus(dealId: string): Promise<string | null> {
     throw new Error(`Pipedrive GET deal ${res.status}: ${body.slice(0, 200)}`)
   }
   const json = await res.json()
-  return json?.data?.status ?? null
+  if (!json?.data) return null
+  return { status: json.data.status ?? null, stageId: json.data.stage_id ?? null }
 }
 
 async function pipedriveAddNote(dealId: string, content: string): Promise<string | null> {
@@ -470,6 +503,40 @@ export async function POST(req: NextRequest) {
   let skipped = 0
   let errors = 0
 
+  // Newest petition suffix per deal, from this file AND previous uploads
+  // (e.g. "389586001" seen last week → a closed "389586" today must not close the deal)
+  const maxSuffixByDeal = new Map<string, number>()
+  const bumpSuffix = (dealId: string, numero: string) => {
+    const s = petitionSuffix(numero)
+    if (s > (maxSuffixByDeal.get(dealId) ?? 0)) maxSuffixByDeal.set(dealId, s)
+  }
+  const dealIds = new Set<string>()
+  for (const row of rows) {
+    const numero = (row.numero_peticion ?? '').toString().trim()
+    if (!numero) continue
+    const dealId = extractDealId(numero)
+    dealIds.add(dealId)
+    bumpSuffix(dealId, numero)
+  }
+  const dealIdList = Array.from(dealIds)
+  const PAGE = 1000 // PostgREST max rows per response
+  for (let i = 0; i < dealIdList.length; i += 100) {
+    const chunk = dealIdList.slice(i, i + 100)
+    for (let from = 0; ; from += PAGE) {
+      const { data: history, error: historyError } = await supabase
+        .from('caixa_processed')
+        .select('deal_id, numero_peticion')
+        .in('deal_id', chunk)
+        .order('id')
+        .range(from, from + PAGE - 1)
+      if (historyError) {
+        return NextResponse.json({ error: `No se pudo leer el histórico de peticiones: ${historyError.message}` }, { status: 500 })
+      }
+      for (const h of history ?? []) bumpSuffix(h.deal_id, h.numero_peticion)
+      if (!history || history.length < PAGE) break
+    }
+  }
+
   for (const row of rows) {
     const numeroPeticion = (row.numero_peticion ?? '').toString().trim()
     if (!numeroPeticion) continue
@@ -494,15 +561,37 @@ export async function POST(req: NextRequest) {
     const motivoNorm = (row.col_E ?? '').trim()
     const resolucionNorm = (row.col_F ?? '').trim()
 
-    // Dedup: skip if already processed with same composite key (migration 011)
-    const { data: existing } = await supabase
+    // Superseded petition: a newer one (higher 001/002… suffix) exists for this deal,
+    // in this file or in a previous upload → it no longer reflects the deal, never touch it
+    const newestSuffix = maxSuffixByDeal.get(dealId) ?? 0
+    if (petitionSuffix(numeroPeticion) < newestSuffix) {
+      results.push({
+        numero_peticion: numeroPeticion,
+        deal_id: dealId,
+        status: 'skipped',
+        detail: `Petición antigua — manda la más reciente (${dealId}${String(newestSuffix).padStart(3, '0')})`,
+      })
+      skipped++
+      continue
+    }
+
+    // Dedup: skip if already processed with same composite key (migration 011).
+    // Compared with normText() so a badly-encoded file doesn't look like a new state.
+    const { data: previous, error: previousError } = await supabase
       .from('caixa_processed')
-      .select('id')
+      .select('estado_del_lead, motivo_pendiente, resolucion')
       .eq('numero_peticion', numeroPeticion)
-      .eq('estado_del_lead', estadoNorm)
-      .eq('motivo_pendiente', motivoNorm)
-      .eq('resolucion', resolucionNorm)
-      .maybeSingle()
+
+    if (previousError) {
+      results.push({ numero_peticion: numeroPeticion, deal_id: dealId, status: 'error', detail: `No se pudo comprobar duplicados: ${previousError.message}` })
+      errors++
+      continue
+    }
+
+    const key = [estadoNorm, motivoNorm, resolucionNorm].map(normText).join('|')
+    const existing = (previous ?? []).some(
+      (p) => [p.estado_del_lead, p.motivo_pendiente, p.resolucion].map((v) => normText(v ?? '')).join('|') === key
+    )
 
     if (existing) {
       results.push({ numero_peticion: numeroPeticion, deal_id: dealId, status: 'skipped', detail: 'Ya procesado (mismo estado)' })
@@ -522,8 +611,11 @@ export async function POST(req: NextRequest) {
 
     // Guard: never touch won deals
     let dealStatus: string | null = null
+    let currentStageId: number | null = null
     try {
-      dealStatus = await pipedriveDealStatus(dealId)
+      const deal = await pipedriveDealStatus(dealId)
+      dealStatus = deal?.status ?? null
+      currentStageId = deal?.stageId ?? null
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       results.push({ numero_peticion: numeroPeticion, deal_id: dealId, status: 'error', detail: `No se pudo verificar estado del deal: ${msg}` })
@@ -625,18 +717,25 @@ export async function POST(req: NextRequest) {
     if (!isClosed) {
       const target = getTargetStage(estadoNorm, motivoNorm)
       if (target) {
-        stageId = target.stageId
-        stageName = STAGE_NAMES[target.stageId]
-        markedWon = target.markWon
-        try {
-          await pipedriveUpdateStage(dealId, target.stageId, target.markWon)
-          stageUpdated = true
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err)
-          stageWarning = msg.includes('403')
-            ? `Sin permiso para mover stage (403 — usa un API token de admin): ${msg.slice(0, 120)}`
-            : msg
-          console.error(`[caixa/process] Stage update error on ${numeroPeticion}:`, msg)
+        // Solo avanzar: never move a deal back to an earlier stage than the one it is in
+        const currentIdx = currentStageId !== null ? STAGE_ORDER.indexOf(currentStageId) : -1
+        const targetIdx = STAGE_ORDER.indexOf(target.stageId)
+        if (currentIdx !== -1 && targetIdx < currentIdx) {
+          stageWarning = `Etapa no retrocedida: el deal está en ${STAGE_NAMES[currentStageId!]} y Caixa indica ${STAGE_NAMES[target.stageId]}`
+        } else {
+          stageId = target.stageId
+          stageName = STAGE_NAMES[target.stageId]
+          markedWon = target.markWon
+          try {
+            await pipedriveUpdateStage(dealId, target.stageId, target.markWon)
+            stageUpdated = true
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err)
+            stageWarning = msg.includes('403')
+              ? `Sin permiso para mover stage (403 — usa un API token de admin): ${msg.slice(0, 120)}`
+              : msg
+            console.error(`[caixa/process] Stage update error on ${numeroPeticion}:`, msg)
+          }
         }
       }
     }
