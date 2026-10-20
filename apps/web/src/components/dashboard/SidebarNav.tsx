@@ -72,7 +72,7 @@ function SectionTitle({ children, logo }: { children: React.ReactNode; logo?: st
 
 function Section({ title, logo, children }: { title: string; logo?: string | null; children: React.ReactNode }) {
   return (
-    <div className="mt-6 first:mt-0">
+    <div className="mt-5 first:mt-0">
       <SectionTitle logo={logo}>{title}</SectionTitle>
       <div className="flex flex-col gap-0.5">{children}</div>
     </div>
@@ -109,7 +109,7 @@ export default function SidebarNav() {
   const top = (href: string) => isActive(href, pathname, tab)
 
   return (
-    <nav className="flex flex-1 flex-col overflow-y-auto px-3 py-5">
+    <nav className="sidebar-scroll flex flex-1 flex-col overflow-y-auto px-3 pb-6 pt-5">
       <Section title="Envíos">
         <NavLink href="/dashboard?tab=pendientes" label="Pendientes" icon="clock" active={top('/dashboard?tab=pendientes')} />
         <NavLink href="/dashboard?tab=enviados" label="Enviados" icon="send" active={top('/dashboard?tab=enviados')} />
@@ -162,7 +162,7 @@ export default function SidebarNav() {
       </Section>
 
       {/* Bancos — plegable con buscador */}
-      <div className="mt-6">
+      <div className="mt-5">
         <button
           type="button"
           onClick={() => setBancosOpen(!bancosOpen)}

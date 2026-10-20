@@ -13,7 +13,8 @@ export interface BankCardData {
   blocks: boolean
   redflags: 'own' | 'general' | 'na'
   recipients: string   // texto corto: "Correo del deal", "11 provincias", "1 correo"…
-  warning: string | null
+  coverage: string | null  // dato neutro: "El resto de provincias no se envía"
+  warning: string | null   // solo problemas reales (sin destinatario)
   updatedAt: string
 }
 
@@ -91,12 +92,12 @@ export default function BankGrid({ banks }: { banks: BankCardData[] }) {
             <Link
               key={b.slug}
               href={`/dashboard/configuracion/${b.slug}`}
-              className={`group flex flex-col rounded-xl border bg-white p-5 shadow-sm transition hover:shadow-md ${
+              className={`group flex flex-col rounded-2xl border bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition duration-200 hover:-translate-y-0.5 hover:border-gray-200 hover:shadow-[0_8px_24px_-8px_rgba(16,24,40,0.12)] ${
                 na ? 'border-dashed border-gray-200 opacity-75 hover:opacity-100' : 'border-gray-100'
               }`}
             >
               <div className="flex items-center gap-3">
-                <BankLogo slug={b.slug} name={b.name} size={36} />
+                <BankLogo slug={b.slug} name={b.name} size={40} />
                 <p className="min-w-0 flex-1 truncate text-[15px] font-semibold text-gray-900">{b.name}</p>
                 <span className="text-gray-300 transition group-hover:translate-x-0.5 group-hover:text-gray-500">→</span>
               </div>
@@ -106,25 +107,28 @@ export default function BankGrid({ banks }: { banks: BankCardData[] }) {
                   <span className="font-medium text-gray-700">No aplica.</span> {b.channelNote}
                 </p>
               ) : (
-                <div className="mt-4 space-y-2">
-                  <div className="flex items-center justify-between gap-2 text-xs">
-                    <span className="text-gray-500">Red flags</span>
-                    <span className="flex items-center gap-1.5">
-                      {b.redflags === 'na' ? <Pill tone="gray">No aplican</Pill>
+                <dl className="mt-4 space-y-2 text-xs">
+                  <div className="flex items-center justify-between gap-3">
+                    <dt className="text-gray-400">Red flags</dt>
+                    <dd className="flex items-center gap-1.5 text-gray-700">
+                      {b.redflags === 'na' ? <span className="text-gray-400">No aplican</span>
                         : b.redflags === 'general' ? <Pill tone="blue">Regla general</Pill>
-                          : <Pill tone="green">Propias</Pill>}
-                      {b.redflags !== 'na' && (b.blocks ? <Pill tone="red">Bloquean</Pill> : <Pill tone="gray">Informan</Pill>)}
-                    </span>
+                          : <span>Propias</span>}
+                      {b.redflags !== 'na' && b.blocks && <Pill tone="red">Bloquean</Pill>}
+                    </dd>
                   </div>
-                  <div className="flex items-center justify-between gap-2 text-xs">
-                    <span className="text-gray-500">Destinatario</span>
-                    <span className="truncate text-right text-gray-800">{b.recipients}</span>
+                  <div className="flex items-start justify-between gap-3">
+                    <dt className="shrink-0 text-gray-400">Destinatario</dt>
+                    <dd className="min-w-0 text-right">
+                      <span className="block truncate text-gray-800">{b.recipients}</span>
+                      {b.coverage && <span className="block text-[11px] text-gray-400">{b.coverage}</span>}
+                    </dd>
                   </div>
                   {b.warning && <p className="rounded-md bg-amber-50 px-2 py-1 text-[11px] text-amber-800">{b.warning}</p>}
-                </div>
+                </dl>
               )}
 
-              <p className="mt-auto pt-4 text-[11px] text-gray-400">Editado {fmtDate(b.updatedAt)}</p>
+              <p className="mt-auto pt-4 text-[11px] text-gray-300 transition-colors group-hover:text-gray-400">Editado {fmtDate(b.updatedAt)}</p>
             </Link>
           )
         })}

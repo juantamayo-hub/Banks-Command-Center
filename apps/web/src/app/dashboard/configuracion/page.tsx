@@ -18,27 +18,34 @@ export const dynamic = 'force-dynamic'
 const fmt = (n: number | null | undefined, suffix = '') =>
   n === null || n === undefined ? '—' : `${Number(n).toLocaleString('es-ES')}${suffix}`
 
-function recipientsSummary(b: BankConfig, contacts: BankContact[], provinces: Province[]): { text: string; warning: string | null } {
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
+
+function recipientsSummary(
+  b: BankConfig, contacts: BankContact[], provinces: Province[],
+): { text: string; coverage: string | null; warning: string | null } {
   const own = contacts.filter((c) => c.bank_slug === b.bank_slug && c.active)
   const prov = own.filter((c) => c.scope === 'province').length
   const def = own.find((c) => c.scope === 'default')
-  if (b.to_source === 'deal_field') return { text: '"Email bancario" del deal', warning: null }
+  if (b.to_source === 'deal_field') return { text: '"Email bancario" del deal', coverage: null, warning: null }
 
   const names = Array.from(new Set(provinces.map((p) => p.name))).filter((n) => n !== 'TBC')
   const uncovered = names.filter((n) =>
     resolveRecipients(b, contacts, provinces, [], { province: n }).route !== 'ok').length
 
   let text: string
-  if (b.to_source === 'contacts_cc_deal_field') text = `${def?.to_emails[0] ?? '—'} · oficina por provincia`
-  else if (prov && def) text = `${prov} provincias + resto`
-  else if (prov) text = `${prov} provincias`
-  else if (def) text = def.to_emails.length === 1 ? def.to_emails[0] : `${def.to_emails.length} correos`
+  if (b.to_source === 'contacts_cc_deal_field') text = `${def?.to_emails[0] ?? '—'}`
+  else if (prov && def) text = `${plural(prov, 'provincia', 'provincias')} + resto`
+  else if (prov) text = plural(prov, 'provincia', 'provincias')
+  else if (def) text = def.to_emails.length === 1 ? def.to_emails[0] : plural(def.to_emails.length, 'correo', 'correos')
   else text = 'Sin correos'
-  if (b.to_source === 'deal_field_then_contacts') text = `Email del deal o ${text}`
 
-  const warning = !own.length ? 'Sin destinatario configurado'
-    : uncovered && b.to_source !== 'contacts_cc_deal_field' ? `${uncovered} provincias sin correo: no se envía` : null
-  return { text, warning }
+  let coverage: string | null = null
+  if (b.to_source === 'contacts_cc_deal_field') coverage = 'Oficina de la provincia en copia'
+  else if (b.to_source === 'deal_field_then_contacts') coverage = 'Si el deal no trae "Email bancario"'
+  if (uncovered && own.length && b.to_source !== 'contacts_cc_deal_field') {
+    coverage = `${coverage ? coverage + ' · ' : ''}resto de provincias: no se envía`
+  }
+  return { text, coverage, warning: own.length ? null : 'Sin destinatario configurado' }
 }
 
 export default async function ConfiguracionPage() {
@@ -99,6 +106,7 @@ export default async function ConfiguracionPage() {
       blocks: b.block_on_red_flags,
       redflags: !b.redflags_apply ? 'na' : b.uses_general_rules ? 'general' : 'own',
       recipients: r.text,
+      coverage: b.channel === 'email' ? r.coverage : null,
       warning: b.channel === 'email' ? r.warning : null,
       updatedAt: dates[dates.length - 1],
     }
