@@ -149,6 +149,33 @@ export default function SidebarNav() {
         </div>
       </div>
 
+      {/* Configuración section (red flags y correos por banco) */}
+      <div className="mt-6">
+        <p className={SECTION_LABEL}>Configuración</p>
+        <div className="flex flex-col gap-0.5">
+          <Link
+            href="/dashboard/configuracion"
+            className={
+              pathname.startsWith('/dashboard/configuracion') && pathname !== '/dashboard/configuracion/ajustes'
+                ? 'sidebar-link sidebar-link-sm sidebar-link-active'
+                : 'sidebar-link sidebar-link-sm'
+            }
+          >
+            Bancos
+          </Link>
+          <Link
+            href="/dashboard/configuracion/ajustes"
+            className={
+              pathname === '/dashboard/configuracion/ajustes'
+                ? 'sidebar-link sidebar-link-sm sidebar-link-active'
+                : 'sidebar-link sidebar-link-sm'
+            }
+          >
+            Bloqueados y editores
+          </Link>
+        </div>
+      </div>
+
       {/* Bancos section — collapsible with search */}
       <div className="mt-6">
         <button
