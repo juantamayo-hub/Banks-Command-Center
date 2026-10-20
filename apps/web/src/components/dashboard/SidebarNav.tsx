@@ -55,7 +55,7 @@ function NavLink({ href, label, icon, active, badge }: { href: string; label: st
       <span className="truncate">{label}</span>
       {!!badge && badge > 0 && (
         <span
-          className="ml-auto inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10.5px] font-semibold leading-none text-white tabular-nums"
+          className="ml-auto inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-bayteca-cream px-1.5 text-[10.5px] font-semibold leading-none text-bayteca-green tabular-nums"
           aria-label={`${badge} pendientes`}
         >
           {badge > 99 ? '99+' : badge}
