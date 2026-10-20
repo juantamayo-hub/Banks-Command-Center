@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import PageHeader from '@/components/ui/PageHeader'
 import { BlockedEmailsEditor, EditorsEditor } from '@/components/config/GlobalSettingsEditors'
 import { CARD } from '@/components/config/ui'
+import BackLink from '@/components/config/BackLink'
 import { canEditBankConfig } from '@/app/actions/bankConfig'
 import type { BlockedEmail } from '@/lib/bankConfig'
 
@@ -19,9 +20,9 @@ export default async function ConfigAjustesPage() {
 
   return (
     <div className="flex flex-col gap-6 p-6 pb-12">
+      <BackLink />
       <PageHeader
         title="Correos bloqueados y editores"
-        breadcrumbs={[{ label: 'Configuración', href: '/dashboard/configuracion' }]}
       />
       <div className="grid gap-4 lg:grid-cols-2">
         <section className={CARD}>

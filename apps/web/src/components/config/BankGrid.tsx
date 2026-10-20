@@ -8,7 +8,7 @@ import { INPUT } from './ui'
 export interface BankCardData {
   slug: string
   name: string
-  channel: 'email' | 'platform' | 'none'
+  channel: 'email' | 'platform' | 'none' | 'unused'
   channelNote: string | null
   blocks: boolean
   redflags: 'own' | 'general' | 'na'
@@ -45,7 +45,9 @@ export default function BankGrid({ banks }: { banks: BankCardData[] }) {
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState<FilterKey>('email')
 
-  const count = (k: FilterKey) => banks.filter((b) => matches(b, k)).length
+  const active = banks.filter((b) => b.channel !== 'unused')
+  const unused = banks.filter((b) => b.channel === 'unused')
+  const count = (k: FilterKey) => active.filter((b) => matches(b, k)).length
   function matches(b: BankCardData, k: FilterKey) {
     if (k === 'email') return b.channel === 'email'
     if (k === 'general') return b.redflags === 'general'
@@ -53,7 +55,9 @@ export default function BankGrid({ banks }: { banks: BankCardData[] }) {
     if (k === 'na') return b.channel !== 'email'
     return true
   }
-  const visible = banks.filter((b) => matches(b, filter) && b.name.toLowerCase().includes(q.trim().toLowerCase()))
+  const search = (b: BankCardData) => b.name.toLowerCase().includes(q.trim().toLowerCase())
+  const visible = active.filter((b) => matches(b, filter) && search(b))
+  const unusedVisible = unused.filter(search)
 
   return (
     <div className="space-y-4">
@@ -126,6 +130,29 @@ export default function BankGrid({ banks }: { banks: BankCardData[] }) {
         })}
         {!visible.length && <p className="col-span-full py-10 text-center text-sm text-gray-400">Ningún banco coincide</p>}
       </div>
+
+      {unusedVisible.length > 0 && (
+        <details className="group/unused mt-4 rounded-xl border border-gray-100 bg-white px-5 py-4" open={!!q.trim()}>
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+            <span>
+              <span className="text-sm font-semibold text-gray-800">En Pipedrive, sin actividad ({unusedVisible.length})</span>
+              <span className="block text-xs text-gray-500">
+                Bancos del desplegable de Pipedrive con los que hoy no trabajamos: no están en la hoja, ni en n8n, ni en plataformas.
+              </span>
+            </span>
+            <span className="text-xs text-gray-400 group-open/unused:hidden">Mostrar</span>
+            <span className="hidden text-xs text-gray-400 group-open/unused:inline">Ocultar</span>
+          </summary>
+          <ul className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {unusedVisible.map((b) => (
+              <li key={b.slug} className="flex items-center gap-3 rounded-lg px-2 py-2">
+                <BankLogo slug={b.slug} name={b.name} size={28} />
+                <span className="text-sm text-gray-700">{b.name}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
     </div>
   )
 }

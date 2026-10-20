@@ -28,7 +28,7 @@ export const TO_SOURCE_LABEL: Record<ToSource, string> = {
   contacts_cc_deal_field: 'Correos configurados aquí; en CC el "Email bancario" del deal o, si falta, el CC de la provincia',
 }
 
-export type Channel = 'email' | 'platform' | 'none'
+export type Channel = 'email' | 'platform' | 'none' | 'unused'
 
 export interface BankConfig {
   bank_slug: string

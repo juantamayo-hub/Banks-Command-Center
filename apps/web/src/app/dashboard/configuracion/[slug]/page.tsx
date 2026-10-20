@@ -1,4 +1,3 @@
-import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import Tabs from '@/components/ui/Tabs'
@@ -9,6 +8,7 @@ import ContactsEditor from '@/components/config/ContactsEditor'
 import RecipientPreview from '@/components/config/RecipientPreview'
 import DocumentsEditor from '@/components/config/DocumentsEditor'
 import { CARD } from '@/components/config/ui'
+import BackLink from '@/components/config/BackLink'
 import { canEditBankConfig } from '@/app/actions/bankConfig'
 import type {
   BankConfig,
@@ -108,11 +108,7 @@ export default async function BankConfigPage({ params, searchParams }: Props) {
     <div className="flex flex-col gap-6 p-6 pb-12">
       {/* Cabecera */}
       <div>
-        <nav className="mb-2 text-xs text-gray-400">
-          <Link href="/dashboard/configuracion" className="hover:text-gray-600">Configuración</Link>
-          <span className="mx-1">/</span>
-          <span className="text-gray-500">{bank.display_name}</span>
-        </nav>
+        <div className="mb-3"><BackLink /></div>
         <div className="flex flex-wrap items-center gap-4">
           <BankLogo slug={bank.bank_slug} name={bank.display_name} size={44} />
           <div className="min-w-0 flex-1">
