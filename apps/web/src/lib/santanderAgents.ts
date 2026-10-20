@@ -7,13 +7,14 @@
  *      búsqueda en Pipedrive). Si el id apunta a otro pipeline (p. ej. el deal general), busca el deal bancario
  *      Santander de la misma persona. Debe salir exactamente uno; si no → deal_not_found. Nunca escribe en un deal dudoso.
  *   2. Cruza el nombre del gestor con bank_agents.
- *   3. Gestor conocido → "Bank Mail / Email agente bancario" + nota + comentario en el ticket del Request Hub.
+ *   3. Gestor conocido → "Bank Mail / Email agente bancario" + nota + comentario en el ticket del Request Hub,
+ *      que queda solucionado (status closed) si seguía abierto.
  *      Gestor desconocido → pending_agent + nota + aviso (DM del Request Hub con botón para añadir el correo).
  * Escribe en Pipedrive SIEMPRE como Hipotecas Bayteca (PIPEDRIVE_API_TOKEN_HIPOTECAS); nunca con otro token.
  * Idempotente: UNIQUE(bank_slug, dni, agent_key) en bank_agent_assignments; lo ya asignado no se repite.
  */
 
-import { hubComment, hubNotifyAssignmentIssue, hubTicketForDeal } from '@/lib/requestHub'
+import { hubCloseTicket, hubComment, hubNotifyAssignmentIssue, hubTicketsForDeal } from '@/lib/requestHub'
 import type { AdminClient } from '@/lib/bankConfigAuth'
 
 export const SANTANDER = 'santander'
@@ -21,6 +22,9 @@ const BANK_PIPELINE_ID = 7
 const BANK_NAME_FIELD = 'c3a445b9bf0422b9db09abc776cf2dc281b7e975'   // "Bank Name / Nombre del Banco"
 const BANK_MAIL_FIELD = '498dd83b5c5e1f1181c232131933717ceadfda34'   // "Bank Mail / Email agente bancario"
 const SANTANDER_NAMES = ['santander', 'bsch']
+// Request Hub: categoría "Contactar con el cliente (Banco)" — el ticket con el que se pide la activación a Santander
+const HUB_CONTACT_CATEGORY_ID = '3eeac518-8cc2-408c-bfe2-7ada741924a4'
+const HUB_OPEN_STATUSES = ['new', 'in_progress', 'waiting_on_employee']
 
 // ── Normalización ────────────────────────────────────────────────────────────
 
@@ -213,7 +217,7 @@ export async function processAssignment(
 
   const planned: string[] = []
   let notifiedTo: string[] | null = null
-  const avisoTxt = () => (notifiedTo ? ` · Aviso enviado a: ${notifiedTo.join(', ') || 'nadie (Slack no encontró al usuario)'}` : '')
+  const avisoTxt = () => (notifiedTo ? ` · Aviso a: ${notifiedTo.join(', ') || 'nadie (sin destinatario)'}` : '')
   const save = async (r: Omit<AssignmentResult, 'planned'>, extra: Record<string, unknown> = {}) => {
     if (opts.dryRun) return { ...r, planned }
     const rec = {
@@ -288,8 +292,22 @@ export async function processAssignment(
     // 3. Asignar (si no lo está ya)
     const current = String(deal[BANK_MAIL_FIELD] ?? '').trim().toLowerCase()
     if (current === agent.email.toLowerCase()) {
+      // El gestor ya estaba escrito (p. ej. a mano): el ticket de la activación debe quedar solucionado igualmente
+      let extra = ''
+      if (opts.dryRun) planned.push('Si el ticket de la activación sigue abierto, marcarlo como solucionado')
+      else {
+        try {
+          const tickets = await hubTicketsForDeal(dealId, true)
+          const t = tickets.find((x) => x.category_id === HUB_CONTACT_CATEGORY_ID) ?? tickets[0]
+          if (t?.status && HUB_OPEN_STATUSES.includes(t.status) && (await hubCloseTicket(t.id))) {
+            extra = ` · ticket ${t.display_id ?? t.id} solucionado`
+          }
+        } catch (e) {
+          extra = ` · Request Hub: ${String(e instanceof Error ? e.message : e).slice(0, 120)}`
+        }
+      }
       return save({ ...base, status: 'already_assigned', bank_deal_id: dealId, agent_email: agent.email,
-        detail: `El deal ${dealId} ya tenía a ${agent.email}` })
+        detail: `El deal ${dealId} ya tenía a ${agent.email}${extra}` })
     }
     const noteText = `Gestor/a asignado/a SANTANDER: ${agent.full_name} — ${agent.email}` +
       (current ? `\n(antes: ${current})` : '')
@@ -303,16 +321,23 @@ export async function processAssignment(
       const n = await pd<{ data: { id: number } }>('/notes', { method: 'POST', body: JSON.stringify({ deal_id: dealId, content: noteText }) })
       noteId = n.data?.id ?? null
       try {
-        const t = await hubTicketForDeal(dealId, true)
+        // Ticket de la activación (categoría "Contactar con el cliente (Banco)"); si no hay, el último del deal
+        const tickets = await hubTicketsForDeal(dealId, true)
+        const t = tickets.find((x) => x.category_id === HUB_CONTACT_CATEGORY_ID) ?? tickets[0]
         if (t) {
           await hubComment(t.id, `Gestor/a asignado/a por Santander: ${agent.full_name} (${agent.email}).`)
           ticketId = t.display_id ?? t.id
+          // Con el gestor escrito, el ticket queda solucionado
+          if (t.status && HUB_OPEN_STATUSES.includes(t.status)) {
+            const closed = await hubCloseTicket(t.id)
+            hubWarn += closed ? ` · ticket ${ticketId} solucionado` : ` · ticket ${ticketId} sin cerrar (Request Hub sin endpoint de cierre)`
+          }
         }
       } catch (e) {
         hubWarn = ` · Request Hub: ${String(e instanceof Error ? e.message : e).slice(0, 120)}`
       }
     } else {
-      planned.push('Comentario en el último ticket del deal (Request Hub)')
+      planned.push('Comentario en el ticket de la activación (Request Hub) y, si está abierto, marcarlo como solucionado')
     }
     return save(
       { ...base, status: 'assigned', bank_deal_id: dealId, agent_email: agent.email,
