@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { updateBankSettings } from '@/app/actions/bankConfig'
-import { TO_SOURCE_LABEL, type BankConfig, type ToSource } from '@/lib/bankConfig'
+import { TO_SOURCE_LABEL, toSourceToToggle, toggleToToSource, type BankConfig, type ToSource } from '@/lib/bankConfig'
 import { BTN_PRIMARY, INPUT } from './ui'
 
 /** Pestaña Ajustes: origen del destinatario, nombres en el deal, copia al owner, asunto. */
@@ -11,6 +11,7 @@ export default function BankSettingsForm({ config, canEdit }: { config: BankConf
   const [ccOwner, setCcOwner] = useState(config.cc_owner)
   const [subject, setSubject] = useState(config.subject_template ?? '')
   const [names, setNames] = useState(config.pipedrive_names.join(', '))
+  const toggle = toSourceToToggle(toSource)
   const [pending, start] = useTransition()
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
@@ -36,19 +37,50 @@ export default function BankSettingsForm({ config, canEdit }: { config: BankConf
   return (
     <div className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
-        <label className="block">
-          <span className="mb-1 block text-xs font-medium text-gray-600">¿De dónde sale el destinatario (Para)?</span>
-          <select
-            value={toSource}
-            disabled={!canEdit}
-            onChange={(e) => setToSource(e.target.value as ToSource)}
-            className={INPUT}
-          >
-            {(Object.keys(TO_SOURCE_LABEL) as ToSource[]).map((k) => (
-              <option key={k} value={k}>{TO_SOURCE_LABEL[k]}</option>
-            ))}
-          </select>
-        </label>
+        <div>
+          <span className="mb-1 block text-xs font-medium text-gray-600">Destinatario (Para): ¿qué correo tiene prioridad?</span>
+          {toggle ? (
+            <>
+              <div role="radiogroup" className="inline-flex rounded-lg bg-gray-100 p-1">
+                {([
+                  ['deal', 'Email bancario de Pipedrive'],
+                  ['contacts', 'Correos configurados (provincia / por defecto)'],
+                ] as const).map(([k, label]) => (
+                  <button
+                    key={k}
+                    type="button"
+                    role="radio"
+                    aria-checked={toggle.priority === k}
+                    disabled={!canEdit}
+                    onClick={() => setToSource(toggleToToSource(k, toggle.fallback))}
+                    className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-default ${
+                      toggle.priority === k ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-800'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <label className="mt-2 flex items-center gap-2 text-xs text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={toggle.fallback}
+                  disabled={!canEdit}
+                  onChange={(e) => setToSource(toggleToToSource(toggle.priority, e.target.checked))}
+                  className="h-4 w-4 accent-[var(--bayteca-green)]"
+                />
+                {toggle.priority === 'deal'
+                  ? 'Si el deal no tiene "Email bancario", usar los correos configurados'
+                  : 'Si no hay correo configurado para la provincia, usar el "Email bancario" del deal'}
+              </label>
+              <span className="mt-1 block text-[11px] text-gray-400">{TO_SOURCE_LABEL[toSource]}</span>
+            </>
+          ) : (
+            <p className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600">
+              {TO_SOURCE_LABEL[toSource]}. Caso especial de este banco: se mantiene como en su flujo.
+            </p>
+          )}
+        </div>
         <label className="block">
           <span className="mb-1 block text-xs font-medium text-gray-600">Nombre(s) del banco en el deal bancario</span>
           <input value={names} disabled={!canEdit} onChange={(e) => setNames(e.target.value)} className={INPUT} />

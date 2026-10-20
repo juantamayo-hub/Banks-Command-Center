@@ -9,7 +9,7 @@
  * Cualquier cambio aquí cambia a quién se envían los dossiers: validar con scripts/bank_config_parity.py.
  */
 
-export type ToSource = 'contacts' | 'deal_field' | 'deal_field_then_contacts' | 'contacts_cc_deal_field'
+export type ToSource = 'contacts' | 'deal_field' | 'deal_field_then_contacts' | 'contacts_then_deal_field' | 'contacts_cc_deal_field'
 export type OperationType = 'primera_residencia' | 'segunda_residencia' | 'cambio_hipoteca'
 export type ContactScope = 'default' | 'province' | 'when_to'
 
@@ -25,10 +25,27 @@ export const TO_SOURCE_LABEL: Record<ToSource, string> = {
   contacts: 'Correos configurados aquí',
   deal_field: 'Campo "Email bancario" del deal',
   deal_field_then_contacts: '"Email bancario" del deal; si está vacío, correos configurados aquí',
+  contacts_then_deal_field: 'Correos configurados aquí; si no hay para la provincia, "Email bancario" del deal',
   contacts_cc_deal_field: 'Correos configurados aquí; en CC el "Email bancario" del deal o, si falta, el CC de la provincia',
 }
 
 export type Channel = 'email' | 'platform' | 'none' | 'unused'
+
+/** Interruptor de la UI ↔ to_source (Ibercaja usa contacts_cc_deal_field, que no se expone como interruptor) */
+export function toSourceToToggle(t: ToSource): { priority: 'deal' | 'contacts'; fallback: boolean } | null {
+  switch (t) {
+    case 'deal_field': return { priority: 'deal', fallback: false }
+    case 'deal_field_then_contacts': return { priority: 'deal', fallback: true }
+    case 'contacts': return { priority: 'contacts', fallback: false }
+    case 'contacts_then_deal_field': return { priority: 'contacts', fallback: true }
+    default: return null
+  }
+}
+
+export function toggleToToSource(priority: 'deal' | 'contacts', fallback: boolean): ToSource {
+  if (priority === 'deal') return fallback ? 'deal_field_then_contacts' : 'deal_field'
+  return fallback ? 'contacts_then_deal_field' : 'contacts'
+}
 
 export interface BankConfig {
   bank_slug: string
@@ -238,6 +255,17 @@ export function resolveRecipients(
         if (contact.cc_owner !== null) ccOwner = contact.cc_owner
       }
       break
+    case 'contacts_then_deal_field':
+      if (contact && contact.to_emails.length) {
+        to = contact.to_emails
+        cc = contact.cc_emails
+        matchedBy = byProvince ? 'province' : 'default'
+        if (contact.cc_owner !== null) ccOwner = contact.cc_owner
+      } else if (dealEmails.length) {
+        to = dealEmails
+        matchedBy = 'deal_field'
+      }
+      break
     case 'contacts_cc_deal_field':
       if (byDefault) {
         to = byDefault.to_emails
@@ -270,7 +298,8 @@ export function resolveRecipients(
   let route: RecipientRoute = 'ok'
   let reason = ''
   if (!to.length) {
-    if (bank.to_source === 'deal_field' || (bank.to_source === 'deal_field_then_contacts' && !contact)) {
+    if (bank.to_source === 'deal_field' || (bank.to_source === 'deal_field_then_contacts' && !contact) ||
+        (bank.to_source === 'contacts_then_deal_field' && !contact)) {
       route = bank.to_source === 'deal_field' ? 'falta_email' : 'sin_configuracion'
     } else {
       route = 'sin_configuracion'
