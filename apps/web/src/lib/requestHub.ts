@@ -9,21 +9,47 @@ function config() {
   return base && secret ? { base: base.replace(/\/$/, ''), secret } : null
 }
 
+export interface HubTicket {
+  id: string
+  display_id?: string
+  status?: string
+  category_id?: string
+  created_at?: string
+}
+
 /**
- * Último ticket del deal. Con includeClosed=true también los cerrados (requiere el parámetro include_closed en el
- * Request Hub; si aún no lo soporta, devuelve solo los abiertos, como antes).
+ * Tickets del deal (más reciente primero). Con includeClosed=true también los cerrados (parámetro include_closed
+ * del Request Hub; si no lo soporta, devuelve solo los abiertos, como antes).
  */
-export async function hubTicketForDeal(dealId: number, includeClosed = true): Promise<{ id: string; display_id?: string } | null> {
+export async function hubTicketsForDeal(dealId: number, includeClosed = true): Promise<HubTicket[]> {
   const c = config()
-  if (!c) return null
+  if (!c) return []
   const res = await fetch(`${c.base}/api/external/tickets/deal/${dealId}${includeClosed ? '?include_closed=1' : ''}`, {
     headers: { Authorization: `Bearer ${c.secret}` },
   })
-  if (res.status === 404 || res.status === 401 || res.status === 403) return null
+  if (res.status === 404 || res.status === 401 || res.status === 403) return []
   if (!res.ok) throw new Error(`Request Hub GET ticket ${res.status}: ${(await res.text()).slice(0, 200)}`)
   const json = await res.json()
-  const tickets: Array<{ id: string; display_id?: string }> = json?.tickets ?? []
-  return tickets[0] ?? null
+  return (json?.tickets ?? []) as HubTicket[]
+}
+
+/** Último ticket del deal (compatibilidad). */
+export async function hubTicketForDeal(dealId: number, includeClosed = true): Promise<HubTicket | null> {
+  return (await hubTicketsForDeal(dealId, includeClosed))[0] ?? null
+}
+
+/** Marca el ticket como solucionado (status 'closed'). Solo cierra si está abierto. false = endpoint aún no existe. */
+export async function hubCloseTicket(ticketId: string): Promise<boolean> {
+  const c = config()
+  if (!c) return false
+  const res = await fetch(`${c.base}/api/external/tickets/${ticketId}/close`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${c.secret}` },
+    body: JSON.stringify({ author_email: process.env.REQUEST_HUB_AUTHOR_EMAIL }),
+  })
+  if (res.status === 404 && !(await res.text()).includes('Ticket not found')) return false
+  if (!res.ok) throw new Error(`Request Hub close ${res.status}`)
+  return true
 }
 
 export async function hubComment(ticketId: string, body: string): Promise<void> {
