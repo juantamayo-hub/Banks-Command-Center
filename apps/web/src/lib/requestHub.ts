@@ -90,6 +90,6 @@ export async function hubNotifyAssignmentIssue(issue: AssignmentIssue): Promise<
   if (res.status === 404) return false
   if (!res.ok) throw new Error(`Request Hub notify ${res.status}: ${(await res.text()).slice(0, 200)}`)
   const json = (await res.json().catch(() => ({}))) as { notified?: string[]; failed?: string[] }
-  // Los que Slack no encontró se devuelven con el prefijo "✗" para dejarlos en el detalle
-  return [...(json.notified ?? []), ...(json.failed ?? []).map((e) => `✗ ${e} (no encontrado en Slack)`)]
+  // Fallidos con "✗" y el motivo que da Slack (p. ej. "✗ ana@x.com [post:invalid_blocks]")
+  return [...(json.notified ?? []), ...(json.failed ?? []).map((e) => `✗ ${e}`)]
 }
