@@ -9,6 +9,8 @@ import RecipientPreview from '@/components/config/RecipientPreview'
 import DocumentsEditor from '@/components/config/DocumentsEditor'
 import { CARD } from '@/components/config/ui'
 import BackLink from '@/components/config/BackLink'
+import AgentsEditor, { type AgentRow } from '@/components/config/AgentsEditor'
+import AgentAssignments, { type AssignmentRowView } from '@/components/config/AgentAssignments'
 import { canEditBankConfig } from '@/app/actions/bankConfig'
 import type {
   BankConfig,
@@ -27,8 +29,14 @@ const TABS = [
   { key: 'red-flags', label: 'Red flags' },
   { key: 'documentos', label: 'Documentos' },
   { key: 'ajustes', label: 'Ajustes' },
+  { key: 'gestores', label: 'Gestores' },
+  { key: 'asignaciones', label: 'Asignaciones' },
   { key: 'historial', label: 'Historial' },
 ] as const
+
+/** Bancos que asignan gestor y nos mandan el listado (migración 032) */
+const AGENT_BANKS = ['santander']
+const AGENT_TABS = ['gestores', 'asignaciones']
 type TabKey = (typeof TABS)[number]['key']
 
 interface Props {
@@ -52,6 +60,7 @@ const TABLE_LABEL: Record<string, string> = {
   bank_redflag_rules: 'Red flags',
   bank_contacts: 'Destinatarios',
   bank_required_documents: 'Documentos',
+  bank_agents: 'Gestores',
   blocked_emails: 'Correo bloqueado',
 }
 const IGNORED_KEYS = new Set(['id', 'created_at', 'updated_at', 'updated_by', 'bank_slug'])
@@ -86,9 +95,13 @@ export default async function BankConfigPage({ params, searchParams }: Props) {
   }
   const bank = config as BankConfig
   const applies = bank.channel === 'email'
-  const tab: TabKey = (TABS.find((t) => t.key === tabParam)?.key ?? (applies ? 'correos' : 'historial')) as TabKey
+  const usesAgents = AGENT_BANKS.includes(slug)
+  const visibleTabs = TABS.filter((t) =>
+    AGENT_TABS.includes(t.key) ? usesAgents : applies || t.key === 'historial')
+  const tab: TabKey = (visibleTabs.find((t) => t.key === tabParam)?.key ??
+    (applies ? 'correos' : usesAgents ? 'gestores' : 'historial')) as TabKey
 
-  const [rules, general, contacts, docs, provinces, blocked, history, canEdit] = await Promise.all([
+  const [rules, general, contacts, docs, provinces, blocked, history, canEdit, agents, assignments] = await Promise.all([
     supabase.from('bank_redflag_rules').select('*').eq('bank_slug', slug),
     supabase.from('bank_redflag_general').select('*'),
     supabase.from('bank_contacts').select('*').eq('bank_slug', slug),
@@ -99,10 +112,15 @@ export default async function BankConfigPage({ params, searchParams }: Props) {
       ? supabase.from('bank_config_history').select('*').eq('bank_slug', slug).order('created_at', { ascending: false }).limit(100)
       : Promise.resolve({ data: [] as HistoryRow[] }),
     canEditBankConfig(),
+    usesAgents
+      ? supabase.from('bank_agents').select('id, full_name, email, active').eq('bank_slug', slug).order('full_name')
+      : Promise.resolve({ data: [] as AgentRow[] }),
+    usesAgents && tab === 'asignaciones'
+      ? supabase.from('bank_agent_assignments').select('*').eq('bank_slug', slug).order('created_at', { ascending: false }).limit(200)
+      : Promise.resolve({ data: [] as AssignmentRowView[] }),
   ])
 
   const base = `/dashboard/configuracion/${slug}`
-  const visibleTabs = applies ? TABS : TABS.filter((t) => t.key === 'historial')
 
   return (
     <div className="flex flex-col gap-6 p-6 pb-12">
@@ -129,7 +147,7 @@ export default async function BankConfigPage({ params, searchParams }: Props) {
         </div>
       </div>
 
-      {!applies && (
+      {!applies && !usesAgents && (
         <div className="rounded-xl border border-dashed border-gray-200 bg-white px-5 py-4 text-sm text-gray-600">
           <p className="font-medium text-gray-800">Esta configuración no aplica a {bank.display_name}</p>
           <p className="mt-1">{bank.channel_note}</p>
@@ -178,6 +196,20 @@ export default async function BankConfigPage({ params, searchParams }: Props) {
         <div className={CARD}>
           <BankSettingsForm key={bank.updated_at} config={bank} canEdit={canEdit} />
         </div>
+      )}
+
+      {usesAgents && tab === 'gestores' && (
+        <div className={CARD}>
+          <p className="mb-4 text-xs text-gray-500">
+            Santander manda cada día un Excel con el gestor asignado a cada cliente. Con esta lista se rellena
+            automáticamente “Bank Mail / Email agente bancario” en el deal bancario (pipeline 7) y se deja una nota.
+          </p>
+          <AgentsEditor agents={(agents.data ?? []) as AgentRow[]} canEdit={canEdit} />
+        </div>
+      )}
+
+      {usesAgents && tab === 'asignaciones' && (
+        <AgentAssignments rows={(assignments.data ?? []) as AssignmentRowView[]} canEdit={canEdit} />
       )}
 
       {tab === 'historial' && (

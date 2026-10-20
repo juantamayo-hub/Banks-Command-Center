@@ -9,7 +9,6 @@
  *   siguiente envío vía /api/bank-config/*: un correo mal escrito = dossier al destinatario equivocado.
  */
 
-import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import {
   OPERATION_TYPES,
@@ -18,36 +17,13 @@ import {
   type OperationType,
   type ToSource,
 } from '@/lib/bankConfig'
-import { bankConfigEnabled } from '@/lib/featureFlags'
+import { isAllowedDomain, requireEditor, type AdminClient } from '@/lib/bankConfigAuth'
 
-const ALLOWED_DOMAINS = ['huspy.io', 'bayteca.com']
 const TO_SOURCES: ToSource[] = ['contacts', 'deal_field', 'deal_field_then_contacts', 'contacts_cc_deal_field']
 const SCOPES: ContactScope[] = ['default', 'province', 'when_to']
 const DRIVE_CODE_RE = /^[A-Z]\d{3}$/
 
 export type ConfigResult = { ok: true } | { ok: false; error: string }
-
-type AdminClient = Awaited<ReturnType<typeof createAdminClient>>
-
-async function sessionEmail(): Promise<string | null> {
-  const supabase = await createClient()
-  const { data } = await supabase.auth.getUser()
-  const email = data.user?.email?.toLowerCase() ?? null
-  if (!email || !ALLOWED_DOMAINS.includes(email.split('@')[1] ?? '')) return null
-  return email
-}
-
-/** Devuelve el correo del editor o un error si no puede editar. */
-async function requireEditor(): Promise<{ email: string; db: AdminClient } | { error: string }> {
-  if (!bankConfigEnabled()) return { error: 'La configuración de bancos no está disponible en este entorno' }
-  const email = await sessionEmail()
-  if (!email) return { error: 'Sesión no válida' }
-  const db = await createAdminClient()
-  const { data, error } = await db.from('bank_config_editors').select('email').eq('email', email).maybeSingle()
-  if (error) return { error: error.message }
-  if (!data) return { error: 'No tienes permiso para editar la configuración de bancos' }
-  return { email, db }
-}
 
 /** ¿El usuario actual puede editar? (para pintar la UI en modo lectura) */
 export async function canEditBankConfig(): Promise<boolean> {
@@ -402,7 +378,7 @@ export async function addEditor(email: string): Promise<ConfigResult> {
   const auth = await requireEditor()
   if ('error' in auth) return { ok: false, error: auth.error }
   const e = email.trim().toLowerCase()
-  if (!isValidEmail(e) || !ALLOWED_DOMAINS.includes(e.split('@')[1] ?? '')) {
+  if (!isValidEmail(e) || !isAllowedDomain(e)) {
     return { ok: false, error: 'Solo correos @huspy.io o @bayteca.com' }
   }
   const { error } = await auth.db.from('bank_config_editors').insert({ email: e, added_by: auth.email })
