@@ -217,7 +217,7 @@ export async function processAssignment(
 
   const planned: string[] = []
   let notifiedTo: string[] | null = null
-  const avisoTxt = () => (notifiedTo ? ` · Aviso enviado a: ${notifiedTo.join(', ') || 'nadie (Slack no encontró al usuario)'}` : '')
+  const avisoTxt = () => (notifiedTo ? ` · Aviso a: ${notifiedTo.join(', ') || 'nadie (sin destinatario)'}` : '')
   const save = async (r: Omit<AssignmentResult, 'planned'>, extra: Record<string, unknown> = {}) => {
     if (opts.dryRun) return { ...r, planned }
     const rec = {
