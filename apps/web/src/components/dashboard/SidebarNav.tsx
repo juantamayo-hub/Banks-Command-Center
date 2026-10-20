@@ -2,7 +2,7 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { ACTIVE_BANKS } from '@/lib/banks'
 import { getBankLogo } from '@/lib/bankLogos'
@@ -48,13 +48,42 @@ function Icon({ name }: { name: IconName }) {
   )
 }
 
-function NavLink({ href, label, icon, active }: { href: string; label: string; icon: IconName; active: boolean }) {
+function NavLink({ href, label, icon, active, badge }: { href: string; label: string; icon: IconName; active: boolean; badge?: number | null }) {
   return (
     <Link href={href} aria-current={active ? 'page' : undefined} className={active ? 'sidebar-link sidebar-link-active' : 'sidebar-link'}>
       <Icon name={icon} />
       <span className="truncate">{label}</span>
+      {!!badge && badge > 0 && (
+        <span
+          className="ml-auto inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10.5px] font-semibold leading-none text-white tabular-nums"
+          aria-label={`${badge} pendientes`}
+        >
+          {badge > 99 ? '99+' : badge}
+        </span>
+      )}
     </Link>
   )
+}
+
+type PendingCounts = { envios: number | null; plataforma: number | null; ofertas: number | null; prestamos: number | null }
+
+const COUNTS_REFRESH_MS = 60_000
+
+/** Contadores para las burbujas: al cargar, al cambiar de página y cada minuto. */
+function usePendingCounts(navKey: string): PendingCounts | null {
+  const [counts, setCounts] = useState<PendingCounts | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    const load = () =>
+      fetch('/api/sidebar-counts', { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d: PendingCounts | null) => { if (!cancelled && d) setCounts(d) })
+        .catch(() => {})
+    load()
+    const interval = setInterval(load, COUNTS_REFRESH_MS)
+    return () => { cancelled = true; clearInterval(interval) }
+  }, [navKey])
+  return counts
 }
 
 function SectionTitle({ children, logo }: { children: React.ReactNode; logo?: string | null }) {
@@ -105,20 +134,22 @@ export default function SidebarNav() {
       )
     : ACTIVE_BANKS
 
+  const counts = usePendingCounts(pathname + '?' + searchParams.toString())
+
   const isOnBankPage = pathname.startsWith('/dashboard/bancos/')
   const top = (href: string) => isActive(href, pathname, tab)
 
   return (
     <nav className="sidebar-scroll flex flex-1 flex-col overflow-y-auto px-3 pb-6 pt-5">
       <Section title="Envíos">
-        <NavLink href="/dashboard?tab=pendientes" label="Pendientes" icon="clock" active={top('/dashboard?tab=pendientes')} />
+        <NavLink href="/dashboard?tab=pendientes" label="Pendientes" icon="clock" active={top('/dashboard?tab=pendientes')} badge={counts?.envios} />
         <NavLink href="/dashboard?tab=enviados" label="Enviados" icon="send" active={top('/dashboard?tab=enviados')} />
         <NavLink href="/dashboard/nuevo-envio" label="Nuevo envío" icon="plus" active={top('/dashboard/nuevo-envio')} />
-        <NavLink href="/dashboard/envios-plataforma" label="Envíos por plataforma" icon="platform" active={top('/dashboard/envios-plataforma')} />
+        <NavLink href="/dashboard/envios-plataforma" label="Envíos por plataforma" icon="platform" active={top('/dashboard/envios-plataforma')} badge={counts?.plataforma} />
       </Section>
 
       <Section title="Seguimiento">
-        <NavLink href="/dashboard/ofertas" label="Ofertas recibidas" icon="inbox" active={top('/dashboard/ofertas')} />
+        <NavLink href="/dashboard/ofertas" label="Ofertas recibidas" icon="inbox" active={top('/dashboard/ofertas')} badge={counts?.ofertas} />
         <NavLink href="/dashboard/metricas" label="Métricas" icon="chart" active={top('/dashboard/metricas')} />
       </Section>
 
@@ -138,6 +169,7 @@ export default function SidebarNav() {
           label="Pendientes"
           icon="clock"
           active={pathname === '/dashboard/prestamos' && !searchParams.get('vista')}
+          badge={counts?.prestamos}
         />
         <NavLink
           href="/dashboard/prestamos?vista=enviados"
