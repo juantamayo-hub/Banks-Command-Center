@@ -132,7 +132,8 @@ export default async function BankConfigPage({ params, searchParams }: Props) {
           <div className="min-w-0 flex-1">
             <h1 className="text-xl font-semibold text-gray-900">{bank.display_name}</h1>
             <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
-              {!applies && <span className="rounded-full bg-gray-100 px-2 py-0.5 font-medium text-gray-600">No aplica</span>}
+              {!applies && !usesAgents && <span className="rounded-full bg-gray-100 px-2 py-0.5 font-medium text-gray-600">No aplica</span>}
+              {usesAgents && <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700">Asignación de gestores automática</span>}
               {applies && bank.redflags_apply && (
                 bank.block_on_red_flags
                   ? <span className="rounded-full bg-red-50 px-2 py-0.5 font-medium text-red-700">Red flags bloquean</span>
