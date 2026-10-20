@@ -69,7 +69,7 @@ function ContactRow({
 
   if (!editing) {
     return (
-      <tr className={`border-t border-gray-100 align-top ${d.active ? '' : 'opacity-50'}`}>
+      <tr className={`group/row border-t border-gray-100 align-top transition-colors hover:bg-gray-50/70 ${d.active ? '' : 'opacity-50'}`}>
         <td className="py-2 pr-3 text-sm font-medium text-gray-800">{scopeLabel}</td>
         <td className="py-2 pr-3 text-xs text-gray-700 break-all">{d.to_emails.join(', ') || <span className="text-gray-400">—</span>}</td>
         <td className="py-2 pr-3 text-xs text-gray-700 break-all">
@@ -80,10 +80,10 @@ function ContactRow({
         </td>
         <td className="py-2 text-right whitespace-nowrap">
           {canEdit && !confirmDelete && (
-            <>
+            <span className="opacity-0 transition-opacity focus-within:opacity-100 group-hover/row:opacity-100">
               <button type="button" className={BTN_GHOST} onClick={() => setEditing(true)}>Editar</button>
               <button type="button" className={BTN_GHOST} onClick={() => setConfirmDelete(true)}>Borrar</button>
-            </>
+            </span>
           )}
           {confirmDelete && (
             <span className="inline-flex items-center gap-1 text-xs">

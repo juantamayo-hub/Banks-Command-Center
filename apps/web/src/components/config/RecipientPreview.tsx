@@ -46,13 +46,11 @@ export default function RecipientPreview({
           {covered}<span className="text-sm font-normal text-gray-400"> / {covered + uncovered.length}</span>
         </p>
         <p className="text-[11px] text-gray-500">
-          {uncovered.length
-            ? `provincias con destinatario${config.to_source === 'deal_field_then_contacts' ? ' (si el deal no trae "Email bancario")' : ''}. En el resto el flujo no envía y avisa:`
-            : 'Todas las provincias tienen destinatario.'}
+          provincias con destinatario{config.to_source === 'deal_field_then_contacts' ? ' (sin "Email bancario" en el deal)' : ''}
         </p>
         {uncovered.length > 0 && (
           <details className="mt-2">
-            <summary className="cursor-pointer text-[11px] text-gray-500 hover:text-gray-700">Ver {uncovered.length} sin correo</summary>
+            <summary className="cursor-pointer text-[11px] text-gray-500 hover:text-gray-700">{uncovered.length} sin correo: no se envía</summary>
             <p className="mt-1 text-[11px] leading-relaxed text-gray-600">{uncovered.join(' · ')}</p>
           </details>
         )}
@@ -74,6 +72,9 @@ export default function RecipientPreview({
           />
         )}
       </div>
+      {!province && !dealEmail ? (
+        <p className="mt-3 text-xs text-gray-400">Elige una provincia para ver el destinatario.</p>
+      ) : (
       <dl className="mt-3 grid grid-cols-[60px_1fr] gap-x-2 gap-y-1 text-xs">
         <dt className="text-gray-500">Para</dt>
         <dd className="break-all text-gray-900">{r.toEmail ?? <span className="text-red-600">— {r.reason}</span>}</dd>
@@ -82,6 +83,7 @@ export default function RecipientPreview({
           {r.ccEmail.replace('owner@bayteca.com', 'owner del deal') || '—'}
         </dd>
       </dl>
+      )}
       {r.route === 'bloqueado' && <p className="mt-2 text-xs text-red-600">{r.reason}</p>}
     </div>
     </div>
