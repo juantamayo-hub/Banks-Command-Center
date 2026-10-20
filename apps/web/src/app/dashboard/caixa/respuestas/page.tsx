@@ -6,6 +6,10 @@ import * as XLSX from 'xlsx'
 import type { ParsedCaixaRow } from '@/app/api/caixa/process/route'
 
 // ── Column indices (0-based) ──────────────────────────────────────────────────
+// Old layout (until 16-oct-2026). Caixa changed the file on 19-oct-2026: "Resolución
+// comercial" was removed and the closing reason now lives in "Detalle Estado", so every
+// column from F onwards shifted one to the left. Columns are resolved by header name
+// (resolveColumns); these indices are only the fallback when headers aren't recognised.
 const COL = {
   NUMERO_PETICION: 1,  // B
   NOMBRE_OP: 2,        // C
@@ -16,6 +20,37 @@ const COL = {
   FECHA_CREACION: 8,   // I
   LLAMADAS: 13,        // N
 } as const
+
+type ColMap = { -readonly [K in keyof typeof COL]: number }
+
+const normHeader = (s: unknown) =>
+  String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\x00-\x7F]/g, '').toLowerCase().replace(/\s+/g, ' ').trim()
+
+// Accepted header names per field (normalized), old and new layout
+const HEADER_ALIASES: { [K in keyof typeof COL]: string[] } = {
+  NUMERO_PETICION:  ['numero peticion', 'nmero peticin'],
+  NOMBRE_OP:        ['nombre de la oportunidad'],
+  ESTADO_LEAD:      ['estado del lead', 'estado'],
+  MOTIVO_PENDIENTE: ['motivo pendiente interno', 'detalle estado'],
+  RESOLUCION:       ['resolucion comercial', 'resolucion', 'resolucin comercial'],
+  FECHA_FIRMA:      ['fecha firma'],
+  FECHA_CREACION:   ['fecha de creacion', 'fecha de creacin'],
+  LLAMADAS:         ['llamadas salientes'],
+}
+
+/** Maps each field to its column by header name; -1 = column not in this layout (e.g. RESOLUCION in the new file). */
+function resolveColumns(header: unknown[]): ColMap {
+  const names = header.map(normHeader)
+  const found = {} as ColMap
+  let recognised = 0
+  for (const key of Object.keys(COL) as (keyof typeof COL)[]) {
+    const idx = names.findIndex((n) => HEADER_ALIASES[key].includes(n))
+    found[key] = idx
+    if (idx !== -1) recognised++
+  }
+  // Headers not recognised at all → assume the old fixed layout
+  return recognised >= 3 ? found : { ...COL }
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -75,19 +110,22 @@ function parseWorkbook(wb: import('xlsx').WorkBook, rawStrings = false): ParsedC
   // raw:false to return the string value rather than the underlying number
   const raw = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '', raw: !rawStrings })
 
+  const col = resolveColumns((raw[0] as unknown[]) ?? [])
+  const get = (row: unknown[], idx: number) => (idx === -1 ? '' : cellStr(row, idx))
+
   // Skip header row
   return raw.slice(1).flatMap((row) => {
-    const numeroPeticion = cellStr(row as unknown[], COL.NUMERO_PETICION)
+    const numeroPeticion = get(row as unknown[], col.NUMERO_PETICION)
     if (!numeroPeticion) return []
     return [{
       numero_peticion: numeroPeticion,
-      col_C: cellStr(row as unknown[], COL.NOMBRE_OP),
-      col_D: cellStr(row as unknown[], COL.ESTADO_LEAD),
-      col_E: cellStr(row as unknown[], COL.MOTIVO_PENDIENTE),
-      col_F: cellStr(row as unknown[], COL.RESOLUCION),
-      col_G: cellStr(row as unknown[], COL.FECHA_FIRMA),
-      col_I: cellStr(row as unknown[], COL.FECHA_CREACION),
-      col_N: cellStr(row as unknown[], COL.LLAMADAS),
+      col_C: get(row as unknown[], col.NOMBRE_OP),
+      col_D: get(row as unknown[], col.ESTADO_LEAD),
+      col_E: get(row as unknown[], col.MOTIVO_PENDIENTE),
+      col_F: get(row as unknown[], col.RESOLUCION),
+      col_G: get(row as unknown[], col.FECHA_FIRMA),
+      col_I: get(row as unknown[], col.FECHA_CREACION),
+      col_N: get(row as unknown[], col.LLAMADAS),
     }]
   })
 }

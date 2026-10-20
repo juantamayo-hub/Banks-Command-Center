@@ -77,7 +77,7 @@ const RESOLUCION_LOOKUP: Record<string, number> = (() => {
     ['relación entre la edad del titular de la hipoteca y el plazo solicitado', 3139],
     ['registrado por otra plataforma', 3144],
     ['dti excedido', 3138],
-    ['primer contacto sin vivienda', 3146],
+    ['primer contacto sin vivienda', 3145],
     ['primer deudor hipotecario tiene una simulacion / solicitud sia en proceso', 3144],
     ['primer deudor hipotecario tiene una simulacion sia en proceso', 3144],
     ['primer contacto gestión en oficinas', 3144],
@@ -124,7 +124,7 @@ const RESOLUCION_LOOKUP: Record<string, number> = (() => {
     ['phd - ya en trámite en oficina', 3144],
     ['admisión cliente no localizado', 3136],
     ['admisión finalidad no admitida', 3139],
-    ['admisión sin vivienda', 3146],
+    ['admisión sin vivienda', 3145],
     ['admisión perfil de riesgo', 3139],
     ['admisión ltv excesivo', 3137],
     ['finalidad no admitida', 3139],
@@ -136,12 +136,27 @@ const RESOLUCION_LOOKUP: Record<string, number> = (() => {
     ['admision contacto sin ahorros', 3138],
     ['perfil de riesgo', 3139],
     ['sia desistido por cliente', 3142],
-    ['sin vivienda', 3146],
+    ['sin vivienda', 3145],
     ['admisión sin interés real', 3136],
     ['cliente no localizado', 3136],
     ['admisión  sin ahorros', 3138],
     ['admisión sin ahorros', 3138],
     ['admision alertas impagados', 3138],
+    // New file layout (19-oct-2026): reason comes in "Detalle Estado" — "Caixa estados - Dossier diario" › Nuevo - Lost
+    ['sin vivienda/sin reserva/sin arras', 3145],
+    ['ya enviada por la misma plataforma', 3144],
+    ['ya enviada por otra plataforma', 3144],
+    ['arras fuera de plazo', 3139],
+    ['cliente no interesado', 3136],
+    ['envío no cumple criterios', 3139],
+    ['falta documentación convenio', 3139],
+    ['gestión previa en oficina', 3144],
+    ['perfil de riesgo - dti', 3138],
+    ['perfil de riesgo - ltv', 3137],
+    ['perfil de riesgo - edad+plazo excedido', 3139],
+    ['perfil de riesgo - plazo fuera de límites', 3139],
+    ['perfil de riesgo - criterios internacional', 3139],
+    ['pruebas técnicas', 3361],
   ]
   return Object.fromEntries(entries)
 })()
@@ -185,8 +200,28 @@ const STAGE_MAP: Record<string, Record<string, number>> = {
     'Aprobada pendiente escritura': 74,
     'Aprobada pendiente fecha': 74,
     'Pendiente acta notarial': 74,
+    // New file layout (19-oct-2026)
+    'Pendiente de firma acta notarial': 74,
+    'Pendiente de formalizar': 74,
+  },
+  // New file layout (19-oct-2026) — replaces "2 - SIA EN CURSO".
+  // Pendiente onboarding / firma de Solicitud (SUA) / de documentación → no stage change
+  '2 - EXPTE. EN CURSO': {
+    'En curso': 79,
+    'Préstamo en análisis': 79,
+    'Aprobada: pendiente de documentación': 79,
+    'Aprobada: pendiente de tasación': 72,
+    'Aprobada: pendiente de FEIN': 73,
   },
 }
+
+// STAGE_MAP keyed by normText() so badly-encoded files still match
+const STAGE_MAP_NORM: Record<string, Record<string, number>> = Object.fromEntries(
+  Object.entries(STAGE_MAP).map(([estado, motivos]) => [
+    normText(estado),
+    Object.fromEntries(Object.entries(motivos).map(([m, id]) => [normText(m), id])),
+  ])
+)
 
 /**
  * Parses a date string that may be in "d/m/yyyy" format (Caixa's Fecha de creación)
@@ -205,10 +240,10 @@ function parseFechaCreacion(raw: string): Date | null {
 
 
 function getTargetStage(estadoLead: string, motivoPendiente: string): { stageId: number; markWon: boolean } | null {
-  const estado = estadoLead.trim()
-  const motivo = motivoPendiente.trim()
-  if (estado === '4 - FORMALIZADA') return { stageId: 75, markWon: true }
-  const stageId = STAGE_MAP[estado]?.[motivo]
+  const estado = normText(estadoLead)
+  const motivo = normText(motivoPendiente)
+  if (estado === normText('4 - FORMALIZADA')) return { stageId: 75, markWon: true }
+  const stageId = STAGE_MAP_NORM[estado]?.[motivo]
   return stageId ? { stageId, markWon: false } : null
 }
 
@@ -692,7 +727,9 @@ export async function POST(req: NextRequest) {
     // Step 2: Mark lost (non-fatal — 403 = permission issue)
     if (isClosed) {
       try {
-        const resolutionText = (row.col_F ?? '').trim()
+        // Old layout: reason in "Resolución" (col F). New layout (19-oct-2026): no such column,
+        // the reason comes in "Detalle Estado" (col_E)
+        const resolutionText = ((row.col_F ?? '').trim() || (row.col_E ?? '').trim())
         lostReasonId = await matchLostReason(resolutionText)
         await pipedriveMarkLost(dealId, lostReasonId)
         markedLost = true
@@ -753,7 +790,7 @@ export async function POST(req: NextRequest) {
       motivo_pendiente: motivoNorm,
       resolucion: resolucionNorm,
       // resolution_text: derived reason — resolución si cerrado, motivo pendiente si no
-      resolution_text: isClosed ? resolucionNorm : motivoNorm,
+      resolution_text: isClosed ? (resolucionNorm || motivoNorm) : motivoNorm,
       error_message: combinedWarning,
     })
 
