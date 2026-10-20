@@ -57,7 +57,8 @@ export async function hubNotifyAssignmentIssue(issue: AssignmentIssue): Promise<
   const res = await fetch(`${c.base}/api/external/notify/assignment-issue`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${c.secret}` },
-    body: JSON.stringify(issue),
+    // ASSIGNMENT_NOTIFY_TEST_EMAIL (opcional): en pruebas, el aviso va a esa persona y no a quien gestiona el banco
+    body: JSON.stringify({ ...issue, notify_email: process.env.ASSIGNMENT_NOTIFY_TEST_EMAIL || undefined }),
   })
   if (res.status === 404) return false
   if (!res.ok) throw new Error(`Request Hub notify ${res.status}: ${(await res.text()).slice(0, 200)}`)
