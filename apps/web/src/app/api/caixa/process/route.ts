@@ -151,6 +151,7 @@ const RESOLUCION_LOOKUP: Record<string, number> = (() => {
     ['envío no cumple criterios', 3139],
     ['falta documentación convenio', 3139],
     ['gestión previa en oficina', 3144],
+    ['incidencia lopd/documentación', 3139],
     ['perfil de riesgo - dti', 3138],
     ['perfil de riesgo - ltv', 3137],
     ['perfil de riesgo - edad+plazo excedido', 3139],
