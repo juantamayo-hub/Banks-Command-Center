@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import type {
   BankConfig,
+  GeneralRule,
   BankContact,
   BlockedEmail,
   Province,
@@ -25,15 +26,16 @@ export async function loadBankConfig(bankSlug?: string) {
     docsQ = docsQ.eq('bank_slug', bankSlug)
   }
 
-  const [configs, contacts, rules, docs, provinces, blocked] = await Promise.all([
+  const [configs, contacts, rules, docs, provinces, blocked, general] = await Promise.all([
     configsQ,
     contactsQ,
     rulesQ,
     docsQ,
     supabase.from('provinces').select('*').order('name'),
     supabase.from('blocked_emails').select('id, email, bank_slug, reason'),
+    supabase.from('bank_redflag_general').select('*'),
   ])
-  for (const r of [configs, contacts, rules, docs, provinces, blocked]) {
+  for (const r of [configs, contacts, rules, docs, provinces, blocked, general]) {
     if (r.error) throw new Error(`bank_config: ${r.error.message}`)
   }
   return {
@@ -43,5 +45,6 @@ export async function loadBankConfig(bankSlug?: string) {
     docs: (docs.data ?? []) as RequiredDocument[],
     provinces: (provinces.data ?? []) as Province[],
     blocked: (blocked.data ?? []) as BlockedEmail[],
+    general: (general.data ?? []) as GeneralRule[],
   }
 }

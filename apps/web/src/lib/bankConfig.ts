@@ -28,10 +28,16 @@ export const TO_SOURCE_LABEL: Record<ToSource, string> = {
   contacts_cc_deal_field: 'Correos configurados aquí; en CC el "Email bancario" del deal o, si falta, el CC de la provincia',
 }
 
+export type Channel = 'email' | 'platform' | 'none'
+
 export interface BankConfig {
   bank_slug: string
   display_name: string
   pipedrive_names: string[]
+  channel: Channel
+  channel_note: string | null
+  redflags_apply: boolean
+  uses_general_rules: boolean
   block_on_red_flags: boolean
   to_source: ToSource
   subject_template: string | null
@@ -75,6 +81,15 @@ export interface RedFlagRule {
   updated_by: string | null
   updated_at: string
 }
+
+/** Regla general (tabla bank_redflag_general): mismas columnas, sin banco. */
+export type GeneralRule = Omit<RedFlagRule, 'id' | 'bank_slug'>
+
+export type RuleValues = Pick<
+  RedFlagRule,
+  | 'min_importe' | 'max_plazo_anos' | 'max_financiacion_pct' | 'max_edad_plazo' | 'min_ingresos_1t'
+  | 'max_dti_pct' | 'min_ingresos_2t' | 'max_bancos' | 'min_antiguedad_anos' | 'validate_dti' | 'notes'
+>
 
 export interface RequiredDocument {
   id: string
@@ -289,4 +304,29 @@ export function resolveRecipients(
 
 export function pickRule(rules: RedFlagRule[], bankSlug: string, op: OperationType): RedFlagRule | null {
   return rules.find((r) => r.bank_slug === bankSlug && r.operation_type === op) ?? null
+}
+
+export type RuleSource = 'own' | 'own_primera' | 'general'
+
+/**
+ * Regla que se aplica de verdad a un banco y tipo de operación:
+ *   · banco con "regla general"          → regla general
+ *   · banco con reglas propias            → su regla de ese tipo; si no tiene la de segunda residencia, su primera
+ *                                           residencia (así lo hacía el subflujo); si tampoco, la regla general
+ */
+export function effectiveRule(
+  bank: BankConfig,
+  rules: RedFlagRule[],
+  general: GeneralRule[],
+  op: OperationType,
+): { rule: RuleValues | null; source: RuleSource } {
+  const gen = general.find((g) => g.operation_type === op) ?? null
+  if (bank.uses_general_rules) return { rule: gen, source: 'general' }
+  const own = pickRule(rules, bank.bank_slug, op)
+  if (own) return { rule: own, source: 'own' }
+  if (op === 'segunda_residencia') {
+    const primera = pickRule(rules, bank.bank_slug, 'primera_residencia')
+    if (primera) return { rule: primera, source: 'own_primera' }
+  }
+  return { rule: gen, source: 'general' }
 }

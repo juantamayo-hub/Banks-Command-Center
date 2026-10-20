@@ -5,9 +5,8 @@ import { updateBankSettings } from '@/app/actions/bankConfig'
 import { TO_SOURCE_LABEL, type BankConfig, type ToSource } from '@/lib/bankConfig'
 import { BTN_PRIMARY, INPUT } from './ui'
 
-/** Ajustes generales del banco: bloqueo por red flags, origen del TO, copia al owner, asunto. */
+/** Pestaña Ajustes: origen del destinatario, nombres en el deal, copia al owner, asunto. */
 export default function BankSettingsForm({ config, canEdit }: { config: BankConfig; canEdit: boolean }) {
-  const [block, setBlock] = useState(config.block_on_red_flags)
   const [toSource, setToSource] = useState<ToSource>(config.to_source)
   const [ccOwner, setCcOwner] = useState(config.cc_owner)
   const [subject, setSubject] = useState(config.subject_template ?? '')
@@ -16,21 +15,15 @@ export default function BankSettingsForm({ config, canEdit }: { config: BankConf
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
   const dirty =
-    block !== config.block_on_red_flags ||
     toSource !== config.to_source ||
     ccOwner !== config.cc_owner ||
     subject !== (config.subject_template ?? '') ||
     names !== config.pipedrive_names.join(', ')
 
   function save() {
-    if (block && !config.block_on_red_flags &&
-        !window.confirm(`Con el bloqueo activado, los envíos a ${config.display_name} con red flags NO saldrán. ¿Activarlo?`)) {
-      return
-    }
     setMsg(null)
     start(async () => {
       const r = await updateBankSettings(config.bank_slug, {
-        block_on_red_flags: block,
         to_source: toSource,
         cc_owner: ccOwner,
         subject_template: subject,
@@ -42,22 +35,6 @@ export default function BankSettingsForm({ config, canEdit }: { config: BankConf
 
   return (
     <div className="space-y-4">
-      <label className="flex items-start gap-3">
-        <input
-          type="checkbox"
-          checked={block}
-          disabled={!canEdit}
-          onChange={(e) => setBlock(e.target.checked)}
-          className="mt-0.5 h-4 w-4 accent-red-600"
-        />
-        <span>
-          <span className="block text-sm font-medium text-gray-900">Bloquear envío si hay red flags</span>
-          <span className="block text-xs text-gray-500">
-            Apagado = las red flags solo se informan (comportamiento actual). Encendido = el dossier no sale.
-          </span>
-        </span>
-      </label>
-
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="block">
           <span className="mb-1 block text-xs font-medium text-gray-600">¿De dónde sale el destinatario (Para)?</span>

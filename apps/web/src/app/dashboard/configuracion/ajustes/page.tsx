@@ -18,7 +18,7 @@ export default async function ConfigAjustesPage() {
   ])
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6 p-6 pb-12">
       <PageHeader
         title="Correos bloqueados y editores"
         breadcrumbs={[{ label: 'Configuración', href: '/dashboard/configuracion' }]}

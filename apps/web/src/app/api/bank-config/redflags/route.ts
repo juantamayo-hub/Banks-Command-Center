@@ -4,14 +4,15 @@
  * Reglas de red flags del banco para el subflujo n8n "Red Flag Check IRPF" (sustituye a la hoja "Reglas Red Flag").
  * Solo lectura. Requiere cabecera x-offers-secret = OFFERS_API_SECRET.
  *
- * configFound=false si el banco o la regla no existen: el subflujo mantiene sus valores por defecto.
+ * Regla devuelta = regla efectiva (lib/bankConfig.effectiveRule): propia del banco, o la regla general si el banco
+ * la usa o no tiene regla para ese tipo. configFound=false solo si el banco no existe (el subflujo usa sus defaults).
  * blockOnRedFlags=false → las red flags son informativas (comportamiento actual).
  */
 
 import { NextResponse } from 'next/server'
 import { hasOffersSecret } from '@/lib/auth/offersSecret'
 import { loadBankConfig } from '@/lib/bankConfigData'
-import { OPERATION_TYPES, pickRule, resolveBank, type OperationType } from '@/lib/bankConfig'
+import { OPERATION_TYPES, effectiveRule, resolveBank, type OperationType } from '@/lib/bankConfig'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,12 +30,15 @@ export async function GET(req: Request) {
   try {
     const data = await loadBankConfig()
     const bank = resolveBank(data.configs, bankInput)
-    const rule = bank ? pickRule(data.rules, bank.bank_slug, op) : null
+    const eff = bank ? effectiveRule(bank, data.rules, data.general, op) : null
+    const rule = eff?.rule ?? null
     const docs = bank ? data.docs.filter((d) => d.bank_slug === bank.bank_slug) : []
     return NextResponse.json({
       bank: bank?.bank_slug ?? null,
       operationType: op,
       configFound: !!rule,
+      ruleSource: eff?.source ?? null,
+      redFlagsApply: bank?.redflags_apply ?? false,
       blockOnRedFlags: bank?.block_on_red_flags ?? false,
       rule: rule && {
         minImporte: rule.min_importe,

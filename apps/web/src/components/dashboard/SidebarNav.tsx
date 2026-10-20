@@ -156,12 +156,23 @@ export default function SidebarNav() {
           <Link
             href="/dashboard/configuracion"
             className={
-              pathname.startsWith('/dashboard/configuracion') && pathname !== '/dashboard/configuracion/ajustes'
+              pathname.startsWith('/dashboard/configuracion') &&
+              !['/dashboard/configuracion/ajustes', '/dashboard/configuracion/regla-general'].includes(pathname)
                 ? 'sidebar-link sidebar-link-sm sidebar-link-active'
                 : 'sidebar-link sidebar-link-sm'
             }
           >
             Bancos
+          </Link>
+          <Link
+            href="/dashboard/configuracion/regla-general"
+            className={
+              pathname === '/dashboard/configuracion/regla-general'
+                ? 'sidebar-link sidebar-link-sm sidebar-link-active'
+                : 'sidebar-link sidebar-link-sm'
+            }
+          >
+            Regla general
           </Link>
           <Link
             href="/dashboard/configuracion/ajustes"

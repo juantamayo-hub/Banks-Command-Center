@@ -32,10 +32,35 @@ export default function RecipientPreview({
     ownerEmail: 'owner@bayteca.com',
   })
 
+  // Cobertura: provincias a las que hoy se enviaría (sin "Email bancario" en el deal)
+  const uncovered = names.filter((n) => n !== 'TBC' &&
+    resolveRecipients(config, contacts, provinces, blocked, { province: n, dealEmail: null, ownerEmail: null }).route !== 'ok')
+  const covered = names.filter((n) => n !== 'TBC').length - uncovered.length
+
   return (
+    <div className="space-y-3">
+    {config.to_source !== 'deal_field' && (
+      <div className="rounded-lg border border-gray-100 bg-white p-4">
+        <p className="text-xs font-semibold text-gray-700">Cobertura por provincia</p>
+        <p className="mt-1 text-2xl font-semibold tabular-nums text-gray-900">
+          {covered}<span className="text-sm font-normal text-gray-400"> / {covered + uncovered.length}</span>
+        </p>
+        <p className="text-[11px] text-gray-500">
+          {uncovered.length
+            ? `provincias con destinatario${config.to_source === 'deal_field_then_contacts' ? ' (si el deal no trae "Email bancario")' : ''}. En el resto el flujo no envía y avisa:`
+            : 'Todas las provincias tienen destinatario.'}
+        </p>
+        {uncovered.length > 0 && (
+          <details className="mt-2">
+            <summary className="cursor-pointer text-[11px] text-gray-500 hover:text-gray-700">Ver {uncovered.length} sin correo</summary>
+            <p className="mt-1 text-[11px] leading-relaxed text-gray-600">{uncovered.join(' · ')}</p>
+          </details>
+        )}
+      </div>
+    )}
     <div className="rounded-lg bg-gray-50 p-4">
       <p className="mb-2 text-xs font-semibold text-gray-700">Probar: ¿a quién se enviaría?</p>
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="grid gap-2">
         <select value={province} onChange={(e) => setProvince(e.target.value)} className={INPUT}>
           <option value="">Provincia del deal…</option>
           {names.map((n) => <option key={n} value={n}>{n}</option>)}
@@ -58,6 +83,7 @@ export default function RecipientPreview({
         </dd>
       </dl>
       {r.route === 'bloqueado' && <p className="mt-2 text-xs text-red-600">{r.reason}</p>}
+    </div>
     </div>
   )
 }

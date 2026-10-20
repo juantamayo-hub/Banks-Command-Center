@@ -136,25 +136,9 @@ export async function saveRedFlagRule(slug: string, op: OperationType, input: Ru
   if ('error' in auth) return { ok: false, error: auth.error }
   if (!OPERATION_TYPES.includes(op)) return { ok: false, error: 'Tipo de operación no válido' }
 
-  const row = {
-    bank_slug: slug,
-    operation_type: op,
-    min_importe: numOrNull(input.min_importe),
-    max_plazo_anos: numOrNull(input.max_plazo_anos),
-    max_financiacion_pct: numOrNull(input.max_financiacion_pct),
-    max_edad_plazo: numOrNull(input.max_edad_plazo),
-    min_ingresos_1t: numOrNull(input.min_ingresos_1t),
-    max_dti_pct: numOrNull(input.max_dti_pct),
-    min_ingresos_2t: numOrNull(input.min_ingresos_2t),
-    max_bancos: numOrNull(input.max_bancos),
-    min_antiguedad_anos: numOrNull(input.min_antiguedad_anos),
-    validate_dti: !!input.validate_dti,
-    notes: input.notes?.trim() || null,
-    updated_by: auth.email,
-  }
-  for (const [k, v] of Object.entries(row)) {
-    if (typeof v === 'number' && v < 0) return { ok: false, error: `${k} no puede ser negativo` }
-  }
+  const v = ruleValues(input)
+  if ('error' in v) return { ok: false, error: v.error }
+  const row = { bank_slug: slug, operation_type: op, ...v.values, updated_by: auth.email }
 
   const { data: before } = await auth.db
     .from('bank_redflag_rules').select('*').eq('bank_slug', slug).eq('operation_type', op).maybeSingle()
@@ -165,6 +149,82 @@ export async function saveRedFlagRule(slug: string, op: OperationType, input: Ru
     bank_slug: slug, table_name: 'bank_redflag_rules', record_key: op, action: before ? 'update' : 'insert', before, after,
   })
   revalidate(slug)
+  return { ok: true }
+}
+
+// ── Regla general ────────────────────────────────────────────────────────────
+
+const RULE_NUM_KEYS = [
+  'min_importe', 'max_plazo_anos', 'max_financiacion_pct', 'max_edad_plazo', 'min_ingresos_1t',
+  'max_dti_pct', 'min_ingresos_2t', 'max_bancos', 'min_antiguedad_anos',
+] as const
+
+function ruleValues(input: RuleInput): { values: Record<string, unknown> } | { error: string } {
+  const values: Record<string, unknown> = { validate_dti: !!input.validate_dti, notes: input.notes?.trim() || null }
+  for (const k of RULE_NUM_KEYS) {
+    const v = numOrNull(input[k])
+    if (v !== null && v < 0) return { error: 'Los valores no pueden ser negativos' }
+    values[k] = v
+  }
+  return { values }
+}
+
+export async function saveGeneralRule(op: OperationType, input: RuleInput): Promise<ConfigResult> {
+  const auth = await requireEditor()
+  if ('error' in auth) return { ok: false, error: auth.error }
+  if (!OPERATION_TYPES.includes(op)) return { ok: false, error: 'Tipo de operación no válido' }
+  const v = ruleValues(input)
+  if ('error' in v) return { ok: false, error: v.error }
+
+  const { data: before } = await auth.db.from('bank_redflag_general').select('*').eq('operation_type', op).maybeSingle()
+  const { data: after, error } = await auth.db
+    .from('bank_redflag_general')
+    .upsert({ operation_type: op, ...v.values, updated_by: auth.email }, { onConflict: 'operation_type' })
+    .select('*').single()
+  if (error) return { ok: false, error: error.message }
+  await logHistory(auth.db, auth.email, {
+    bank_slug: null, table_name: 'bank_redflag_general', record_key: op, action: before ? 'update' : 'insert', before, after,
+  })
+  revalidatePath('/dashboard/configuracion', 'layout')
+  return { ok: true }
+}
+
+/**
+ * Mete o saca un banco de la regla general. Al sacarlo, si no tiene reglas propias, se crean con los valores
+ * de la regla general como punto de partida (así el comportamiento no cambia hasta que alguien las edite).
+ */
+export async function setUsesGeneralRules(slug: string, useGeneral: boolean): Promise<ConfigResult> {
+  const auth = await requireEditor()
+  if ('error' in auth) return { ok: false, error: auth.error }
+
+  const { data: before, error: e1 } = await auth.db.from('bank_config').select('*').eq('bank_slug', slug).single()
+  if (e1 || !before) return { ok: false, error: e1?.message ?? 'Banco no encontrado' }
+
+  if (!useGeneral) {
+    const { data: own } = await auth.db.from('bank_redflag_rules').select('operation_type').eq('bank_slug', slug)
+    const have = new Set((own ?? []).map((r) => r.operation_type as string))
+    const { data: general } = await auth.db.from('bank_redflag_general').select('*')
+    const missing = (general ?? []).filter((g) => !have.has(g.operation_type as string))
+    if (missing.length) {
+      const rows = missing.map((g) => {
+        const r: Record<string, unknown> = { bank_slug: slug, operation_type: g.operation_type, updated_by: auth.email }
+        for (const k of [...RULE_NUM_KEYS, 'validate_dti', 'notes'] as const) r[k] = g[k]
+        return r
+      })
+      const { error } = await auth.db.from('bank_redflag_rules').insert(rows)
+      if (error) return { ok: false, error: error.message }
+    }
+  }
+
+  const { data: after, error } = await auth.db
+    .from('bank_config').update({ uses_general_rules: useGeneral, updated_by: auth.email })
+    .eq('bank_slug', slug).select('*').single()
+  if (error) return { ok: false, error: error.message }
+  await logHistory(auth.db, auth.email, {
+    bank_slug: slug, table_name: 'bank_config', record_key: slug, action: 'update',
+    before: { uses_general_rules: before.uses_general_rules }, after: { uses_general_rules: after.uses_general_rules },
+  })
+  revalidatePath('/dashboard/configuracion', 'layout')
   return { ok: true }
 }
 

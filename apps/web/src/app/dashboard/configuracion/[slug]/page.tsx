@@ -1,10 +1,10 @@
+import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import PageHeader from '@/components/ui/PageHeader'
 import Tabs from '@/components/ui/Tabs'
 import BankLogo from '@/components/config/BankLogo'
 import BankSettingsForm from '@/components/config/BankSettingsForm'
-import RedFlagRulesEditor from '@/components/config/RedFlagRulesEditor'
+import RedFlagsPanel from '@/components/config/RedFlagsPanel'
 import ContactsEditor from '@/components/config/ContactsEditor'
 import RecipientPreview from '@/components/config/RecipientPreview'
 import DocumentsEditor from '@/components/config/DocumentsEditor'
@@ -14,6 +14,7 @@ import type {
   BankConfig,
   BankContact,
   BlockedEmail,
+  GeneralRule,
   Province,
   RedFlagRule,
   RequiredDocument,
@@ -22,9 +23,10 @@ import type {
 export const dynamic = 'force-dynamic'
 
 const TABS = [
+  { key: 'correos', label: 'Destinatarios' },
   { key: 'red-flags', label: 'Red flags' },
-  { key: 'correos', label: 'Correos' },
   { key: 'documentos', label: 'Documentos' },
+  { key: 'ajustes', label: 'Ajustes' },
   { key: 'historial', label: 'Historial' },
 ] as const
 type TabKey = (typeof TABS)[number]['key']
@@ -48,7 +50,7 @@ interface HistoryRow {
 const TABLE_LABEL: Record<string, string> = {
   bank_config: 'Ajustes',
   bank_redflag_rules: 'Red flags',
-  bank_contacts: 'Correos',
+  bank_contacts: 'Destinatarios',
   bank_required_documents: 'Documentos',
   blocked_emails: 'Correo bloqueado',
 }
@@ -69,14 +71,17 @@ function diff(before: Record<string, unknown> | null, after: Record<string, unkn
 export default async function BankConfigPage({ params, searchParams }: Props) {
   const { slug } = await params
   const { tab: tabParam } = await searchParams
-  const tab: TabKey = (TABS.find((t) => t.key === tabParam)?.key ?? 'red-flags') as TabKey
 
   const supabase = await createClient()
   const { data: config } = await supabase.from('bank_config').select('*').eq('bank_slug', slug).maybeSingle()
   if (!config) notFound()
+  const bank = config as BankConfig
+  const applies = bank.channel === 'email'
+  const tab: TabKey = (TABS.find((t) => t.key === tabParam)?.key ?? (applies ? 'correos' : 'historial')) as TabKey
 
-  const [rules, contacts, docs, provinces, blocked, history, canEdit] = await Promise.all([
+  const [rules, general, contacts, docs, provinces, blocked, history, canEdit] = await Promise.all([
     supabase.from('bank_redflag_rules').select('*').eq('bank_slug', slug),
+    supabase.from('bank_redflag_general').select('*'),
     supabase.from('bank_contacts').select('*').eq('bank_slug', slug),
     supabase.from('bank_required_documents').select('*').eq('bank_slug', slug).order('drive_code'),
     supabase.from('provinces').select('*').order('name'),
@@ -87,39 +92,49 @@ export default async function BankConfigPage({ params, searchParams }: Props) {
     canEditBankConfig(),
   ])
 
-  const bank = config as BankConfig
   const base = `/dashboard/configuracion/${slug}`
+  const visibleTabs = applies ? TABS : TABS.filter((t) => t.key === 'historial')
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title={bank.display_name}
-        breadcrumbs={[{ label: 'Configuración', href: '/dashboard/configuracion' }]}
-        actions={
-          <span className="flex items-center gap-2">
-            <BankLogo slug={bank.bank_slug} name={bank.display_name} size={32} />
-            {!canEdit && <span className="rounded bg-gray-100 px-2 py-0.5 text-[11px] text-gray-500">Solo lectura</span>}
-          </span>
-        }
-      />
-
-      <div className={CARD}>
-        <BankSettingsForm key={bank.updated_at} config={bank} canEdit={canEdit} />
+    <div className="flex flex-col gap-6 p-6 pb-12">
+      {/* Cabecera */}
+      <div>
+        <nav className="mb-2 text-xs text-gray-400">
+          <Link href="/dashboard/configuracion" className="hover:text-gray-600">Configuración</Link>
+          <span className="mx-1">/</span>
+          <span className="text-gray-500">{bank.display_name}</span>
+        </nav>
+        <div className="flex flex-wrap items-center gap-4">
+          <BankLogo slug={bank.bank_slug} name={bank.display_name} size={44} />
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xl font-semibold text-gray-900">{bank.display_name}</h1>
+            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
+              {!applies && <span className="rounded-full bg-gray-100 px-2 py-0.5 font-medium text-gray-600">No aplica</span>}
+              {applies && bank.redflags_apply && (
+                bank.block_on_red_flags
+                  ? <span className="rounded-full bg-red-50 px-2 py-0.5 font-medium text-red-700">Red flags bloquean</span>
+                  : <span className="rounded-full bg-gray-100 px-2 py-0.5 font-medium text-gray-600">Red flags informan</span>
+              )}
+              {applies && bank.redflags_apply && bank.uses_general_rules && (
+                <span className="rounded-full bg-sky-50 px-2 py-0.5 font-medium text-sky-700">Regla general</span>
+              )}
+              {!canEdit && <span className="rounded-full bg-gray-100 px-2 py-0.5 text-gray-500">Solo lectura</span>}
+            </div>
+          </div>
+        </div>
       </div>
 
-      <Tabs tabs={TABS.map((t) => ({ label: t.label, href: `${base}?tab=${t.key}`, active: t.key === tab }))} />
-
-      {tab === 'red-flags' && (
-        <RedFlagRulesEditor
-          key={(rules.data ?? []).map((r) => r.updated_at).join()}
-          slug={slug}
-          rules={(rules.data ?? []) as RedFlagRule[]}
-          canEdit={canEdit}
-        />
+      {!applies && (
+        <div className="rounded-xl border border-dashed border-gray-200 bg-white px-5 py-4 text-sm text-gray-600">
+          <p className="font-medium text-gray-800">Esta configuración no aplica a {bank.display_name}</p>
+          <p className="mt-1">{bank.channel_note}</p>
+        </div>
       )}
 
-      {tab === 'correos' && (
-        <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+      <Tabs tabs={visibleTabs.map((t) => ({ label: t.label, href: `${base}?tab=${t.key}`, active: t.key === tab }))} />
+
+      {applies && tab === 'correos' && (
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
           <div className={CARD}>
             <ContactsEditor
               config={bank}
@@ -128,7 +143,7 @@ export default async function BankConfigPage({ params, searchParams }: Props) {
               canEdit={canEdit}
             />
           </div>
-          <div className="lg:sticky lg:top-4 lg:self-start">
+          <div className="xl:sticky xl:top-4 xl:self-start">
             <RecipientPreview
               config={bank}
               contacts={(contacts.data ?? []) as BankContact[]}
@@ -139,9 +154,24 @@ export default async function BankConfigPage({ params, searchParams }: Props) {
         </div>
       )}
 
-      {tab === 'documentos' && (
+      {applies && tab === 'red-flags' && (
+        <RedFlagsPanel
+          config={bank}
+          rules={(rules.data ?? []) as RedFlagRule[]}
+          general={(general.data ?? []) as GeneralRule[]}
+          canEdit={canEdit}
+        />
+      )}
+
+      {applies && tab === 'documentos' && (
         <div className={CARD}>
           <DocumentsEditor slug={slug} docs={(docs.data ?? []) as RequiredDocument[]} canEdit={canEdit} />
+        </div>
+      )}
+
+      {applies && tab === 'ajustes' && (
+        <div className={CARD}>
+          <BankSettingsForm key={bank.updated_at} config={bank} canEdit={canEdit} />
         </div>
       )}
 
