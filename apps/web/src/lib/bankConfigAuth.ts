@@ -1,4 +1,5 @@
 import { createAdminClient, createClient } from '@/lib/supabase/server'
+import { bankConfigEnabled } from '@/lib/featureFlags'
 
 /**
  * Solo servidor. Quién puede editar la configuración de bancos: sesión @huspy.io / @bayteca.com
@@ -19,6 +20,8 @@ export async function sessionEmail(): Promise<string | null> {
 
 /** Devuelve el correo del editor o un error si no puede editar. */
 export async function requireEditor(): Promise<{ email: string; db: AdminClient } | { error: string }> {
+  // Sección oculta en producción hasta su revisión (lib/featureFlags): las ediciones también se rechazan
+  if (!bankConfigEnabled()) return { error: 'La configuración de bancos no está disponible en este entorno' }
   const email = await sessionEmail()
   if (!email) return { error: 'Sesión no válida' }
   const db = await createAdminClient()
