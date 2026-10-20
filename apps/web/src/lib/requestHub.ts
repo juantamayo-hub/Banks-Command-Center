@@ -49,9 +49,10 @@ export interface AssignmentIssue {
 
 /**
  * Aviso por Slack (DM del bot del Request Hub a quien gestiona los tickets de ese banco). Para agent_missing el
- * mensaje trae el botón "Añadir correo del gestor". Devuelve false si el Request Hub aún no tiene el endpoint.
+ * mensaje trae el botón "Añadir correo del gestor". Devuelve a quién llegó el DM, o false si el Request Hub aún no
+ * tiene el endpoint.
  */
-export async function hubNotifyAssignmentIssue(issue: AssignmentIssue): Promise<boolean> {
+export async function hubNotifyAssignmentIssue(issue: AssignmentIssue): Promise<string[] | false> {
   const c = config()
   if (!c) return false
   const res = await fetch(`${c.base}/api/external/notify/assignment-issue`, {
@@ -62,5 +63,6 @@ export async function hubNotifyAssignmentIssue(issue: AssignmentIssue): Promise<
   })
   if (res.status === 404) return false
   if (!res.ok) throw new Error(`Request Hub notify ${res.status}: ${(await res.text()).slice(0, 200)}`)
-  return true
+  const json = (await res.json().catch(() => ({}))) as { notified?: string[] }
+  return json.notified ?? []
 }
