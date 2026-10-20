@@ -391,6 +391,13 @@ if (requiredDocs.includes('F001') && !hasF001) flags.push('Falta documento F001'
     set_code(wf, 'Validate All Rules', c)
 
 
+def p_pichincha(wf):
+    replace_node(wf, 'GetBankEmail', reader_legacy_row('pichincha'))
+    for n in wf['nodes']:
+        if n['type'].endswith('gmail') and 'johanna.carrion@bancopichincha.es' in str(n['parameters'].get('sendTo')):
+            n['parameters']['sendTo'] = "={{ $('GetBankEmail').first().json['Email TO'] }}"
+
+
 PATCHES = {
     '4gnfEIxrG7IdsdNF': p_hipotecas,
     '7tABOhyg3kYrYiNj': p_craragon,
@@ -409,6 +416,7 @@ PATCHES = {
     'ghrabIQkmYHPCXFA': p_caixapopular,
     'cxHH2ylDZz0AzjNm': p_myinvestor,
     '7uUqWPCqDB7QQWeb': p_redflags,
+    'o9Sm5hWc1t0nDccE': p_pichincha,
 }
 
 
@@ -447,6 +455,26 @@ def check_all(src_dir: str) -> bool:
 if __name__ == '__main__':
     if '--check' in sys.argv:
         sys.exit(0 if check_all(os.environ.get('SRC_DIR', '/private/tmp/claude-503/f4')) else 1)
+    if '--apply-over-draft' in sys.argv:
+        # Autorizado por el owner (Juanjo, 20-oct-2026): publicar sobre el borrador ajeno partiendo de la versión
+        # PUBLICADA (activeVersion), no del borrador. Solo para flujos cuyo borrador no tiene cambios de lógica.
+        from n8n_safe_put import _req  # noqa: E402
+        for wid in [a for a in sys.argv[sys.argv.index('--apply-over-draft') + 1:] if not a.startswith('-')]:
+            wf = _req('GET', f'/workflows/{wid}')
+            os.makedirs(BACKUPS, exist_ok=True)
+            json.dump(wf, open(os.path.join(BACKUPS, f'draft_backup_{wid}.json'), 'w'))
+            av = wf['activeVersion']
+            wf['nodes'], wf['connections'] = av['nodes'], av['connections']
+            PATCHES[wid](wf)
+            _req('PUT', f'/workflows/{wid}', {k: wf[k] for k in ('name', 'nodes', 'connections', 'settings')})
+            after = _req('GET', f'/workflows/{wid}')
+            if not after.get('active'):
+                _req('POST', f'/workflows/{wid}/activate')
+                after = _req('GET', f'/workflows/{wid}')
+            assert after.get('active'), f'{wid} quedó inactivo'
+            assert after.get('versionId') == after.get('activeVersionId'), f'{wid} no quedó publicado'
+            print('publicado sobre borrador', wid, after['name'])
+        sys.exit(0)
     if '--apply' in sys.argv:
         ids = [a for a in sys.argv[sys.argv.index('--apply') + 1:] if not a.startswith('-')] or list(PATCHES)
         for wid in ids:
