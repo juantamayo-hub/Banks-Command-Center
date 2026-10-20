@@ -18,6 +18,7 @@ import {
   type OperationType,
   type ToSource,
 } from '@/lib/bankConfig'
+import { bankConfigEnabled } from '@/lib/featureFlags'
 
 const ALLOWED_DOMAINS = ['huspy.io', 'bayteca.com']
 const TO_SOURCES: ToSource[] = ['contacts', 'deal_field', 'deal_field_then_contacts', 'contacts_cc_deal_field']
@@ -38,6 +39,7 @@ async function sessionEmail(): Promise<string | null> {
 
 /** Devuelve el correo del editor o un error si no puede editar. */
 async function requireEditor(): Promise<{ email: string; db: AdminClient } | { error: string }> {
+  if (!bankConfigEnabled()) return { error: 'La configuración de bancos no está disponible en este entorno' }
   const email = await sessionEmail()
   if (!email) return { error: 'Sesión no válida' }
   const db = await createAdminClient()

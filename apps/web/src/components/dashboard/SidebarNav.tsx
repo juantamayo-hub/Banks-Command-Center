@@ -121,7 +121,7 @@ function isActive(href: string, pathname: string, tab: string | null): boolean {
   return false
 }
 
-export default function SidebarNav() {
+export default function SidebarNav({ showBankConfig = true }: { showBankConfig?: boolean }) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const tab = searchParams.get('tab')
@@ -179,6 +179,7 @@ export default function SidebarNav() {
         />
       </Section>
 
+      {showBankConfig && (
       <Section title="Configuración">
         <NavLink
           href="/dashboard/configuracion"
@@ -192,6 +193,7 @@ export default function SidebarNav() {
         <NavLink href="/dashboard/configuracion/regla-general" label="Regla general" icon="sliders" active={pathname === '/dashboard/configuracion/regla-general'} />
         <NavLink href="/dashboard/configuracion/ajustes" label="Bloqueados y editores" icon="shield" active={pathname === '/dashboard/configuracion/ajustes'} />
       </Section>
+      )}
 
       {/* Bancos — plegable con buscador */}
       <div className="mt-5">
