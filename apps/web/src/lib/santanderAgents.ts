@@ -28,7 +28,7 @@ const SANTANDER_NAMES = ['santander', 'bsch']
 export function nameKey(s: string): string {
   return s
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .toUpperCase()
     .replace(/[^A-Z0-9 ]/g, ' ')
     .replace(/\s+/g, ' ')
@@ -212,6 +212,8 @@ export async function processAssignment(
   }
 
   const planned: string[] = []
+  let notifiedTo: string[] | null = null
+  const avisoTxt = () => (notifiedTo ? ` · Aviso enviado a: ${notifiedTo.join(', ') || 'nadie (Slack no encontró al usuario)'}` : '')
   const save = async (r: Omit<AssignmentResult, 'planned'>, extra: Record<string, unknown> = {}) => {
     if (opts.dryRun) return { ...r, planned }
     const rec = {
@@ -239,14 +241,14 @@ export async function processAssignment(
     if ('error' in lookup) {
       let notified = prev?.notified_at ?? null
       if (!opts.dryRun && !notified) {
-        const ok = await hubNotifyAssignmentIssue({
+        const to = await hubNotifyAssignmentIssue({
           type: 'deal_not_found', bank: SANTANDER, client_name: row.client_name ?? null, dni,
           agent_name: row.agent_name, deal_id: null, detail: lookup.error,
-        }).catch(() => false)
-        if (ok) notified = new Date().toISOString()
+        }).catch(() => false as const)
+        if (to) { notified = new Date().toISOString(); notifiedTo = to }
       }
       planned.push(`Aviso: ${lookup.error}`)
-      return save({ ...base, status: 'deal_not_found', detail: lookup.error }, { notified_at: notified })
+      return save({ ...base, status: 'deal_not_found', detail: lookup.error + avisoTxt() }, { notified_at: notified })
     }
     const deal = lookup.deal
     const dealId = deal.id
@@ -270,15 +272,15 @@ export async function processAssignment(
           noteId = n.data?.id ?? null
         }
         if (!notified) {
-          const ok = await hubNotifyAssignmentIssue({
+          const to = await hubNotifyAssignmentIssue({
             type: 'agent_missing', bank: SANTANDER, client_name: row.client_name ?? null, dni,
             agent_name: row.agent_name, deal_id: dealId, detail,
-          }).catch(() => false)
-          if (ok) notified = new Date().toISOString()
+          }).catch(() => false as const)
+          if (to) { notified = new Date().toISOString(); notifiedTo = to }
         }
       }
       return save(
-        { ...base, status: 'pending_agent', bank_deal_id: dealId, detail },
+        { ...base, status: 'pending_agent', bank_deal_id: dealId, detail: detail + avisoTxt() },
         { pipedrive_note_id: noteId, notified_at: notified },
       )
     }
