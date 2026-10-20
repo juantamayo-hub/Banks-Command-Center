@@ -75,6 +75,15 @@ export default async function BankConfigPage({ params, searchParams }: Props) {
   const supabase = await createClient()
   const { data: config } = await supabase.from('bank_config').select('*').eq('bank_slug', slug).maybeSingle()
   if (!config) notFound()
+  if (!('channel' in config)) {
+    return (
+      <div className="flex flex-col gap-6 p-6">
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-800">
+          Falta aplicar la migración <b>030_bank_config_general_rules.sql</b> en Supabase (SQL editor).
+        </div>
+      </div>
+    )
+  }
   const bank = config as BankConfig
   const applies = bank.channel === 'email'
   const tab: TabKey = (TABS.find((t) => t.key === tabParam)?.key ?? (applies ? 'correos' : 'historial')) as TabKey

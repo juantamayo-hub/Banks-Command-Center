@@ -71,8 +71,22 @@ insert into bank_config (bank_slug, display_name, pipedrive_names, channel, chan
   ('kutxabank',      'Kutxabank',      array['Kutxabank']::text[],      'platform', 'Flujo propio: ZIP cifrado vía Rastreator (sección Kutxabank).', false, 'contacts', 'seed'),
   ('ing',            'ING',            array['ING']::text[],            'email',    'Envía al "Email bancario" del deal. Su flujo no pasa por el control de red flags.', false, 'deal_field', 'seed'),
   ('cr_extremadura', 'CR Extremadura', array['CR Extremadura']::text[], 'none',     'Sin flujo de envío automático.', false, 'contacts', 'seed'),
-  ('banca_360',      'Banca 360',      array['Banca 360']::text[],      'none',     'Sin flujo de envío automático.', false, 'contacts', 'seed')
+  ('banca_360',      'Banca 360',      array['Banca 360']::text[],      'none',     'Sin flujo de envío automático.', false, 'contacts', 'seed'),
+  -- Resto de bancos del campo "Bank 1…5" de Pipedrive (sin flujo de envío automático: envío manual)
+  ('banca_march',    'Banca March',    array['Banca March']::text[],    'none', 'Sin flujo de envío automático (envío manual).', false, 'contacts', 'seed'),
+  ('bbva',           'BBVA',           array['BBVA']::text[],           'none', 'Sin flujo de envío automático (envío manual).', false, 'contacts', 'seed'),
+  ('cajasiete',      'Cajasiete',      array['Cajasiete']::text[],      'none', 'Sin flujo de envío automático (envío manual).', false, 'contacts', 'seed'),
+  ('evo',            'EVO',            array['EVO']::text[],            'none', 'Sin flujo de envío automático (envío manual).', false, 'contacts', 'seed'),
+  ('targobank',      'Targobank',      array['Targobank']::text[],      'none', 'Sin flujo de envío automático (envío manual).', false, 'contacts', 'seed'),
+  ('vp_bank',        'VP Bank',        array['VP Bank']::text[],        'none', 'Sin flujo de envío automático (envío manual).', false, 'contacts', 'seed'),
+  ('quintet',        'Quintet Private Bank', array['Quintet Private Bank']::text[], 'none', 'Sin flujo de envío automático (envío manual).', false, 'contacts', 'seed'),
+  ('cr_zamora',      'CR Zamora',      array['CR Zamora']::text[],      'none', 'Sin flujo de envío automático (envío manual).', false, 'contacts', 'seed'),
+  ('caixa_ontinyent','Caixa Ontinyent',array['Caixa Ontinyent']::text[],'none', 'Sin flujo de envío automático (envío manual).', false, 'contacts', 'seed'),
+  ('cofidis',        'Cofidis',        array['Cofidis - NO hipoteca', 'Cofidis']::text[], 'none', 'Préstamos personales: se gestiona en la sección Préstamos.', false, 'contacts', 'seed')
 on conflict (bank_slug) do nothing;
+
+-- "BSCH" es Santander en el desplegable de Pipedrive
+update bank_config set pipedrive_names = array['Santander', 'BSCH'] where bank_slug = 'santander';
 
 -- ── Correcciones (Juanjo, 2026-10-20) ────────────────────────────────────────
 -- Ibercaja Badajoz: la oficina estaba como @bayteca.es

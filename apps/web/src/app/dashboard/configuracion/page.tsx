@@ -62,6 +62,20 @@ export default async function ConfiguracionPage() {
     )
   }
 
+  // La migración 030 añade channel / regla general: sin ella todo se vería como "No aplica"
+  const missing030 = (configs.data ?? []).length > 0 && !('channel' in (configs.data ?? [])[0]) || !!general.error
+  if (missing030) {
+    return (
+      <div className="flex flex-col gap-6 p-6">
+        <PageHeader title="Configuración de bancos" />
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-800">
+          Falta aplicar la migración <b>030_bank_config_general_rules.sql</b> en Supabase (SQL editor). Sin ella no se
+          puede mostrar el canal de envío ni la regla general de cada banco.
+        </div>
+      </div>
+    )
+  }
+
   const banks = (configs.data ?? []) as BankConfig[]
   const contactRows = (contacts.data ?? []) as BankContact[]
   const ruleRows = (rules.data ?? []) as Pick<RedFlagRule, 'bank_slug' | 'updated_at'>[]
