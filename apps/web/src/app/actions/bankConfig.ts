@@ -19,7 +19,7 @@ import {
 } from '@/lib/bankConfig'
 import { isAllowedDomain, requireEditor, type AdminClient } from '@/lib/bankConfigAuth'
 
-const TO_SOURCES: ToSource[] = ['contacts', 'deal_field', 'deal_field_then_contacts', 'contacts_cc_deal_field']
+const TO_SOURCES: ToSource[] = ['contacts', 'deal_field', 'deal_field_then_contacts', 'contacts_then_deal_field', 'contacts_cc_deal_field']
 const SCOPES: ContactScope[] = ['default', 'province', 'when_to']
 const DRIVE_CODE_RE = /^[A-Z]\d{3}$/
 
