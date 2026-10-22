@@ -23,7 +23,7 @@ export const ALMA_TOOLS: Anthropic.Tool[] = [
   },
   {
     name: 'ficha_cliente',
-    description: 'Ficha completa de un cliente por Opportunity ID: datos de Pipedrive (owner, DNI/NIE de los titulares, deals bancarios, carpeta de Drive), estado de cada envío por banco con su diagnóstico, respuestas de los bancos (correos clasificados), historial de estados de la petición en CaixaBank (estado del lead, motivo pendiente, resolución), estados de Rastreator para Kutxabank, notas del equipo en el Command Center, relanzamientos solicitados, reservas anti-duplicado, red flags y eventos de los flujos.',
+    description: 'Ficha completa de un cliente por Opportunity ID: datos de Pipedrive (owner, plan del cliente Basic/Pro/Elite, DNI/NIE de los titulares, deals bancarios, carpeta de Drive), estado de cada envío por banco con su diagnóstico, respuestas de los bancos (correos clasificados), historial de estados de la petición en CaixaBank (estado del lead, motivo pendiente, resolución), estados de Rastreator para Kutxabank, notas del equipo en el Command Center, relanzamientos solicitados, reservas anti-duplicado, red flags y eventos de los flujos.',
     input_schema: {
       type: 'object',
       properties: { opportunity_id: { type: 'integer', description: 'Opportunity ID (deal general de Pipedrive)' } },
@@ -240,7 +240,7 @@ export async function runAlmaTool(name: string, input: Record<string, unknown>):
             dossieres_en_drive: docs?.dossieres ?? `No se pudo consultar Drive: ${drive.error}`,
             // Una autorización mal nombrada hace que el flujo la dé por faltante y no envíe
             ...(drive.ok
-              ? { revision_autorizaciones: revisarAutorizaciones(drive.files, deal?.dni_1t ?? null, deal?.dni_2t ?? null, (deal?.deals_bancarios ?? []).map((b) => b.banco ?? '').filter(Boolean)) }
+              ? { revision_autorizaciones: revisarAutorizaciones(drive.files, deal?.dni_1t ?? null, deal?.dni_2t ?? null, (deal?.deals_bancarios ?? []).map((b) => b.banco ?? '').filter(Boolean), deal?.plan ?? null) }
               : {}),
             enlace_pipedrive: deal?.enlace_pipedrive,
           }),
@@ -260,7 +260,7 @@ export async function runAlmaTool(name: string, input: Record<string, unknown>):
           content: json({
             cliente: deal?.cliente,
             carpeta: deal?.carpeta_drive,
-            revision_autorizaciones: revisarAutorizaciones(drive.files, deal?.dni_1t ?? null, deal?.dni_2t ?? null, (deal?.deals_bancarios ?? []).map((b) => b.banco ?? '').filter(Boolean)),
+            revision_autorizaciones: revisarAutorizaciones(drive.files, deal?.dni_1t ?? null, deal?.dni_2t ?? null, (deal?.deals_bancarios ?? []).map((b) => b.banco ?? '').filter(Boolean), deal?.plan ?? null),
             ...summarizeDocs(drive.files),
           }),
         }
