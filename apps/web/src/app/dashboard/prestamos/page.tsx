@@ -12,6 +12,8 @@ import {
   PRODUCT_LABEL,
   SOURCE_LABEL,
   STATUS_LABEL,
+  isBankBlock,
+  statusLabel,
   STATUS_STYLE,
   needsAction,
 } from '@/lib/lenderSubmissions'
@@ -173,7 +175,7 @@ export default async function PrestamosPage({ searchParams }: PrestamosPageProps
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${STATUS_STYLE[s.status]}`}>
-                      {STATUS_LABEL[s.status]}
+                      {statusLabel(s)}
                     </span>
                     <span className="text-sm font-semibold text-gray-800">{lenderName}</span>
                     <span className="text-sm text-gray-600">· {s.client_name ?? `Deal ${s.deal_id}`}</span>
@@ -185,9 +187,14 @@ export default async function PrestamosPage({ searchParams }: PrestamosPageProps
 
                   {s.status === 'pending_docs' && s.missing_docs.length > 0 && (
                     <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                      <span className="text-xs text-gray-500">Falta:</span>
+                      <span className="text-xs text-gray-500">{s.missing_docs.some(isBankBlock) ? 'Motivos:' : 'Falta:'}</span>
                       {s.missing_docs.map((d) => (
-                        <span key={d} className="rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-xs text-amber-800">{d}</span>
+                        <span
+                          key={d}
+                          className={`rounded-md border px-1.5 py-0.5 text-xs ${isBankBlock(d) ? 'border-red-200 bg-red-50 text-red-800' : 'border-amber-200 bg-amber-50 text-amber-800'}`}
+                        >
+                          {d}
+                        </span>
                       ))}
                     </div>
                   )}
@@ -210,7 +217,7 @@ export default async function PrestamosPage({ searchParams }: PrestamosPageProps
                         {events.map((e) => (
                           <li key={e.id}>
                             <span className="text-gray-400">{fmtDate(e.created_at)}</span> · {STATUS_LABEL[e.status]}
-                            {e.missing_docs.length > 0 ? ` (falta: ${e.missing_docs.join(', ')})` : ''}
+                            {e.missing_docs.length > 0 ? ` (${e.missing_docs.some(isBankBlock) ? 'motivos' : 'falta'}: ${e.missing_docs.join(', ')})` : ''}
                             {e.detail ? ` — ${e.detail}` : ''}
                           </li>
                         ))}
@@ -226,7 +233,12 @@ export default async function PrestamosPage({ searchParams }: PrestamosPageProps
                     {bankUrl && <a href={bankUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Deal bancario ↗</a>}
                   </div>
                   {(action || s.status === 'sent') && (
-                    <LenderSubmissionActions id={s.id} status={s.status as 'pending_docs' | 'error' | 'sent'} lenderName={lenderName} />
+                    <LenderSubmissionActions
+                      id={s.id}
+                      status={s.status as 'pending_docs' | 'error' | 'sent'}
+                      lenderName={lenderName}
+                      reasons={s.status === 'pending_docs' ? s.missing_docs : []}
+                    />
                   )}
                 </div>
               </div>

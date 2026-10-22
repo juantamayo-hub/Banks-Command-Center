@@ -5,16 +5,18 @@ import { dismissLenderSubmission, relaunchLenderSubmission } from '@/app/actions
 
 interface Props {
   id: string
-  /** 'sent' → Relanzar (reenvío con force); pendiente/error → Reintentar envío + Descartar */
+  /** 'sent' → Relanzar (reenvío con force); pendiente/error → Reintentar envío + Forzar envío + Descartar */
   status: 'pending_docs' | 'error' | 'sent'
   lenderName: string
+  /** Motivos por los que no salió (documentos que faltan / bancos incompatibles), para la confirmación del forzado */
+  reasons?: string[]
 }
 
-export default function LenderSubmissionActions({ id, status, lenderName }: Props) {
+export default function LenderSubmissionActions({ id, status, lenderName, reasons = [] }: Props) {
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
-  const [mode, setMode] = useState<'idle' | 'dismiss' | 'confirm_relaunch'>('idle')
+  const [mode, setMode] = useState<'idle' | 'dismiss' | 'confirm_relaunch' | 'confirm_force'>('idle')
   const [reason, setReason] = useState('')
 
   function run(action: () => Promise<{ ok: boolean; error?: string }>, okMsg?: string) {
@@ -59,6 +61,15 @@ export default function LenderSubmissionActions({ id, status, lenderName }: Prop
               <button
                 type="button"
                 disabled={pending}
+                onClick={() => setMode('confirm_force')}
+                title="Envía aunque falte documentación o haya un banco incompatible en Pipedrive"
+                className="rounded-md border border-amber-300 bg-white px-2.5 py-1 text-xs font-medium text-amber-800 hover:bg-amber-50 disabled:opacity-50"
+              >
+                Forzar envío
+              </button>
+              <button
+                type="button"
+                disabled={pending}
                 onClick={() => setMode('dismiss')}
                 className="rounded-md px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 disabled:opacity-50"
               >
@@ -82,6 +93,32 @@ export default function LenderSubmissionActions({ id, status, lenderName }: Prop
               className="rounded-md bg-gray-800 px-2.5 py-1 font-medium text-white hover:bg-gray-700 disabled:opacity-50"
             >
               {pending ? '…' : 'Sí, relanzar'}
+            </button>
+            <button type="button" onClick={() => setMode('idle')} className="rounded-md px-2 py-1 text-gray-500 hover:bg-gray-100">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {mode === 'confirm_force' && (
+        <div className="max-w-xs rounded-lg bg-white px-3 py-2 text-xs ring-1 ring-amber-300 sm:text-right">
+          <p className="text-gray-700">
+            ¿Enviar a {lenderName} <b>aunque no cumpla las validaciones</b>? Sale con la documentación que haya en la carpeta y queda registrado a tu nombre.
+          </p>
+          {reasons.length > 0 && (
+            <ul className="mt-1 list-inside list-disc text-left text-amber-800">
+              {reasons.map((r) => <li key={r}>{r}</li>)}
+            </ul>
+          )}
+          <div className="mt-1.5 flex justify-end gap-2">
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => run(() => relaunchLenderSubmission(id, { override: true }), 'Envío forzado lanzado: en 1–2 min se actualiza el estado')}
+              className="rounded-md bg-amber-600 px-2.5 py-1 font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+            >
+              {pending ? '…' : 'Sí, forzar envío'}
             </button>
             <button type="button" onClick={() => setMode('idle')} className="rounded-md px-2 py-1 text-gray-500 hover:bg-gray-100">
               Cancelar
