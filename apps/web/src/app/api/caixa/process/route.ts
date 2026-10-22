@@ -509,9 +509,16 @@ async function pipedriveUpdateStage(dealId: string, stageId: number, markWon: bo
 
 // ── Route handler ─────────────────────────────────────────────────────────────
 
+// Files of several hundred rows take minutes (several Pipedrive calls per row): the page sends the
+// whole file in every request but each request only processes rows [start, start + count).
+export const maxDuration = 300
+
+// A claim (row inserted before acting) younger than this belongs to an upload still running
+const CLAIM_STALE_MS = 15 * 60 * 1000
+
 export async function POST(req: NextRequest) {
 
-  let body: { rows?: unknown; date_from?: unknown; date_to?: unknown }
+  let body: { rows?: unknown; date_from?: unknown; date_to?: unknown; start?: unknown; count?: unknown }
   try {
     body = await req.json()
   } catch {
@@ -531,6 +538,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: '`date_from` no es una fecha válida' }, { status: 400 })
   }
   const dateTo = body.date_to && typeof body.date_to === 'string' ? new Date(body.date_to) : null
+  // Batch to process in this request; without start/count, the whole file (previous behaviour)
+  const start = Math.max(0, Number.isInteger(body.start) ? (body.start as number) : 0)
+  const count = Number.isInteger(body.count) && (body.count as number) > 0 ? (body.count as number) : rows.length
+  const end = Math.min(rows.length, start + count)
 
   const supabase = await createAdminClient()
   const fechaProcesado = new Date().toLocaleDateString('es-ES')
@@ -573,7 +584,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  for (const row of rows) {
+  for (const row of rows.slice(start, end)) {
     const numeroPeticion = (row.numero_peticion ?? '').toString().trim()
     if (!numeroPeticion) continue
 
@@ -615,7 +626,7 @@ export async function POST(req: NextRequest) {
     // Compared with normText() so a badly-encoded file doesn't look like a new state.
     const { data: previous, error: previousError } = await supabase
       .from('caixa_processed')
-      .select('estado_del_lead, motivo_pendiente, resolucion')
+      .select('id, estado_del_lead, motivo_pendiente, resolucion, note_added, processed_at')
       .eq('numero_peticion', numeroPeticion)
 
     if (previousError) {
@@ -625,18 +636,59 @@ export async function POST(req: NextRequest) {
     }
 
     const key = [estadoNorm, motivoNorm, resolucionNorm].map(normText).join('|')
-    const existing = (previous ?? []).some(
+    const matches = (previous ?? []).filter(
       (p) => [p.estado_del_lead, p.motivo_pendiente, p.resolucion].map((v) => normText(v ?? '')).join('|') === key
     )
+    // Claim without note older than CLAIM_STALE_MS = an upload that died before writing the note → retry
+    const isStaleClaim = (p: { note_added: boolean | null; processed_at: string | null }) =>
+      !p.note_added && Date.now() - new Date(p.processed_at ?? 0).getTime() > CLAIM_STALE_MS
 
-    if (existing) {
-      results.push({ numero_peticion: numeroPeticion, deal_id: dealId, status: 'skipped', detail: 'Ya procesado (mismo estado)' })
+    if (matches.some((p) => !isStaleClaim(p))) {
+      const running = matches.some((p) => !p.note_added)
+      results.push({
+        numero_peticion: numeroPeticion,
+        deal_id: dealId,
+        status: 'skipped',
+        detail: running ? 'Lo está procesando otra subida en este momento' : 'Ya procesado (mismo estado)',
+      })
       skipped++
       continue
     }
+    const staleIds = matches.map((p) => p.id)
+    if (staleIds.length) await supabase.from('caixa_processed').delete().in('id', staleIds)
+
+    // Claim the row BEFORE touching Pipedrive: the UNIQUE index (numero_peticion + estado + motivo +
+    // resolución) lets only one upload win, so two uploads of the same file at the same time can't
+    // both write the note (22-oct-2026: 183 deals got it twice). Completed in Step 3 below.
+    const { data: claim, error: claimError } = await supabase
+      .from('caixa_processed')
+      .insert({
+        numero_peticion: numeroPeticion,
+        deal_id: dealId,
+        note_added: false,
+        estado_del_lead: estadoNorm,
+        motivo_pendiente: motivoNorm,
+        resolucion: resolucionNorm,
+      })
+      .select('id')
+      .single()
+
+    if (claimError) {
+      if (claimError.code === '23505') {
+        results.push({ numero_peticion: numeroPeticion, deal_id: dealId, status: 'skipped', detail: 'Lo está procesando otra subida en este momento' })
+        skipped++
+      } else {
+        results.push({ numero_peticion: numeroPeticion, deal_id: dealId, status: 'error', detail: `No se pudo reservar la fila: ${claimError.message}` })
+        errors++
+      }
+      continue
+    }
+    const claimId = claim.id as string
+    // Exits without a note free the row so a later upload retries it (previous behaviour)
+    const releaseClaim = () => supabase.from('caixa_processed').delete().eq('id', claimId)
 
     // Process this row — two separate try/catch blocks:
-    // - Note failure → real error, do NOT insert into DB (allow retry next upload)
+    // - Note failure → real error, the claim is released (allow retry next upload)
     // - Mark-lost failure → warning only, note was already added, still record as processed
     let noteId: string | null = null
     let markedLost = false
@@ -654,12 +706,14 @@ export async function POST(req: NextRequest) {
       currentStageId = deal?.stageId ?? null
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
+      await releaseClaim()
       results.push({ numero_peticion: numeroPeticion, deal_id: dealId, status: 'error', detail: `No se pudo verificar estado del deal: ${msg}` })
       errors++
       continue
     }
 
     if (dealStatus === 'won') {
+      await releaseClaim()
       results.push({ numero_peticion: numeroPeticion, deal_id: dealId, status: 'skipped', detail: 'Deal ganado (won) — no se toca' })
       skipped++
       continue
@@ -689,11 +743,14 @@ export async function POST(req: NextRequest) {
     }
 
     if (noteError) {
-      // Don't insert into caixa_processed — let the user retry
+      // Free the row in caixa_processed — let the user retry
+      await releaseClaim()
       results.push({ numero_peticion: numeroPeticion, deal_id: dealId, status: 'error', detail: noteError })
       errors++
       continue
     }
+    // Mark the note as written right away: if the request dies after this point the row is not retried
+    await supabase.from('caixa_processed').update({ note_added: true, pipedrive_note_id: noteId }).eq('id', claimId)
 
     // Step 1b: Set external ID in Pipedrive from col C (non-fatal)
     let externalIdWarning: string | undefined
@@ -778,25 +835,21 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Step 3: Record in caixa_processed (note was added successfully)
+    // Step 3: Complete the claimed row in caixa_processed (note was added successfully)
     const combinedWarning = [reopenWarning, lostWarning, stageWarning, externalIdWarning, hubWarning].filter(Boolean).join(' | ') || null
-    const { error: insertError } = await supabase.from('caixa_processed').insert({
-      numero_peticion: numeroPeticion,
-      deal_id: dealId,
+    const { error: insertError } = await supabase.from('caixa_processed').update({
       note_added: true,
       pipedrive_note_id: noteId,
       marked_lost: markedLost,
       lost_reason_id: lostReasonId ?? null,
-      estado_del_lead: estadoNorm,
-      motivo_pendiente: motivoNorm,
-      resolucion: resolucionNorm,
       // resolution_text: derived reason — resolución si cerrado, motivo pendiente si no
       resolution_text: isClosed ? (resolucionNorm || motivoNorm) : motivoNorm,
       error_message: combinedWarning,
-    })
+      processed_at: new Date().toISOString(),
+    }).eq('id', claimId)
 
     if (insertError) {
-      console.error('[caixa/process] Supabase insert error:', insertError.message)
+      console.error('[caixa/process] Supabase update error:', insertError.message)
     }
 
     results.push({
@@ -825,5 +878,6 @@ export async function POST(req: NextRequest) {
     skipped,
     errors,
     results,
+    next_start: end < rows.length ? end : null,
   })
 }
