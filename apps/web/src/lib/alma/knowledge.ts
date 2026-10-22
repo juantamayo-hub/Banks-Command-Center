@@ -27,7 +27,10 @@ export const KNOWLEDGE: Record<string, { titulo: string; texto: string }> = {
 5. Envíos por plataforma (Santander, CaixaBank, Sabadell, Bankinter, Abanca): no van por la hoja; se envían a mano desde la
    web del banco y se marcan como enviados en la página "Envíos por plataforma" del Command Center.
 6. Kutxabank: se genera un ZIP cifrado con los documentos y se envía a Rastreator; se gestiona en "Kutxabank · Envíos".
-7. Más de 3 bancos en un cliente YA NO bloquea el envío (desde el 30-sep-2026): solo deja una nota para revisarlo con el TL.`,
+7. Más de 3 bancos en un cliente YA NO bloquea el envío (desde el 30-sep-2026): solo deja una nota para revisarlo con el TL.
+8. Autorizaciones según el PLAN del cliente (campo "Resident Membership" del deal general; Alma lo ve como "plan"): en
+   plan Basic hace falta la autorización de Bayteca y la de cada banco que la exija; en Pro o Elite basta la de Bayteca, así
+   que NO marques como faltante la autorización de un banco en un cliente Pro/Elite.`,
   },
   limites: {
     titulo: 'Límites técnicos que explican envíos fallidos',

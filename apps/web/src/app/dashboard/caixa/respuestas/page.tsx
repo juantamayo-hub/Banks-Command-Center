@@ -80,6 +80,9 @@ interface ProcessResponse {
 
 type Stage = 'idle' | 'previewing' | 'processing' | 'done'
 
+// Rows per request to /api/caixa/process (each row = several Pipedrive calls)
+const BATCH_SIZE = 40
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /**
@@ -154,6 +157,8 @@ export default function CaixaRespuestasPage() {
   const [response, setResponse] = useState<ProcessResponse | null>(null)
   const [dragOver, setDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const processingRef = useRef(false)
+  const [progress, setProgress] = useState(0)
 
   const handleFile = useCallback((file: File) => {
     setFileName(file.name)
@@ -191,19 +196,51 @@ export default function CaixaRespuestasPage() {
   }, [handleFile])
 
   const handleProcess = useCallback(async () => {
+    if (processingRef.current) return   // never two uploads from the same page
+    processingRef.current = true
     setStage('processing')
+    setProgress(0)
+    // Batches of BATCH_SIZE rows: one request for the whole file exceeded the server time limit
+    const total: ProcessResponse = { total: parsedRows.length, processed: 0, skipped: 0, errors: 0, results: [] }
+    let start: number | null = 0
     try {
-      const res = await fetch('/api/caixa/process', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rows: parsedRows, date_from: dateFrom }),
-      })
-      const data: ProcessResponse = await res.json()
-      setResponse(data)
+      while (start !== null) {
+        const res = await fetch('/api/caixa/process', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rows: parsedRows, date_from: dateFrom, start, count: BATCH_SIZE }),
+        })
+        const text = await res.text()
+        let data: ProcessResponse & { next_start?: number | null; error?: string }
+        try {
+          data = JSON.parse(text)
+        } catch {
+          throw new Error(`el servidor respondió ${res.status} (${text.slice(0, 80)})`)
+        }
+        if (!res.ok || data.error) throw new Error(data.error ?? `el servidor respondió ${res.status}`)
+        total.processed += data.processed
+        total.skipped += data.skipped
+        total.errors += data.errors
+        total.results.push(...data.results)
+        start = data.next_start ?? null
+        setProgress(start ?? parsedRows.length)
+      }
+      setResponse(total)
       setStage('done')
     } catch (err) {
-      alert(`Error al procesar: ${err instanceof Error ? err.message : String(err)}`)
-      setStage('previewing')
+      const done = total.results.length
+      alert(
+        `Error al procesar: ${err instanceof Error ? err.message : String(err)}` +
+        (done ? `\n\nSe llegaron a revisar ${done} filas. Vuelve a subir el mismo archivo: lo ya procesado se omite.` : '')
+      )
+      if (done) {
+        setResponse(total)
+        setStage('done')
+      } else {
+        setStage('previewing')
+      }
+    } finally {
+      processingRef.current = false
     }
   }, [parsedRows, dateFrom])
 
@@ -350,6 +387,9 @@ export default function CaixaRespuestasPage() {
           <div className="mb-4 h-10 w-10 animate-spin rounded-full border-4 border-blue-200 border-t-blue-600" />
           <p className="text-sm font-medium text-gray-700">
             Procesando {filteredCount} filas...
+          </p>
+          <p className="mt-1 text-xs text-gray-500">
+            Revisadas {Math.min(progress, parsedRows.length)} de {parsedRows.length}
           </p>
           <p className="mt-1 text-xs text-gray-400">
             Esto puede tardar unos segundos por fila (Pipedrive + Claude).

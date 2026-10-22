@@ -19,7 +19,12 @@ const F = {
   dossierCreado: 'bb735a607be5082db41ac876f1c7f283599ad742',
   linkDossier: 'a84af88ae6aa30f8b7f840d95bf737a71f42077a',
   bankMail: '498dd83b5c5e1f1181c232131933717ceadfda34', // deal bancario
+  plan: 'af30434e3d168db0ff70cce7f70e279d5c8b7d1b',     // "Resident Membership" (deal general)
 }
+
+// Opciones del campo "Resident Membership": el plan decide qué autorizaciones hacen falta
+const PLAN_LABELS: Record<number, 'Basic' | 'Pro' | 'Elite' | 'Add-on'> = { 2146: 'Basic', 2148: 'Pro', 2147: 'Elite', 2449: 'Add-on' }
+export type ClientPlan = (typeof PLAN_LABELS)[number]
 
 const pipedriveUrl = (id: number | string) => `https://mdsl.pipedrive.com/deal/${id}`
 const num = (v: unknown): number | null => {
@@ -121,6 +126,8 @@ export interface DealInfo {
   etapa_id: number | null
   estado: string | null
   md: string | null
+  // Plan del cliente (Basic / Pro / Elite / Add-on): Basic necesita la autorización de cada banco; Pro y Elite solo la de Bayteca
+  plan: ClientPlan | null
   // DNI/NIE de Pipedrive: los flujos buscan las autorizaciones por el del 1er titular
   dni_1t: string | null
   dni_2t: string | null
@@ -163,6 +170,7 @@ export async function getDealInfo(opportunityId: number): Promise<DealInfo | nul
     etapa_id: num(d.stage_id),
     estado: (d.status as string) ?? null,
     md: (val(d[F.md]) as string) || null,
+    plan: PLAN_LABELS[num(val(d[F.plan])) ?? 0] ?? null,
     dni_1t: String(val(d[F.dni1]) ?? '').trim() || null,
     dni_2t: String(val(d[F.dni2]) ?? '').trim() || null,
     carpeta_drive: (val(d[F.folder]) as string) || null,
@@ -360,7 +368,7 @@ const compactDni = (s: string | null) => (s ?? '').toUpperCase().replace(/[\s.-]
  * "Autorizaciones <Banco> <DNI del 1er titular>.pdf". Los flujos buscan banco + DNI 1T del deal general de Pipedrive
  * (Kutxabank y Laboral Kutxa, solo en PDF); "Kutxa" a secas no la encuentra el flujo de Kutxabank.
  */
-export function revisarAutorizaciones(files: DriveFile[], dni1: string | null, dni2: string | null, bancosCliente: string[]) {
+export function revisarAutorizaciones(files: DriveFile[], dni1: string | null, dni2: string | null, bancosCliente: string[], plan: ClientPlan | null = null) {
   const d1 = compactDni(dni1)
   const d2 = compactDni(dni2)
   const autos = files.filter((f) => /autoriz/i.test(f.name)).map((f) => {
@@ -386,16 +394,26 @@ export function revisarAutorizaciones(files: DriveFile[], dni1: string | null, d
     return { nombre: f.name, banco, estado, problemas, ...(problemas.length || !estandar ? { nombre_correcto: sugerido } : {}), enlace: f.link }
   })
   const bancos = [...new Set(['Bayteca', ...bancosCliente.map((b) => authBank(b) ?? b)])]
+  // Pro y Elite: basta la autorización de Bayteca; la de cada banco solo hace falta en Basic (petición de Óscar, 22-oct-2026)
+  const soloBayteca = plan === 'Pro' || plan === 'Elite'
   return {
     formato_esperado: 'Autorizaciones <Banco> <DNI 1er titular>.pdf',
     dni_1t: dni1 ?? 'VACÍO en Pipedrive: ningún flujo podrá encontrar las autorizaciones',
+    plan_cliente: plan ?? 'sin plan en Pipedrive (campo "Resident Membership" del deal general)',
     autorizaciones: autos,
     por_banco: bancos.map((b) => {
       const suyas = autos.filter((a) => a.banco === b)
       const hay = (e: string) => suyas.some((a) => a.estado === e)
-      return { banco: b, estado: hay('ok') ? 'ok' : hay('sin_comprobar') ? 'sin_comprobar' : suyas.length ? 'mal_nombrada' : 'no_encontrada' }
+      const estado = hay('ok') ? 'ok' : hay('sin_comprobar') ? 'sin_comprobar' : suyas.length ? 'mal_nombrada' : 'no_encontrada'
+      // Sin autorización propia en plan Pro/Elite → correcto, no es un problema
+      if (b !== 'Bayteca' && soloBayteca && estado === 'no_encontrada') return { banco: b, estado: 'no_necesaria', motivo: `plan ${plan}: basta la autorización de Bayteca` }
+      return { banco: b, estado }
     }),
-    nota: 'No todos los bancos exigen autorización propia (algunos solo en plan Basic y otros nunca); la de Bayteca la piden casi todos.',
+    nota: soloBayteca
+      ? `Plan ${plan}: solo hace falta la autorización de Bayteca; no marques como faltante la de cada banco.`
+      : plan === 'Basic'
+        ? 'Plan Basic: hace falta la autorización de Bayteca y la de cada banco que la exija (algunos no la piden nunca).'
+        : 'Plan desconocido: en Basic hace falta la autorización de cada banco; en Pro/Elite basta la de Bayteca. Confírmalo en el deal general antes de reclamar autorizaciones de banco.',
   }
 }
 
