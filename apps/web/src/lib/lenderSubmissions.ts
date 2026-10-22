@@ -72,3 +72,17 @@ export const STATUS_STYLE: Record<LenderStatus, string> = {
 export function needsAction(s: Pick<LenderSubmission, 'status'>): boolean {
   return s.status === 'pending_docs' || s.status === 'error'
 }
+
+/**
+ * Motivo de bloqueo por banco incompatible (no es un documento): los flujos n8n lo guardan en missing_docs con este
+ * prefijo cuando el deal general tiene en Bank 1..5 un banco con el que Cofidis no se envía.
+ */
+export function isBankBlock(reason: string): boolean {
+  return reason.startsWith('Banco incompatible')
+}
+
+/** Etiqueta del estado; un pendiente bloqueado por banco se distingue de uno al que solo le faltan documentos. */
+export function statusLabel(s: Pick<LenderSubmission, 'status' | 'missing_docs'>): string {
+  if (s.status === 'pending_docs' && (s.missing_docs ?? []).some(isBankBlock)) return 'Bloqueado por banco'
+  return STATUS_LABEL[s.status]
+}

@@ -6,6 +6,8 @@
  * - dismissLenderSubmission: el caso no se va a enviar (descartado).
  * - relaunchLenderSubmission: vuelve a lanzar el flujo n8n de la entidad. En un caso pendiente es un reintento
  *   (p. ej. tras subir la documentación); en uno ya enviado es un relanzamiento con force = true.
+ *   Con override = true (solo casos pendientes) es un envío forzado: n8n no bloquea por documentación incompleta
+ *   ni por bancos incompatibles (como el "Enviar" de Kutxabank).
  * El estado "enviado" lo registra siempre el flujo automático (POST /api/lender-submissions).
  * Todas las acciones quedan en lender_submission_events con quién las pidió.
  */
@@ -64,7 +66,7 @@ const SEND_WEBHOOKS: Record<string, string> = {
   'cofidis:loans_pipeline': 'https://huspy.app.n8n.cloud/webhook/cofidis-prestamo-7c41e9d2',
 }
 
-export async function relaunchLenderSubmission(id: string): Promise<LenderActionResult> {
+export async function relaunchLenderSubmission(id: string, opts: { override?: boolean } = {}): Promise<LenderActionResult> {
   if (!UUID_RE.test(id)) return { ok: false, error: 'ID inválido' }
   const email = await currentUserEmail()
   if (!email) return { ok: false, error: 'Sesión no válida' }
@@ -84,11 +86,16 @@ export async function relaunchLenderSubmission(id: string): Promise<LenderAction
 
   // Un caso ya enviado solo se reenvía con force = true (relanzamiento explícito)
   const force = row.status === 'sent'
+  // El envío forzado solo aplica a casos pendientes (en uno enviado sería un reenvío, que ya va con force)
+  const override = opts.override === true
+  if (override && row.status !== 'pending_docs' && row.status !== 'error') {
+    return { ok: false, error: 'Solo se puede forzar el envío de un caso pendiente' }
+  }
   try {
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-offers-secret': secret },
-      body: JSON.stringify({ deal_id: row.deal_id, force, requested_by: email }),
+      body: JSON.stringify({ deal_id: row.deal_id, force, override, requested_by: email }),
     })
     if (!res.ok) return { ok: false, error: `n8n respondió ${res.status}` }
   } catch (e) {
@@ -101,7 +108,7 @@ export async function relaunchLenderSubmission(id: string): Promise<LenderAction
     source: row.source,
     deal_id: row.deal_id,
     status: row.status,
-    detail: `${force ? 'Relanzamiento (force)' : 'Reintento de envío'} solicitado por ${email}`,
+    detail: `${force ? 'Relanzamiento (force)' : override ? 'Envío forzado (sin bloqueo por documentación ni bancos)' : 'Reintento de envío'} solicitado por ${email}`,
   })
   revalidatePath('/dashboard/prestamos')
   return { ok: true }
