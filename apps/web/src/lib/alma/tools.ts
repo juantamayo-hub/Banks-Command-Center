@@ -1,7 +1,8 @@
 /**
  * Herramientas de Alma (todas de SOLO LECTURA). Las "acciones" (marcar_problema_tecnico, preparar_mensaje_slack,
  * regenerar_dossier) no ejecutan nada: solo muestran en la interfaz un botón que pulsa la persona.
- * buzon_buscar / buzon_leer solo existen para los emails de ALMA_MAILBOX_EMAILS (almaToolsFor + recomprobación).
+ * buzon_buscar / buzon_leer solo existen para los emails de ALMA_MAILBOX_EMAILS y solo desde el propio Command Center
+ * (sesión de Supabase), nunca vía el proxy del Request Hub (almaToolsFor + recomprobación).
  */
 
 import type Anthropic from '@anthropic-ai/sdk'
@@ -225,9 +226,15 @@ export const ALMA_MAILBOX_TOOLS: Anthropic.Tool[] = [
 
 const MAILBOX_TOOL_NAMES = new Set(ALMA_MAILBOX_TOOLS.map((t) => t.name))
 
-/** Lista de herramientas para este usuario (el buzón solo si está en ALMA_MAILBOX_EMAILS). */
-export function almaToolsFor(email: string | null | undefined): Anthropic.Tool[] {
-  return mailboxAllowedFor(email) ? [...ALMA_TOOLS, ...ALMA_MAILBOX_TOOLS] : ALMA_TOOLS
+export type AlmaApp = 'command_center' | 'request_hub'
+
+/** Buzón: solo usuarios de ALMA_MAILBOX_EMAILS y solo con sesión propia del Command Center (no vía Request Hub). */
+const mailboxAllowed = (email: string | null | undefined, app: AlmaApp | null | undefined) =>
+  app === 'command_center' && mailboxAllowedFor(email)
+
+/** Lista de herramientas para este usuario (el buzón solo si está en ALMA_MAILBOX_EMAILS y viene del Command Center). */
+export function almaToolsFor(email: string | null | undefined, app: AlmaApp | null | undefined): Anthropic.Tool[] {
+  return mailboxAllowed(email, app) ? [...ALMA_TOOLS, ...ALMA_MAILBOX_TOOLS] : ALMA_TOOLS
 }
 
 export interface ToolOutcome {
@@ -258,10 +265,10 @@ function notasDelBanco(notas: Array<{ banco: string | null; origen: string; nota
   return out.slice(0, 10)
 }
 
-export async function runAlmaTool(name: string, input: Record<string, unknown>, ctx: { email?: string | null } = {}): Promise<ToolOutcome> {
+export async function runAlmaTool(name: string, input: Record<string, unknown>, ctx: { email?: string | null; app?: AlmaApp | null } = {}): Promise<ToolOutcome> {
   try {
     // Recomprobación: aunque el modelo pida una herramienta del buzón, solo se ejecuta para usuarios autorizados
-    if (MAILBOX_TOOL_NAMES.has(name) && !mailboxAllowedFor(ctx.email)) return { ok: false, content: `Herramienta desconocida: ${name}` }
+    if (MAILBOX_TOOL_NAMES.has(name) && !mailboxAllowed(ctx.email, ctx.app)) return { ok: false, content: `Herramienta desconocida: ${name}` }
     const supabase = await createAdminClient()
     switch (name) {
       case 'buscar_cliente': {

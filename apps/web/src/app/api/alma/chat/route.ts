@@ -113,7 +113,7 @@ export async function POST(req: Request) {
               { type: 'text', text: ALMA_SYSTEM, cache_control: { type: 'ephemeral' } },
               { type: 'text', text: [almaContext(who.email, who.app), lessons].filter(Boolean).join('\n\n') },
             ],
-            tools: almaToolsFor(who.email),
+            tools: almaToolsFor(who.email, who.app),
             messages,
           })
           // El texto corto antes de usar una herramienta ("Voy a buscarlo…", a veces en inglés) no se muestra:
@@ -167,7 +167,7 @@ export async function POST(req: Request) {
             toolUses.map(async (tu) => {
               send({ type: 'tool', name: tu.name })
               const input = (tu.input && typeof tu.input === 'object' ? tu.input : {}) as Record<string, unknown>
-              const out = await runAlmaTool(tu.name, input, { email: who.email })
+              const out = await runAlmaTool(tu.name, input, { email: who.email, app: who.app })
               toolsUsed.push({ name: tu.name, input, ok: out.ok })
               if (out.technical) {
                 technical = out.technical
