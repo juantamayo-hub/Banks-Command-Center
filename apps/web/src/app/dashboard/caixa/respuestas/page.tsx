@@ -113,7 +113,19 @@ function parseWorkbook(wb: import('xlsx').WorkBook, rawStrings = false, legacy =
   // raw:false to return the string value rather than the underlying number
   const raw = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '', raw: !rawStrings })
 
-  // PROVISIONAL "Método antiguo": fixed old-layout columns, exactly as before 19-oct-2026
+  // PROVISIONAL "Método antiguo": fixed old-layout columns, exactly as before 19-oct-2026.
+  // Refuse files in the new layout: with shifted columns the resolution would be a date,
+  // which also breaks the dedup key (duplicate notes / wrong lost reasons).
+  if (legacy) {
+    const header = ((raw[0] as unknown[]) ?? []).map(normHeader)
+    const isOldLayout =
+      HEADER_ALIASES.RESOLUCION.includes(header[COL.RESOLUCION]) &&
+      HEADER_ALIASES.ESTADO_LEAD.includes(header[COL.ESTADO_LEAD]) &&
+      HEADER_ALIASES.FECHA_CREACION.includes(header[COL.FECHA_CREACION])
+    if (!isOldLayout) {
+      throw new Error('este archivo no tiene el formato antiguo (falta "Resolución comercial" en la columna F). Súbelo en la zona azul.')
+    }
+  }
   const col = legacy ? { ...COL } : resolveColumns((raw[0] as unknown[]) ?? [])
   const get = (row: unknown[], idx: number) => (idx === -1 ? '' : cellStr(row, idx))
 
