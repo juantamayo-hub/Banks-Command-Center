@@ -17,7 +17,8 @@ export const ALLOWED_DOMAINS = ['huspy.io', 'bayteca.com']
 export const isCompanyEmail = (email: string | null | undefined): boolean =>
   ALLOWED_DOMAINS.includes(String(email ?? '').trim().toLowerCase().split('@')[1] ?? '')
 
-function safeEqual(a: string, b: string): boolean {
+/** Comparación en tiempo constante para secretos compartidos. */
+export function safeEqual(a: string, b: string): boolean {
   const ab = Buffer.from(a)
   const bb = Buffer.from(b)
   return ab.length === bb.length && timingSafeEqual(ab, bb)

@@ -21,7 +21,7 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { recordFlowEvents } from '@/lib/flowEvents'
 import { hubComment, hubTicketsForDeal } from '@/lib/requestHub'
-import { isCompanyEmail } from '@/lib/alma/auth'
+import { isCompanyEmail, safeEqual } from '@/lib/alma/auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -85,7 +85,8 @@ function commentText(b: RegeneratedBody): string {
 
 export async function POST(req: Request) {
   const secret = process.env.OFFERS_API_SECRET
-  if (!secret || req.headers.get('x-offers-secret') !== secret) {
+  const given = req.headers.get('x-offers-secret')
+  if (!secret || !given || !safeEqual(given, secret)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
