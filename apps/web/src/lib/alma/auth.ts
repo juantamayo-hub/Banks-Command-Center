@@ -11,7 +11,11 @@ import { requireAuth } from '@/lib/auth/requireAuth'
 import { almaAllowedFor, almaEnabled } from './config'
 import { isAlmaAdmin } from './admins'
 
-const ALLOWED_DOMAINS = ['huspy.io', 'bayteca.com']
+export const ALLOWED_DOMAINS = ['huspy.io', 'bayteca.com']
+
+/** true si el email es de la empresa (huspy.io / bayteca.com). */
+export const isCompanyEmail = (email: string | null | undefined): boolean =>
+  ALLOWED_DOMAINS.includes(String(email ?? '').trim().toLowerCase().split('@')[1] ?? '')
 
 function safeEqual(a: string, b: string): boolean {
   const ab = Buffer.from(a)
