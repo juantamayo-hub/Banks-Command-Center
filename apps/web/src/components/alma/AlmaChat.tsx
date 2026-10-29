@@ -71,6 +71,33 @@ interface ChatMessage {
 // Los asteriscos sueltos o mal cerrados (p. ej. «*texto***») se quitan para que no se vean en pantalla.
 const cleanStars = (t: string) => t.replace(/\*{2,}/g, '').replace(/(^|\s)\*(?=\S)/g, '$1').replace(/(\S)\*(?=\s|$|[.,;:!?)])/g, '$1')
 
+// Solo se pintan como enlace clicable las URLs https de hosts conocidos (Pipedrive, Google Drive/Docs, el propio
+// Command Center y el Request Hub). Cualquier otra URL se muestra como texto plano: evita que un correo con
+// instrucciones ocultas (prompt injection) consiga que Alma genere un enlace que saque datos a un dominio externo.
+const LINK_HOSTS = new Set(
+  [
+    'mdsl.pipedrive.com',
+    'drive.google.com',
+    'docs.google.com',
+    'banks-command-center.vercel.app',
+    'staging-banks-command-center.vercel.app',
+    process.env.NEXT_PUBLIC_REQUEST_HUB_HOST,
+  ]
+    .map((h) => String(h ?? '').trim().toLowerCase())
+    .filter(Boolean),
+)
+
+function isAllowedLink(href: string): boolean {
+  try {
+    const u = new URL(href)
+    if (u.protocol !== 'https:' || u.username || u.password) return false
+    const host = u.hostname.toLowerCase()
+    return LINK_HOSTS.has(host) || (typeof window !== 'undefined' && host === window.location.hostname.toLowerCase())
+  } catch {
+    return false
+  }
+}
+
 function renderInline(text: string, keyBase: string): ReactNode[] {
   const out: ReactNode[] = []
   const re = /\*{2,3}([^*]+?)\*{2,3}|(?<![\w*])\*([^*\s][^*]*?)\*(?![\w*])|\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s)]+)/g
@@ -83,6 +110,12 @@ function renderInline(text: string, keyBase: string): ReactNode[] {
     else if (m[2]) out.push(<em key={`${keyBase}-i${i++}`}>{cleanStars(m[2])}</em>)
     else {
       const href = m[4] ?? m[5]
+      if (!isAllowedLink(href)) {
+        // Host no permitido: texto plano, sin enlace (se ve la URL completa para que la persona sepa a dónde iría)
+        out.push(m[3] ? `${cleanStars(m[3])} (${href})` : href)
+        last = m.index + m[0].length
+        continue
+      }
       out.push(
         <a key={`${keyBase}-a${i++}`} href={href} target="_blank" rel="noopener noreferrer" className="font-medium text-bayteca-green underline underline-offset-2 hover:opacity-80">
           {m[3] ? cleanStars(m[3]) : 'enlace'}
