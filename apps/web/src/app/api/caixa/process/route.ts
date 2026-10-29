@@ -167,6 +167,28 @@ const RESOLUCION_LOOKUP_NORM: Record<string, number> = Object.fromEntries(
   Object.entries(RESOLUCION_LOOKUP).map(([k, v]) => [normText(k), v])
 )
 
+// ── PROVISIONAL — old file layout ("Método antiguo", red panel on the page) ─────
+// Caixa will temporarily send the daily file in the layout used until 16-oct-2026.
+// Legacy mode reproduces the mapping exactly as it was before the 19-oct adaptation
+// (commit 079b3a4): no "Detalle Estado" reasons, "Sin vivienda" → 403, original STAGE_MAP.
+// Remove together with the red panel once the new layout is back for good.
+const NEW_LAYOUT_RESOLUTIONS = new Set([
+  'sin vivienda/sin reserva/sin arras', 'ya enviada por la misma plataforma', 'ya enviada por otra plataforma',
+  'arras fuera de plazo', 'cliente no interesado', 'envío no cumple criterios', 'falta documentación convenio',
+  'gestión previa en oficina', 'incidencia lopd/documentación', 'perfil de riesgo - dti', 'perfil de riesgo - ltv',
+  'perfil de riesgo - edad+plazo excedido', 'perfil de riesgo - plazo fuera de límites',
+  'perfil de riesgo - criterios internacional', 'pruebas técnicas',
+])
+const RESOLUCION_LOOKUP_LEGACY: Record<string, number> = {
+  ...Object.fromEntries(Object.entries(RESOLUCION_LOOKUP).filter(([k]) => !NEW_LAYOUT_RESOLUTIONS.has(k))),
+  'primer contacto sin vivienda': 3146,
+  'admisión sin vivienda': 3146,
+  'sin vivienda': 3146,
+}
+const RESOLUCION_LOOKUP_LEGACY_NORM: Record<string, number> = Object.fromEntries(
+  Object.entries(RESOLUCION_LOOKUP_LEGACY).map(([k, v]) => [normText(k), v])
+)
+
 const PIPEDRIVE_LOST_REASON_FIELD = '5af7c8a4d8341bfe53526b6a7b4e2fc793503a90'
 const PIPEDRIVE_EXTERNAL_ID_FIELD = '4673f6bf937722b6dee1afa5537f22136a396b69'
 
@@ -216,6 +238,16 @@ const STAGE_MAP: Record<string, Record<string, number>> = {
   },
 }
 
+// PROVISIONAL — stage mapping of the old file layout (exact match, as before 19-oct-2026)
+const STAGE_MAP_LEGACY: Record<string, Record<string, number>> = {
+  '2 - SIA EN CURSO': STAGE_MAP['2 - SIA EN CURSO'],
+  '3 - EN FIRMA': {
+    'Aprobada pendiente escritura': 74,
+    'Aprobada pendiente fecha': 74,
+    'Pendiente acta notarial': 74,
+  },
+}
+
 // STAGE_MAP keyed by normText() so badly-encoded files still match
 const STAGE_MAP_NORM: Record<string, Record<string, number>> = Object.fromEntries(
   Object.entries(STAGE_MAP).map(([estado, motivos]) => [
@@ -240,7 +272,14 @@ function parseFechaCreacion(raw: string): Date | null {
 }
 
 
-function getTargetStage(estadoLead: string, motivoPendiente: string): { stageId: number; markWon: boolean } | null {
+function getTargetStage(estadoLead: string, motivoPendiente: string, legacy = false): { stageId: number; markWon: boolean } | null {
+  if (legacy) {
+    const estado = estadoLead.trim()
+    const motivo = motivoPendiente.trim()
+    if (estado === '4 - FORMALIZADA') return { stageId: 75, markWon: true }
+    const stageId = STAGE_MAP_LEGACY[estado]?.[motivo]
+    return stageId ? { stageId, markWon: false } : null
+  }
   const estado = normText(estadoLead)
   const motivo = normText(motivoPendiente)
   if (estado === normText('4 - FORMALIZADA')) return { stageId: 75, markWon: true }
@@ -293,11 +332,13 @@ function buildNoteContent(row: ParsedCaixaRow, fechaProcesado: string): string {
   ].join('\n')
 }
 
-async function matchLostReason(resolutionText: string): Promise<number> {
+async function matchLostReason(resolutionText: string, legacy = false): Promise<number> {
+  const lookup = legacy ? RESOLUCION_LOOKUP_LEGACY : RESOLUCION_LOOKUP
+  const lookupNorm = legacy ? RESOLUCION_LOOKUP_LEGACY_NORM : RESOLUCION_LOOKUP_NORM
   // 1. Deterministic lookup (normalized) — no AI call needed for known resolutions
   const normalized = normText(resolutionText)
-  if (normalized && RESOLUCION_LOOKUP_NORM[normalized] !== undefined) {
-    return RESOLUCION_LOOKUP_NORM[normalized]
+  if (normalized && lookupNorm[normalized] !== undefined) {
+    return lookupNorm[normalized]
   }
 
   // 2. Claude fallback for unknown resolutions
@@ -308,7 +349,7 @@ async function matchLostReason(resolutionText: string): Promise<number> {
     .join('\n')
 
   // Build few-shot examples from the lookup table to guide Claude
-  const examples = Object.entries(RESOLUCION_LOOKUP)
+  const examples = Object.entries(lookup)
     .slice(0, 10)
     .map(([res, id]) => `"${res}" → ${id}`)
     .join('\n')
@@ -518,7 +559,7 @@ const CLAIM_STALE_MS = 15 * 60 * 1000
 
 export async function POST(req: NextRequest) {
 
-  let body: { rows?: unknown; date_from?: unknown; date_to?: unknown; start?: unknown; count?: unknown }
+  let body: { rows?: unknown; date_from?: unknown; date_to?: unknown; start?: unknown; count?: unknown; legacy?: unknown }
   try {
     body = await req.json()
   } catch {
@@ -542,6 +583,8 @@ export async function POST(req: NextRequest) {
   const start = Math.max(0, Number.isInteger(body.start) ? (body.start as number) : 0)
   const count = Number.isInteger(body.count) && (body.count as number) > 0 ? (body.count as number) : rows.length
   const end = Math.min(rows.length, start + count)
+  // PROVISIONAL: old file layout and mapping (red "Método antiguo" panel)
+  const legacy = body.legacy === true
 
   const supabase = await createAdminClient()
   const fechaProcesado = new Date().toLocaleDateString('es-ES')
@@ -786,9 +829,11 @@ export async function POST(req: NextRequest) {
     if (isClosed) {
       try {
         // Old layout: reason in "Resolución" (col F). New layout (19-oct-2026): no such column,
-        // the reason comes in "Detalle Estado" (col_E)
-        const resolutionText = ((row.col_F ?? '').trim() || (row.col_E ?? '').trim())
-        lostReasonId = await matchLostReason(resolutionText)
+        // the reason comes in "Detalle Estado" (col_E). Legacy mode: col F only, as before.
+        const resolutionText = legacy
+          ? (row.col_F ?? '').trim()
+          : ((row.col_F ?? '').trim() || (row.col_E ?? '').trim())
+        lostReasonId = await matchLostReason(resolutionText, legacy)
         await pipedriveMarkLost(dealId, lostReasonId)
         markedLost = true
       } catch (err) {
@@ -810,7 +855,7 @@ export async function POST(req: NextRequest) {
     let stageWarning: string | undefined
 
     if (!isClosed) {
-      const target = getTargetStage(estadoNorm, motivoNorm)
+      const target = getTargetStage(estadoNorm, motivoNorm, legacy)
       if (target) {
         // Solo avanzar: never move a deal back to an earlier stage than the one it is in
         const currentIdx = currentStageId !== null ? STAGE_ORDER.indexOf(currentStageId) : -1
@@ -843,7 +888,7 @@ export async function POST(req: NextRequest) {
       marked_lost: markedLost,
       lost_reason_id: lostReasonId ?? null,
       // resolution_text: derived reason — resolución si cerrado, motivo pendiente si no
-      resolution_text: isClosed ? (resolucionNorm || motivoNorm) : motivoNorm,
+      resolution_text: isClosed ? (legacy ? resolucionNorm : (resolucionNorm || motivoNorm)) : motivoNorm,
       error_message: combinedWarning,
       processed_at: new Date().toISOString(),
     }).eq('id', claimId)

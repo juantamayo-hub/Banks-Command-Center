@@ -106,14 +106,15 @@ function cellStr(row: unknown[], idx: number): string {
   return String(val).trim()
 }
 
-function parseWorkbook(wb: import('xlsx').WorkBook, rawStrings = false): ParsedCaixaRow[] {
+function parseWorkbook(wb: import('xlsx').WorkBook, rawStrings = false, legacy = false): ParsedCaixaRow[] {
   const ws = wb.Sheets[wb.SheetNames[0]]
   // raw:false when rawStrings=true (CSV) → sheet_to_json returns cell text instead of raw values,
   // needed because XLSX.read with raw:true preserves string types but sheet_to_json still needs
   // raw:false to return the string value rather than the underlying number
   const raw = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '', raw: !rawStrings })
 
-  const col = resolveColumns((raw[0] as unknown[]) ?? [])
+  // PROVISIONAL "Método antiguo": fixed old-layout columns, exactly as before 19-oct-2026
+  const col = legacy ? { ...COL } : resolveColumns((raw[0] as unknown[]) ?? [])
   const get = (row: unknown[], idx: number) => (idx === -1 ? '' : cellStr(row, idx))
 
   // Skip header row
@@ -159,9 +160,14 @@ export default function CaixaRespuestasPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const processingRef = useRef(false)
   const [progress, setProgress] = useState(0)
+  // PROVISIONAL: file uploaded through the red "Método antiguo" panel (old layout + old mapping)
+  const [legacy, setLegacy] = useState(false)
+  const [legacyDragOver, setLegacyDragOver] = useState(false)
+  const legacyInputRef = useRef<HTMLInputElement>(null)
 
-  const handleFile = useCallback((file: File) => {
+  const handleFile = useCallback((file: File, legacyMode = false) => {
     setFileName(file.name)
+    setLegacy(legacyMode)
     const isCSV = file.name.toLowerCase().endsWith('.csv')
     const reader = new FileReader()
     reader.onload = (e) => {
@@ -169,7 +175,7 @@ export default function CaixaRespuestasPage() {
         const wb = isCSV
           ? XLSX.read(e.target!.result as string, { type: 'string', raw: true })  // raw:true preserves "03/06/2026" as string; without it xlsx converts to serial using m/d/yyyy (American) losing Spanish d/m/yyyy
           : XLSX.read(e.target!.result as ArrayBuffer, { type: 'array', cellDates: true })
-        const rows = parseWorkbook(wb, isCSV)
+        const rows = parseWorkbook(wb, isCSV, legacyMode)
         setParsedRows(rows)
         setStage('previewing')
       } catch (err) {
@@ -195,6 +201,18 @@ export default function CaixaRespuestasPage() {
     if (file) handleFile(file)
   }, [handleFile])
 
+  const onLegacyDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setLegacyDragOver(false)
+    const file = e.dataTransfer.files[0]
+    if (file) handleFile(file, true)
+  }, [handleFile])
+
+  const onLegacyFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) handleFile(file, true)
+  }, [handleFile])
+
   const handleProcess = useCallback(async () => {
     if (processingRef.current) return   // never two uploads from the same page
     processingRef.current = true
@@ -208,7 +226,7 @@ export default function CaixaRespuestasPage() {
         const res = await fetch('/api/caixa/process', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ rows: parsedRows, date_from: dateFrom, start, count: BATCH_SIZE }),
+          body: JSON.stringify({ rows: parsedRows, date_from: dateFrom, start, count: BATCH_SIZE, legacy }),
         })
         const text = await res.text()
         let data: ProcessResponse & { next_start?: number | null; error?: string }
@@ -242,11 +260,13 @@ export default function CaixaRespuestasPage() {
     } finally {
       processingRef.current = false
     }
-  }, [parsedRows, dateFrom])
+  }, [parsedRows, dateFrom, legacy])
 
   const reset = useCallback(() => {
     setStage('idle')
+    setLegacy(false)
     setFileName(null)
+    if (legacyInputRef.current) legacyInputRef.current.value = ''
     setParsedRows([])
     setResponse(null)
     if (fileInputRef.current) fileInputRef.current.value = ''
@@ -262,7 +282,7 @@ export default function CaixaRespuestasPage() {
   }).length
 
   return (
-    <div className="p-6 md:p-8 min-h-full flex flex-col items-center max-w-3xl mx-auto w-full">
+    <div className="p-6 md:p-8 min-h-full flex flex-col items-center max-w-5xl mx-auto w-full">
       <div className="mb-8 w-full">
         <PageHeader
           title="Respuestas de Caixa"
@@ -289,9 +309,18 @@ export default function CaixaRespuestasPage() {
         />
       </div>
 
+      {/* PROVISIONAL: reminder that this upload uses the old method */}
+      {legacy && stage !== 'idle' && (
+        <div className="mb-4 w-full rounded-lg border-2 border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <span className="font-semibold">Método antiguo (provisional)</span> — archivo con el formato anterior al 19-oct:
+          columnas fijas y mapeo de estados y motivos de entonces.
+        </div>
+      )}
+
       {/* Drop zone — only when idle */}
       {stage === 'idle' && (
         <div className="w-full space-y-5">
+        <div className="grid gap-5 md:grid-cols-2">
         <div
           onDrop={onDrop}
           onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
@@ -317,6 +346,27 @@ export default function CaixaRespuestasPage() {
             {['.xlsx', '.xls', '.csv'].map((f) => <span key={f} className="rounded-full bg-sky-50 px-2.5 py-0.5 text-[11px] font-medium text-sky-600 ring-1 ring-inset ring-sky-200">{f}</span>)}
           </div>
           <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={onFileChange} />
+        </div>
+
+        {/* PROVISIONAL — old file layout while the new one is paused. Remove with the legacy code in /api/caixa/process */}
+        <div
+          onDrop={onLegacyDrop}
+          onDragOver={(e) => { e.preventDefault(); setLegacyDragOver(true) }}
+          onDragLeave={() => setLegacyDragOver(false)}
+          onClick={() => legacyInputRef.current?.click()}
+          className={`relative flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-8 py-14 text-center transition-all duration-200 ${
+            legacyDragOver
+              ? 'border-red-500 bg-red-100 shadow-lg scale-[1.01]'
+              : 'border-red-300 bg-red-50 hover:border-red-400 hover:bg-red-100/60 hover:shadow-md'
+          }`}
+        >
+          <span className="absolute right-3 top-3 rounded-full bg-red-600 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-white">Provisional</span>
+          <svg className="mb-3 h-8 w-8 text-red-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
+          <p className="text-sm font-semibold text-red-800">{legacyDragOver ? 'Suelta el archivo aquí' : 'Método antiguo'}</p>
+          <p className="mt-1 text-xs text-red-700">Excel con el formato anterior al 19-oct (con «Resolución comercial»)</p>
+          <p className="mt-3 text-[11px] leading-tight text-red-600">Columnas fijas y mapeo de estados y motivos de entonces. Úsalo solo mientras Caixa envíe el archivo antiguo.</p>
+          <input ref={legacyInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={onLegacyFileChange} />
+        </div>
         </div>
 
         {/* Workflow info */}
