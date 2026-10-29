@@ -26,6 +26,10 @@ const TOOL_LABELS: Record<string, string> = {
   ofertas_pendientes: 'Revisando las ofertas por revisar…',
   equipo: 'Mirando quién lleva qué…',
   preparar_mensaje_slack: 'Preparando el mensaje de Slack…',
+  estado_dossier: 'Revisando el estado del dossier…',
+  regenerar_dossier: 'Preparando la regeneración del dossier…',
+  buzon_buscar: 'Buscando en el buzón…',
+  buzon_leer: 'Leyendo el correo…',
 }
 
 // Guía «Cómo usarme»: vídeo corto + ejemplos que se pueden lanzar con un clic
@@ -58,6 +62,7 @@ interface ChatMessage {
   reportMsg?: string
   error?: boolean
   slack?: { destinatario: string; nombre: string; mensaje: string; state: 'draft' | 'sending' | 'sent' | 'error'; info?: string }
+  regen?: { deal_id: number; motivo: string; state: 'idle' | 'sending' | 'done' | 'error'; info?: string }
   dbId?: string | null
   feedback?: { rating: 'up' | 'down'; comment: string; state: 'editing' | 'sending' | 'sent' | 'error'; info?: string }
 }
@@ -199,6 +204,7 @@ export default function AlmaChat({ apiBase = '/api/alma', envLabel }: { apiBase?
           else if (ev.type === 'tool') patch(botId, (m) => ({ ...m, status: TOOL_LABELS[ev.name as string] ?? 'Consultando datos…' }))
           else if (ev.type === 'technical') patch(botId, (m) => ({ ...m, technical: ev.resumen as string, report: 'idle' }))
           else if (ev.type === 'slack_draft') patch(botId, (m) => ({ ...m, slack: { destinatario: ev.destinatario as string, nombre: ev.nombre as string, mensaje: ev.mensaje as string, state: 'draft' } }))
+          else if (ev.type === 'dossier_regen') patch(botId, (m) => ({ ...m, regen: { deal_id: Number(ev.deal_id), motivo: String(ev.motivo ?? ''), state: 'idle' } }))
           else if (ev.type === 'error') patch(botId, (m) => ({ ...m, text: m.text || (typeof ev.message === 'string' && ev.message ? ev.message : 'Algo ha fallado. ¿Lo intentas otra vez?'), status: null, error: true }))
           else if (ev.type === 'done') patch(botId, (m) => ({ ...m, status: null, dbId: (ev.message_id as string | null) ?? null }))
         }
@@ -241,6 +247,24 @@ export default function AlmaChat({ apiBase = '/api/alma', envLabel }: { apiBase?
       patch(id, (m) => ({ ...m, slack: { ...slack, state: res.ok ? 'sent' : 'error', info: res.ok ? `¡Enviado a ${slack.nombre} por Slack!` : data.error || 'No se pudo enviar.' } }))
     } catch {
       patch(id, (m) => ({ ...m, slack: { ...slack, state: 'error', info: 'No se pudo enviar.' } }))
+    }
+  }, [apiBase, conversationId, patch])
+
+  const regenDossier = useCallback(async (id: string, regen: NonNullable<ChatMessage['regen']>) => {
+    patch(id, (m) => ({ ...m, regen: { ...regen, state: 'sending' } }))
+    try {
+      const res = await fetch(`${apiBase}/dossier`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversation_id: conversationId, deal_id: regen.deal_id, motivo: regen.motivo }),
+      })
+      const data = await res.json().catch(() => ({}))
+      const info = data.accepted
+        ? 'En marcha. El dossier nuevo llegará a Drive, al Command Center, al ticket del Request Hub y a Slack en unos minutos.'
+        : data.error || (data.reason ? `No se pudo lanzar (${data.reason}).` : 'No se pudo lanzar.')
+      patch(id, (m) => ({ ...m, regen: { ...regen, state: data.accepted ? 'done' : 'error', info } }))
+    } catch {
+      patch(id, (m) => ({ ...m, regen: { ...regen, state: 'error', info: 'No se pudo lanzar.' } }))
     }
   }, [apiBase, conversationId, patch])
 
@@ -436,6 +460,24 @@ export default function AlmaChat({ apiBase = '/api/alma', envLabel }: { apiBase?
                               {m.slack.state === 'sending' ? 'Enviando…' : `Enviar a ${m.slack.nombre}`}
                             </button>
                           </>
+                        )}
+                      </div>
+                    )}
+                    {m.regen && (
+                      <div className="rounded-xl bg-emerald-50 px-3 py-2 text-[12px] text-emerald-950 ring-1 ring-emerald-200">
+                        <p className="font-medium">📄 Regenerar el dossier del deal {m.regen.deal_id}</p>
+                        {m.regen.motivo && <p className="mt-0.5 text-emerald-900/80">{m.regen.motivo}</p>}
+                        {m.regen.state === 'done' || m.regen.state === 'error' ? (
+                          <p className={`mt-1 ${m.regen.state === 'error' ? 'text-red-700' : ''}`}>{m.regen.info}</p>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={m.regen.state === 'sending'}
+                            onClick={() => m.regen && regenDossier(m.id, m.regen)}
+                            className="mt-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                          >
+                            {m.regen.state === 'sending' ? 'Lanzando…' : 'Regenerar dossier'}
+                          </button>
                         )}
                       </div>
                     )}

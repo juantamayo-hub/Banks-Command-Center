@@ -8,6 +8,7 @@
  *   { type: 'text', delta }                texto de la respuesta
  *   { type: 'technical', resumen }         problema técnico → mostrar "Enviar reporte a Juanjo"
  *   { type: 'slack_draft', destinatario, nombre, mensaje }  borrador de DM de Slack (lo envía el usuario)
+ *   { type: 'dossier_regen', deal_id, motivo }  propuesta de regenerar el dossier (botón → POST /api/alma/dossier)
  *   { type: 'done', message_id }
  *   { type: 'error', message }
  *
@@ -20,7 +21,7 @@ import { almaAuth } from '@/lib/alma/auth'
 import { ALMA_DAILY_MESSAGE_LIMIT, ALMA_MODEL, almaEnv } from '@/lib/alma/config'
 import { ALMA_SYSTEM, almaContext } from '@/lib/alma/prompt'
 import { almaLessons } from '@/lib/alma/lessons'
-import { ALMA_TOOLS, runAlmaTool } from '@/lib/alma/tools'
+import { almaToolsFor, runAlmaTool } from '@/lib/alma/tools'
 import { madridDayStart } from '@/lib/dossierSends'
 
 export const dynamic = 'force-dynamic'
@@ -112,7 +113,7 @@ export async function POST(req: Request) {
               { type: 'text', text: ALMA_SYSTEM, cache_control: { type: 'ephemeral' } },
               { type: 'text', text: [almaContext(who.email, who.app), lessons].filter(Boolean).join('\n\n') },
             ],
-            tools: ALMA_TOOLS,
+            tools: almaToolsFor(who.email),
             messages,
           })
           // El texto corto antes de usar una herramienta ("Voy a buscarlo…", a veces en inglés) no se muestra:
@@ -166,13 +167,14 @@ export async function POST(req: Request) {
             toolUses.map(async (tu) => {
               send({ type: 'tool', name: tu.name })
               const input = (tu.input && typeof tu.input === 'object' ? tu.input : {}) as Record<string, unknown>
-              const out = await runAlmaTool(tu.name, input)
+              const out = await runAlmaTool(tu.name, input, { email: who.email })
               toolsUsed.push({ name: tu.name, input, ok: out.ok })
               if (out.technical) {
                 technical = out.technical
                 send({ type: 'technical', resumen: out.technical.resumen })
               }
               if (out.slackDraft) send({ type: 'slack_draft', ...out.slackDraft })
+              if (out.dossierRegen) send({ type: 'dossier_regen', ...out.dossierRegen })
               return { type: 'tool_result' as const, tool_use_id: tu.id, content: out.content, is_error: !out.ok }
             }),
           )
