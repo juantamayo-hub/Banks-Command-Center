@@ -52,13 +52,14 @@ export async function hubCloseTicket(ticketId: string): Promise<boolean> {
   return true
 }
 
-export async function hubComment(ticketId: string, body: string): Promise<void> {
+/** authorEmail opcional: si no se indica, firma REQUEST_HUB_AUTHOR_EMAIL (cuenta de sistema). */
+export async function hubComment(ticketId: string, body: string, authorEmail?: string): Promise<void> {
   const c = config()
   if (!c) return
   const res = await fetch(`${c.base}/api/external/tickets/${ticketId}/comment`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${c.secret}` },
-    body: JSON.stringify({ body, visibility: 'public', author_email: process.env.REQUEST_HUB_AUTHOR_EMAIL }),
+    body: JSON.stringify({ body, visibility: 'public', author_email: authorEmail || process.env.REQUEST_HUB_AUTHOR_EMAIL }),
   })
   if (!res.ok) throw new Error(`Request Hub POST comment ${res.status}: ${(await res.text()).slice(0, 200)}`)
 }

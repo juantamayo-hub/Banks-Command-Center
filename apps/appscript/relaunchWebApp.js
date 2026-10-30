@@ -400,10 +400,17 @@ function dispatchIbercajaDelayed_() {
  * Ejecuta UNA VEZ para guardar el secret en Script Properties.
  * Pon el mismo valor en APPS_SCRIPT_RELAUNCH_SECRET en .env.local / Vercel.
  */
-function setRelaunchSecret() {
-  var secret = 'CAMBIA_ESTO_POR_UN_SECRET_ALEATORIO_LARGO';
+function setRelaunchSecret(secret) {
+  // El secret ya NO se guarda en el código: vive en Script Properties
+  // (APPS_SCRIPT_RELAUNCH_SECRET). Defínelo en Configuración del proyecto →
+  // Propiedades de la secuencia de comandos, o llama setRelaunchSecret('<valor>')
+  // desde un snippet temporal que no se guarde.
+  if (!secret) {
+    Logger.log('ERROR: pasa el secret como argumento o defínelo en Script Properties (APPS_SCRIPT_RELAUNCH_SECRET).');
+    return;
+  }
   PropertiesService.getScriptProperties().setProperty('APPS_SCRIPT_RELAUNCH_SECRET', secret);
-  Logger.log('Secret guardado: ' + secret);
+  Logger.log('APPS_SCRIPT_RELAUNCH_SECRET guardado en Script Properties.');
 }
 
 /**
