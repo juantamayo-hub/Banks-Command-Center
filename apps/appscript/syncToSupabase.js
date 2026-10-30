@@ -545,14 +545,16 @@ function getServiceRoleKey_() {
  * Guarda el API token de Pipedrive en Script Properties.
  * Ejecutar UNA VEZ manualmente.
  */
-function setPipedriveApiToken() {
-  var token = 'PEGA_TU_PIPEDRIVE_API_TOKEN_AQUI';
-  if (token === 'PEGA_TU_PIPEDRIVE_API_TOKEN_AQUI') {
-    Logger.log('ERROR: Reemplaza el valor antes de ejecutar.');
+function setPipedriveApiToken(token) {
+  // El token NO se escribe en el código: vive en Script Properties (PIPEDRIVE_API_TOKEN).
+  // Defínelo en Configuración del proyecto → Propiedades de la secuencia de comandos,
+  // o llama setPipedriveApiToken('<token>') desde un snippet temporal que no se guarde.
+  if (!token) {
+    Logger.log('ERROR: pasa el token como argumento o defínelo en Script Properties (PIPEDRIVE_API_TOKEN).');
     return;
   }
   PropertiesService.getScriptProperties().setProperty('PIPEDRIVE_API_TOKEN', token);
-  Logger.log('PIPEDRIVE_API_TOKEN guardado correctamente.');
+  Logger.log('PIPEDRIVE_API_TOKEN guardado en Script Properties.');
 }
 
 /**
