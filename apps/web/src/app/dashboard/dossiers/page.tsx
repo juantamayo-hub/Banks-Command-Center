@@ -158,7 +158,7 @@ export default async function DossiersPage({ searchParams }: { searchParams: Pro
                       <td className="px-4 py-3">
                         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${st.cls}`}>{st.label}</span>
                         {d.dossier_key !== 'UNICO' && <span className="ml-1 text-xs text-gray-500">Tipo {d.dossier_key}</span>}
-                        {d.link_dossier && (
+                        {d.link_dossier && /^https:\/\/(drive|docs)\.google\.com\//.test(d.link_dossier) && (
                           <a href={d.link_dossier} target="_blank" rel="noopener noreferrer" className="ml-2 text-xs text-blue-600 hover:underline">Drive</a>
                         )}
                         {d.status === 'error' && (

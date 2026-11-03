@@ -64,6 +64,21 @@ export async function dispatchRow(
     return { ok: false, code: 'NOT_CC', error: 'Este banco se envía todavía por la hoja (interruptor en "Hoja")' }
   }
 
+  // Datos que faltaban al crear la línea (p. ej. "Importe Banco N" rellenado después): se releen del deal general.
+  // El importe es imprescindible: n8n busca el dossier en Drive por "<importe>€<expediente>".
+  if (!row.importe || !row.bank_deal_id) {
+    try {
+      const deal = await getGeneralDeal(row.opportunity_id)
+      const slot = deal?.slots.find((s) => resolveDispatchBank(banks, s.bank_name)?.bank_slug === bank.bank_slug)
+      const patch: Record<string, unknown> = {}
+      if (!row.importe && slot?.importe) patch.importe = row.importe = slot.importe
+      if (!row.bank_deal_id && slot?.bank_deal_id) patch.bank_deal_id = row.bank_deal_id = slot.bank_deal_id
+      if (Object.keys(patch).length) await db.from('sheet_rows').update(patch).eq('id', row.id)
+    } catch (e) {
+      console.error('[dispatch] relectura de Pipedrive', row.id, e)
+    }
+  }
+
   const { data: claim, error: claimErr } = await db.rpc('claim_dispatch', {
     p_row_id: row.id,
     p_action: action,

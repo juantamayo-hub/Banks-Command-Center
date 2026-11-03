@@ -17,7 +17,8 @@ const STUCK_MS = 15 * 60 * 1000
 const LOST_WINDOW_MS = 15 * 24 * 60 * 60 * 1000
 
 export async function GET(req: NextRequest) {
-  if (req.headers.get('authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
+  const cronSecret = process.env.CRON_SECRET
+  if (!cronSecret || req.headers.get('authorization') !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   const db = await createAdminClient()

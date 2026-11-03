@@ -15,7 +15,8 @@
  * signed action IDs), so arbitrary external callers cannot invoke this.
  */
 
-import { createAdminClient, createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
+import { sessionEmail } from '@/lib/bankConfigAuth'
 import { waitUntil } from '@vercel/functions'
 import { dispatchRow } from '@/lib/dispatch/engine'
 
@@ -36,19 +37,19 @@ export async function requestRelaunch(
     return { ok: false, error: 'ID de fila inválido', code: 'INVALID_ID' }
   }
 
+  const email = await sessionEmail()
+  if (!email) return { ok: false, error: 'Sesión caducada: vuelve a entrar', code: 'UNAUTHORIZED' }
+
   const supabase = await createAdminClient()
 
   // ── Líneas del Command Center (banco con el interruptor en "Command Center"): sin hoja ni Apps Script ──
   const { data: rowEngine } = await supabase.from('sheet_rows').select('engine').eq('id', sheet_row_id).maybeSingle()
   if ((rowEngine as { engine?: string } | null)?.engine === 'cc') {
-    const session = await createClient()
-    const { data: { user } } = await session.auth.getUser()
-    if (!user?.email) return { ok: false, error: 'Sesión caducada: vuelve a entrar', code: 'UNAUTHORIZED' }
     const r = await dispatchRow(supabase, {
       rowId: sheet_row_id,
       action: dispatch_action,
       force,
-      actor: `user:${user.email}`,
+      actor: `user:${email}`,
       source: 'manual',
     })
     return r.ok

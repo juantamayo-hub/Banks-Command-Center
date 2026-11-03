@@ -77,7 +77,8 @@ export async function POST(req: Request) {
   }
   const force = body.force === true || body.force === 'true'
   const source = str(body.source, 64)
-  const testMode = body.test_mode === true || body.test_mode === 'true'
+  // En producción se ignora: un envío real nunca puede saltarse el anti-duplicados con test_mode
+  const testMode = process.env.VERCEL_ENV !== 'production' && (body.test_mode === true || body.test_mode === 'true')
 
   const supabase = await createAdminClient()
 

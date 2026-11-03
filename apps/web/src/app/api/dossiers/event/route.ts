@@ -20,6 +20,7 @@ export const maxDuration = 120
 
 const EVENTS = ['created', 'ready', 'error'] as const
 const KEY_RE = /^[A-Z0-9_]{1,20}$/
+const DRIVE_LINK_RE = /^https:\/\/(drive|docs)\.google\.com\//
 
 const str = (v: unknown, max = 500): string | null => {
   const s = typeof v === 'string' ? v.trim() : typeof v === 'number' ? String(v) : ''
@@ -61,7 +62,10 @@ export async function POST(req: Request) {
     execution_id: str(b.execution_id, 64),
     test_mode: testMode,
   }
-  for (const k of ['cliente', 'owner', 'link_dossier'] as const) { const v = str(b[k]); if (v) patch[k] = v }
+  for (const k of ['cliente', 'owner'] as const) { const v = str(b[k]); if (v) patch[k] = v }
+  // El enlace va en el correo al banco y en la web: solo Google Drive / Docs (nunca javascript:, phishing…)
+  const link = str(b.link_dossier, 1000)
+  if (link && DRIVE_LINK_RE.test(link)) patch.link_dossier = link
   const importe = posNum(b.importe); if (importe) patch.importe = importe
   if (event === 'created') patch.status = 'generating'
   if (event === 'ready') { patch.status = 'ready'; patch.error_type = null; patch.error_text = null }
@@ -103,6 +107,6 @@ export async function POST(req: Request) {
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     console.error('[dossiers/event] lines', msg)
-    return NextResponse.json({ ok: false, dossier_id: dossier.id, error: msg }, { status: 502 })
+    return NextResponse.json({ ok: false, dossier_id: dossier.id, error: 'No se pudieron crear las líneas de envío' }, { status: 502 })
   }
 }
