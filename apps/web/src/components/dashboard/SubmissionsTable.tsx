@@ -215,7 +215,9 @@ export default function SubmissionsTable({
 
               if (mode === 'pendientes') {
                 return (
-                  <tr key={row.id} className="hover:bg-gray-50 transition-colors">
+                  <tr key={row.id} className={row.engine === 'cc' && row.status === 'sending'
+                    ? 'bg-indigo-50/60 transition-colors'
+                    : 'hover:bg-gray-50 transition-colors'}>
                     {indexCell}
                     {bankCell}
                     {clientCell}
@@ -249,6 +251,7 @@ export default function SubmissionsTable({
                             hasDispatch={hasDispatch}
                             bankSlug={bankSlug}
                             sheetRowNumber={row.sheet_row_number}
+                            engine={row.engine}
                           />
                         </div>
                         <DiscardButton rowId={row.id} />

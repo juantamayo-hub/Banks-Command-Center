@@ -36,7 +36,7 @@ export async function GET() {
     .eq('pipedrive_lost', false)
     .eq('is_discarded', false)
     // Igual que Pendientes: las líneas del Command Center que están saliendo solas no cuentan
-    .or(`and(engine.neq.cc,or(${pendingAgeFilter})),and(status.neq.sending,or(${pendingAgeFilter}))`)
+    .or(`and(engine.neq.cc,or(${pendingAgeFilter})),and(status.neq.sending,or(${pendingAgeFilter})),and(dispatch_source.neq.auto,or(${pendingAgeFilter}))`)
   if (noDispatchIds.length > 0) envios = envios.not('bank_id', 'in', `(${noDispatchIds.join(',')})`)
 
   const [enviosRes, platformRes, kutxaRes, ofertasRes, prestamosRes] = await Promise.all([

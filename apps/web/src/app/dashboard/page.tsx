@@ -51,9 +51,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const cutoffDate = new Date(Date.now() - PENDING_CUTOFF_MS).toISOString()
   // PostgREST: show row if timestamp_entry is recent OR (timestamp_entry is null AND created_at is recent)
   const pendingAgeFilter = `timestamp_entry.gte.${cutoffDate},and(timestamp_entry.is.null,created_at.gte.${cutoffDate})`
-  // Pendientes = lo que necesita acción. Las líneas del Command Center que están saliendo solas ('sending') no se
-  // muestran: aparecen en el contador "saliendo ahora" y, si fallan o se bloquean, vuelven a Pendientes con su motivo.
-  const pendingFilter = `and(engine.neq.cc,or(${pendingAgeFilter})),and(status.neq.sending,or(${pendingAgeFilter}))`
+  // Pendientes = lo que necesita acción. Las líneas del Command Center que están saliendo SOLAS (envío automático,
+  // 'sending') no se muestran: aparecen en el contador "saliendo ahora" y, si fallan o se bloquean, vuelven con su
+  // motivo. Las relanzadas a mano sí se ven (resaltadas) hasta que n8n informa.
+  const pendingFilter = `and(engine.neq.cc,or(${pendingAgeFilter})),and(status.neq.sending,or(${pendingAgeFilter})),and(dispatch_source.neq.auto,or(${pendingAgeFilter}))`
 
   // Pre-fetch bank IDs where has_dispatch=false (platform-only banks — excluded from pendientes)
   const { data: noDispatchBanksRaw } = await supabase
@@ -85,7 +86,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     pendingCountQuery,
     supabase.from('sheet_rows').select('*', { count: 'exact', head: true }).eq('status', 'sent'),
     supabase.from('banks').select('slug, name').eq('active', true).order('name', { ascending: true }),
-    supabase.from('sheet_rows').select('*', { count: 'exact', head: true }).eq('engine', 'cc').eq('status', 'sending'),
+    supabase.from('sheet_rows').select('*', { count: 'exact', head: true }).eq('engine', 'cc').eq('status', 'sending').eq('dispatch_source', 'auto'),
   ])
 
   // Main table query

@@ -50,6 +50,8 @@ interface RelaunchButtonProps {
   hasDispatch?: boolean | null
   bankSlug?: string | null
   sheetRowNumber?: number | null
+  /** 'cc' = línea del Command Center: el estado llega en tiempo real, sin bloqueo ni cuenta atrás */
+  engine?: string | null
 }
 
 export default function RelaunchButton({
@@ -59,7 +61,9 @@ export default function RelaunchButton({
   hasDispatch,
   bankSlug,
   sheetRowNumber,
+  engine,
 }: RelaunchButtonProps) {
+  const isCc = engine === 'cc'
   const router = useRouter()
   const [phase, setPhase] = useState<Phase>('idle')
   const [pendingAction, setPendingAction] = useState<DispatchAction>('ENVIAR')
@@ -88,7 +92,7 @@ export default function RelaunchButton({
   }
 
   // ── Dispatch lock: recently sent from platform, waiting for sync ──────────
-  if (locked && phase === 'idle') {
+  if (locked && !isCc && phase === 'idle') {
     return (
       <span className="flex items-center gap-1.5 flex-wrap">
         <span className="text-xs text-purple-600 font-medium">Enviando…</span>
@@ -103,6 +107,16 @@ export default function RelaunchButton({
         >
           Refrescar
         </button>
+      </span>
+    )
+  }
+
+  // Línea del Command Center enviándose: n8n informará y la fila se actualiza sola (tiempo real)
+  if (isCc && normalStatus === 'sending') {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-indigo-700">
+        <span className="h-2 w-2 animate-pulse rounded-full bg-indigo-500" />
+        Enviando a n8n…
       </span>
     )
   }
@@ -149,6 +163,13 @@ export default function RelaunchButton({
       }
       setErrorMsg(result.error)
       setPhase('error')
+      return
+    }
+
+    // Command Center: la línea ya está en 'sending' en la base; se refresca y el resultado llega en tiempo real
+    if (isCc) {
+      setPhase('idle')
+      router.refresh()
       return
     }
 
