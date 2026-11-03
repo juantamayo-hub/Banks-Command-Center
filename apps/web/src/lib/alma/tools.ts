@@ -422,8 +422,9 @@ export async function runAlmaTool(name: string, input: Record<string, unknown>, 
         const deal = intArg(input.deal_id)
         const motivo = String(input.motivo ?? '').trim().slice(0, 500)
         if (!deal) return { ok: false, content: 'deal_id no válido' }
-        const importe = input.importe_hipoteca == null || input.importe_hipoteca === '' ? null : intArg(input.importe_hipoteca)
-        if (input.importe_hipoteca != null && input.importe_hipoteca !== '' && !validImporte(importe)) {
+        // mismo criterio estricto que /api/alma/dossier (Number, no parseInt: "468.000" o "468000abc" no valen)
+        const importe = input.importe_hipoteca == null || input.importe_hipoteca === '' ? null : Number(input.importe_hipoteca)
+        if (importe !== null && !validImporte(importe)) {
           return { ok: false, content: 'importe_hipoteca no válido: tiene que ser un importe en euros entre 10.000 y 5.000.000.' }
         }
         return {
