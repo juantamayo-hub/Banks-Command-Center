@@ -36,8 +36,17 @@ async function pd<T>(path: string): Promise<T> {
 
 interface DealField { key: string; name: string; options?: { id: number; label: string }[] }
 
+// "Importe Banco 1–5" del deal general (mismos campos que usa el generador de dossier, nodo "Diccionary")
+const IMPORTE_FIELD_IDS = [
+  '745c37d4e2ebe1c8c3c9330f40d48925ef7ee32e',
+  '92522216e8423e9e022677eae0f1f82d02d88667',
+  'f985577ff66941b29905cb34a659a30cb3663fe4',
+  'fe8f74d3f422f4b0ae4d3b86b24c4450284a4a10',
+  'c20d814f4b7621590b2fac264dd4e5f90c54cb9b',
+] as const
+
 // Diccionario de campos: se cachea en la instancia (cambia muy rara vez)
-let fieldsCache: { at: number; optionLabels: Map<number, string>; importeKeys: (string | null)[] } | null = null
+let fieldsCache: { at: number; optionLabels: Map<number, string> } | null = null
 
 async function fieldDictionary() {
   if (fieldsCache && Date.now() - fieldsCache.at < 60 * 60 * 1000) return fieldsCache
@@ -53,10 +62,7 @@ async function fieldDictionary() {
   for (const key of BANK_FIELD_IDS) {
     for (const o of fields.find((f) => f.key === key)?.options ?? []) optionLabels.set(o.id, o.label)
   }
-  const importeKeys = [1, 2, 3, 4, 5].map(
-    (n) => fields.find((f) => f.name.trim().toLowerCase() === `importe banco ${n}`)?.key ?? null,
-  )
-  fieldsCache = { at: Date.now(), optionLabels, importeKeys }
+  fieldsCache = { at: Date.now(), optionLabels }
   return fieldsCache
 }
 
@@ -85,8 +91,7 @@ export async function getGeneralDeal(dealId: number): Promise<GeneralDeal | null
       const m = String(d[BANK_LINK_FIELD_IDS[i]] ?? '').match(/\/deal\/(\d+)/)
       bankDealId = m ? Number(m[1]) : null
     }
-    const importeKey = dict.importeKeys[i]
-    slots.push({ slot: i + 1, bank_name: label, bank_deal_id: bankDealId, importe: importeKey ? num(d[importeKey]) : null })
+    slots.push({ slot: i + 1, bank_name: label, bank_deal_id: bankDealId, importe: num(d[IMPORTE_FIELD_IDS[i]]) })
   })
   const person = d.person_id as { name?: string } | number | null
   const owner = d.user_id as { name?: string } | number | null
