@@ -36,6 +36,8 @@ export function reportBaseUrl(): string | null {
   if (process.env.VERCEL_ENV === 'production') return null
   const explicit = process.env.COMMAND_CENTER_PUBLIC_URL
   if (explicit) return explicit.replace(/\/$/, '')
+  // Alias fijo de la rama staging: es el que n8n tiene en su lista ($vars.COMMAND_CENTER_STAGING_URL)
+  if (process.env.VERCEL_GIT_COMMIT_REF === 'staging') return 'https://staging-banks-command-center.vercel.app'
   return process.env.VERCEL_BRANCH_URL ? `https://${process.env.VERCEL_BRANCH_URL}` : null
 }
 
