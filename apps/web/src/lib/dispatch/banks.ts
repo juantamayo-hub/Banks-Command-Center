@@ -56,7 +56,17 @@ export function resolveDispatchBank(list: DispatchBank[], pipedriveName: string)
   )
 }
 
+/**
+ * Bancos que staging prueba como si estuvieran en 'cc' SIN tocar el interruptor (la base es la misma que producción).
+ * Solo fuera de producción (y siempre en modo prueba: el correo va al email de prueba). DISPATCH_TEST_BANKS=a,b
+ */
+function stagingTestBanks(): Set<string> {
+  if (process.env.VERCEL_ENV === 'production') return new Set()
+  return new Set((process.env.DISPATCH_TEST_BANKS ?? 'cr_teruel').split(',').map((s) => s.trim()).filter(Boolean))
+}
+
 /** ¿El CC envía este banco? (correo + interruptor en 'cc' + webhook y fila de banks configurados) */
 export function isCcBank(b: DispatchBank | null | undefined): b is DispatchBank & { send_webhook_path: string; bank_id: number } {
-  return !!b && b.channel === 'email' && b.dispatch_engine === 'cc' && !!b.send_webhook_path && !!b.bank_id
+  if (!b || b.channel !== 'email' || !b.send_webhook_path || !b.bank_id) return false
+  return b.dispatch_engine === 'cc' || stagingTestBanks().has(b.bank_slug)
 }
