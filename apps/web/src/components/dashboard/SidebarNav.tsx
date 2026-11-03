@@ -145,6 +145,7 @@ export default function SidebarNav({ showBankConfig = true }: { showBankConfig?:
         <NavLink href="/dashboard?tab=pendientes" label="Pendientes" icon="clock" active={top('/dashboard?tab=pendientes')} badge={counts?.envios} />
         <NavLink href="/dashboard?tab=enviados" label="Enviados" icon="send" active={top('/dashboard?tab=enviados')} />
         <NavLink href="/dashboard/nuevo-envio" label="Nuevo envío" icon="plus" active={top('/dashboard/nuevo-envio')} />
+        <NavLink href="/dashboard/dossiers" label="Dossiers" icon="document" active={top('/dashboard/dossiers')} />
         <NavLink href="/dashboard/envios-plataforma" label="Envíos por plataforma" icon="platform" active={top('/dashboard/envios-plataforma')} badge={counts?.plataforma} />
       </Section>
 

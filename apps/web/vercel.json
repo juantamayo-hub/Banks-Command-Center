@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/platform-dispatches",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/dispatch-watchdog",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

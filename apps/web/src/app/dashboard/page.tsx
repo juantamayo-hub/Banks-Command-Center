@@ -12,6 +12,7 @@ import DocCompletedWidget from '@/components/dashboard/DocCompletedWidget'
 import PageHeader from '@/components/ui/PageHeader'
 import Tabs from '@/components/ui/Tabs'
 import Toolbar from '@/components/ui/Toolbar'
+import RealtimeRefresh from '@/components/dashboard/RealtimeRefresh'
 
 const PAGE_SIZE = 50
 
@@ -50,6 +51,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const cutoffDate = new Date(Date.now() - PENDING_CUTOFF_MS).toISOString()
   // PostgREST: show row if timestamp_entry is recent OR (timestamp_entry is null AND created_at is recent)
   const pendingAgeFilter = `timestamp_entry.gte.${cutoffDate},and(timestamp_entry.is.null,created_at.gte.${cutoffDate})`
+  // Pendientes = lo que necesita acción. Las líneas del Command Center que están saliendo solas ('sending') no se
+  // muestran: aparecen en el contador "saliendo ahora" y, si fallan o se bloquean, vuelven a Pendientes con su motivo.
+  const pendingFilter = `and(engine.neq.cc,or(${pendingAgeFilter})),and(status.neq.sending,or(${pendingAgeFilter}))`
 
   // Pre-fetch bank IDs where has_dispatch=false (platform-only banks — excluded from pendientes)
   const { data: noDispatchBanksRaw } = await supabase
@@ -67,7 +71,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     .neq('status', 'sent')
     .eq('pipedrive_lost', false)
     .eq('is_discarded', false)
-    .or(pendingAgeFilter)
+    .or(pendingFilter)
   if (noDispatchIds.length > 0) {
     pendingCountQuery = pendingCountQuery.not('bank_id', 'in', `(${noDispatchIds.join(',')})`)
   }
@@ -76,17 +80,19 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     { count: pendingCount },
     { count: sentCount },
     { data: banksData },
+    { count: inFlightCount },
   ] = await Promise.all([
     pendingCountQuery,
     supabase.from('sheet_rows').select('*', { count: 'exact', head: true }).eq('status', 'sent'),
     supabase.from('banks').select('slug, name').eq('active', true).order('name', { ascending: true }),
+    supabase.from('sheet_rows').select('*', { count: 'exact', head: true }).eq('engine', 'cc').eq('status', 'sending'),
   ])
 
   // Main table query
   let query = supabase
     .from('sheet_rows')
     .select(
-      'id, opportunity_id, bank_deal_id, nombre_cliente, importe, status, status_raw, red_flags, notas, test_time, timestamp_sent, timestamp_entry, synced_at, owner, sheet_row_number, banks(name, slug, has_dispatch)',
+      'id, opportunity_id, bank_deal_id, nombre_cliente, importe, status, status_raw, red_flags, notas, test_time, timestamp_sent, timestamp_entry, synced_at, owner, sheet_row_number, engine, block_reason, last_error, banks(name, slug, has_dispatch)',
       { count: 'exact' }
     )
 
@@ -102,7 +108,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       .neq('status', 'sent')
       .eq('pipedrive_lost', false)
       .eq('is_discarded', false)
-      .or(pendingAgeFilter)
+      .or(pendingFilter)
       .order('nombre_cliente', { ascending: true, nullsFirst: false })
       .order('test_time', { ascending: false, nullsFirst: false })
     if (noDispatchIds.length > 0) {
@@ -187,6 +193,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         subtitle="Visión general del estado de los envíos bancarios."
       />
 
+      <RealtimeRefresh />
+
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatsCard
@@ -238,6 +246,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           {tab === 'pendientes' && (
             <span className="text-xs text-gray-400 italic">
               · últimos 15 días · sin deals perdidos
+            </span>
+          )}
+          {tab === 'pendientes' && (inFlightCount ?? 0) > 0 && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-indigo-500" />
+              {inFlightCount} saliendo ahora
             </span>
           )}
         </div>

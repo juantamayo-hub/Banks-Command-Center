@@ -93,6 +93,31 @@ export async function updateBankSettings(
   return { ok: true }
 }
 
+// ── Motor de envío (hoja ↔ Command Center) ───────────────────────────────────
+
+/**
+ * Interruptor por banco: 'sheets' = envío por la hoja + Apps Script (antiguo); 'cc' = el Command Center crea la
+ * línea cuando el dossier está listo y lanza el webhook n8n. Volver a 'sheets' deshace el cambio al momento.
+ */
+export async function setDispatchEngine(slug: string, engine: 'sheets' | 'cc'): Promise<ConfigResult> {
+  const auth = await requireEditor()
+  if ('error' in auth) return { ok: false, error: auth.error }
+  if (engine !== 'sheets' && engine !== 'cc') return { ok: false, error: 'Motor no válido' }
+
+  const { data: before, error: e1 } = await auth.db.from('bank_config').select('*').eq('bank_slug', slug).single()
+  if (e1 || !before) return { ok: false, error: e1?.message ?? 'Banco no encontrado' }
+  if (engine === 'cc' && (before.channel !== 'email' || !before.send_webhook_path || !before.banks_slug)) {
+    return { ok: false, error: 'Este banco no se envía por correo o le falta el webhook de n8n' }
+  }
+
+  const { data: after, error } = await auth.db.from('bank_config')
+    .update({ dispatch_engine: engine, updated_by: auth.email }).eq('bank_slug', slug).select('*').single()
+  if (error) return { ok: false, error: error.message }
+  await logHistory(auth.db, auth.email, { bank_slug: slug, table_name: 'bank_config', record_key: slug, action: 'update', before, after })
+  revalidate(slug)
+  return { ok: true }
+}
+
 // ── Reglas de red flags ──────────────────────────────────────────────────────
 
 export interface RuleInput {

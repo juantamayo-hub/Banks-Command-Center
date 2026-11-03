@@ -76,16 +76,41 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'bank_slug y opportunity_id obligatorios' }, { status: 400 })
   }
   const force = body.force === true || body.force === 'true'
+  const source = str(body.source, 64)
+  const testMode = body.test_mode === true || body.test_mode === 'true'
+
+  const supabase = await createAdminClient()
+
+  // Banco ya enviado desde el Command Center: un envío que llegue desde la hoja (Apps Script) es un duplicado.
+  // Si la consulta falla (p. ej. migración 035 sin aplicar) se sigue como siempre.
+  if (source === 'sheets') {
+    const { data: cfg } = await supabase.from('bank_config').select('dispatch_engine').eq('bank_slug', bankSlug).maybeSingle()
+    if ((cfg as { dispatch_engine?: string } | null)?.dispatch_engine === 'cc') {
+      await recordFlowEvents(supabase, [{
+        opportunity_id: opportunityId,
+        bank_deal_id: int(body.bank_deal_id),
+        bank_slug: bankSlug,
+        workflow: 'dossier_claim',
+        step: 'anti-duplicado',
+        kind: 'antidup_blocked',
+        severity: 'warning',
+        message: 'Envío desde la hoja bloqueado: este banco ya se envía desde el Command Center',
+        detail: { source, workflow_id: str(body.workflow_id, 64) },
+        execution_id: str(body.execution_id, 64),
+      }])
+      return NextResponse.json({ allowed: false, reason: 'engine_cc' })
+    }
+  }
+
   const row = {
-    bank_slug: bankSlug,
+    // Las pruebas (modo prueba de staging) reservan aparte para no bloquear ni ensuciar los envíos reales
+    bank_slug: testMode ? `${bankSlug}__test` : bankSlug,
     opportunity_id: opportunityId,
     bank_deal_id: int(body.bank_deal_id),
     workflow_id: str(body.workflow_id, 64),
     execution_id: str(body.execution_id, 64),
-    source: str(body.source, 64),
+    source,
   }
-
-  const supabase = await createAdminClient()
 
   // 1) Intento de reserva: el UNIQUE(bank_slug, opportunity_id) hace que solo una de dos llamadas simultáneas gane
   const { error: insertError } = await supabase.from('dossier_dispatches').insert(row)
@@ -99,7 +124,7 @@ export async function POST(req: Request) {
   const { data: existing, error: selectError } = await supabase
     .from('dossier_dispatches')
     .select('id, claimed_at, attempts, blocked_count, bank_deal_id')
-    .eq('bank_slug', bankSlug)
+    .eq('bank_slug', row.bank_slug)
     .eq('opportunity_id', opportunityId)
     .single()
   if (selectError || !existing) {

@@ -13,18 +13,19 @@
  * }
  */
 
+import { randomUUID } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { ACTIVE_BANKS } from '@/lib/banks'
+import { requireAuth } from '@/lib/auth/requireAuth'
+import { createAdminClient } from '@/lib/supabase/server'
+import { isCcBank, loadDispatchBanks } from '@/lib/dispatch/banks'
+import { dispatchRow, isTestMode } from '@/lib/dispatch/engine'
 
 const VALID_SLUGS: Set<string> = new Set(ACTIVE_BANKS.map((b) => b.slug))
 
 export async function POST(req: NextRequest) {
-
-  const webAppUrl = process.env.APPS_SCRIPT_WEB_APP_URL
-  const secret    = process.env.APPS_SCRIPT_RELAUNCH_SECRET
-  if (!webAppUrl || !secret) {
-    return NextResponse.json({ error: 'Apps Script no configurado' }, { status: 500 })
-  }
+  const auth = await requireAuth()
+  if (!auth.ok) return auth.response
 
   let body: unknown
   try { body = await req.json() } catch {
@@ -48,6 +49,34 @@ export async function POST(req: NextRequest) {
   }
   if (typeof bank_deal_id !== 'number' || !Number.isInteger(bank_deal_id) || bank_deal_id <= 0) {
     return NextResponse.json({ error: '`bank_deal_id` debe ser un entero positivo' }, { status: 400 })
+  }
+
+  // Banco con el interruptor en "Command Center": la línea se crea aquí y se envía, sin hoja ni Apps Script
+  const db = await createAdminClient()
+  const banks = await loadDispatchBanks(db).catch(() => [])
+  const ccBank = banks.find((b) => b.banks_slug === bank_slug)
+  if (isCcBank(ccBank)) {
+    const { data: existing } = await db.from('sheet_rows').select('id')
+      .eq('bank_id', ccBank.bank_id).eq('opportunity_id', deal_id).maybeSingle()
+    let rowId = existing?.id as string | undefined
+    if (!rowId) {
+      const { data: inserted, error } = await db.from('sheet_rows').insert({
+        bank_id: ccBank.bank_id, opportunity_id: deal_id, bank_deal_id, nombre_cliente: nombre_cliente.trim(), importe,
+        uid: randomUUID(), engine: 'cc', status: 'pending_ready', send_trigger: true,
+        timestamp_entry: new Date().toISOString(), dispatch_source: 'nuevo_envio', test_mode: isTestMode(),
+      }).select('id').single()
+      if (error || !inserted) return NextResponse.json({ error: error?.message ?? 'No se pudo crear la línea' }, { status: 500 })
+      rowId = inserted.id as string
+    }
+    const r = await dispatchRow(db, { rowId, actor: `user:${auth.user.email}`, source: 'nuevo_envio', banks })
+    if (!r.ok) return NextResponse.json({ error: r.error, code: r.code }, { status: r.code === 'WEBHOOK_ERROR' ? 502 : 409 })
+    return NextResponse.json({ ok: true, engine: 'cc', row_id: rowId })
+  }
+
+  const webAppUrl = process.env.APPS_SCRIPT_WEB_APP_URL
+  const secret    = process.env.APPS_SCRIPT_RELAUNCH_SECRET
+  if (!webAppUrl || !secret) {
+    return NextResponse.json({ error: 'Apps Script no configurado' }, { status: 500 })
   }
 
   const res = await fetch(webAppUrl, {
