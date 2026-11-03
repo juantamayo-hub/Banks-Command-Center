@@ -59,8 +59,13 @@ export async function estadoDossier(supabase: SupabaseClient, dealId: number) {
   }
 }
 
-/** Llama al flujo de n8n que regenera el dossier. Devuelve { accepted, reason }. */
-export async function requestDossierRegen(dealId: number, requestedBy: string): Promise<{ accepted: boolean; reason: string }> {
+/** Importe de hipoteca aceptable para el dossier (euros, entero, 10.000–5.000.000). */
+export function validImporte(v: unknown): v is number {
+  return typeof v === 'number' && Number.isInteger(v) && v >= 10_000 && v <= 5_000_000
+}
+
+/** Llama al flujo de n8n que regenera el dossier (con importe de hipoteca opcional). Devuelve { accepted, reason }. */
+export async function requestDossierRegen(dealId: number, requestedBy: string, importe?: number | null): Promise<{ accepted: boolean; reason: string }> {
   const url = process.env.ALMA_N8N_DOSSIER_REGEN_URL
   const secret = process.env.ALMA_N8N_SECRET
   if (!url || !secret) return { accepted: false, reason: 'not_configured' }
@@ -68,7 +73,7 @@ export async function requestDossierRegen(dealId: number, requestedBy: string): 
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-alma-secret': secret },
-      body: JSON.stringify({ deal_id: dealId, requested_by: requestedBy, origin: 'bcc' }),
+      body: JSON.stringify({ deal_id: dealId, requested_by: requestedBy, origin: 'bcc', ...(importe ? { importe } : {}) }),
       cache: 'no-store',
       signal: AbortSignal.timeout(20_000),
     })
