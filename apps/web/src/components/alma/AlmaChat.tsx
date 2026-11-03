@@ -62,7 +62,7 @@ interface ChatMessage {
   reportMsg?: string
   error?: boolean
   slack?: { destinatario: string; nombre: string; mensaje: string; state: 'draft' | 'sending' | 'sent' | 'error'; info?: string }
-  regen?: { deal_id: number; motivo: string; state: 'idle' | 'sending' | 'done' | 'error'; info?: string }
+  regen?: { deal_id: number; motivo: string; importe_hipoteca?: number; state: 'idle' | 'sending' | 'done' | 'error'; info?: string }
   dbId?: string | null
   feedback?: { rating: 'up' | 'down'; comment: string; state: 'editing' | 'sending' | 'sent' | 'error'; info?: string }
 }
@@ -237,7 +237,7 @@ export default function AlmaChat({ apiBase = '/api/alma', envLabel }: { apiBase?
           else if (ev.type === 'tool') patch(botId, (m) => ({ ...m, status: TOOL_LABELS[ev.name as string] ?? 'Consultando datos…' }))
           else if (ev.type === 'technical') patch(botId, (m) => ({ ...m, technical: ev.resumen as string, report: 'idle' }))
           else if (ev.type === 'slack_draft') patch(botId, (m) => ({ ...m, slack: { destinatario: ev.destinatario as string, nombre: ev.nombre as string, mensaje: ev.mensaje as string, state: 'draft' } }))
-          else if (ev.type === 'dossier_regen') patch(botId, (m) => ({ ...m, regen: { deal_id: Number(ev.deal_id), motivo: String(ev.motivo ?? ''), state: 'idle' } }))
+          else if (ev.type === 'dossier_regen') patch(botId, (m) => ({ ...m, regen: { deal_id: Number(ev.deal_id), motivo: String(ev.motivo ?? ''), importe_hipoteca: Number(ev.importe_hipoteca) || undefined, state: 'idle' } }))
           else if (ev.type === 'error') patch(botId, (m) => ({ ...m, text: m.text || (typeof ev.message === 'string' && ev.message ? ev.message : 'Algo ha fallado. ¿Lo intentas otra vez?'), status: null, error: true }))
           else if (ev.type === 'done') patch(botId, (m) => ({ ...m, status: null, dbId: (ev.message_id as string | null) ?? null }))
         }
@@ -289,7 +289,7 @@ export default function AlmaChat({ apiBase = '/api/alma', envLabel }: { apiBase?
       const res = await fetch(`${apiBase}/dossier`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ conversation_id: conversationId, deal_id: regen.deal_id, motivo: regen.motivo }),
+        body: JSON.stringify({ conversation_id: conversationId, deal_id: regen.deal_id, motivo: regen.motivo, importe_hipoteca: regen.importe_hipoteca }),
       })
       const data = await res.json().catch(() => ({}))
       const info = data.accepted
@@ -499,6 +499,9 @@ export default function AlmaChat({ apiBase = '/api/alma', envLabel }: { apiBase?
                     {m.regen && (
                       <div className="rounded-xl bg-emerald-50 px-3 py-2 text-[12px] text-emerald-950 ring-1 ring-emerald-200">
                         <p className="font-medium">📄 Regenerar el dossier del deal {m.regen.deal_id}</p>
+                        <p className="mt-0.5 text-emerald-900/80">
+                          Importe de hipoteca: {m.regen.importe_hipoteca ? <strong>{m.regen.importe_hipoteca.toLocaleString('es-ES')} €</strong> : 'el de Pipedrive'}
+                        </p>
                         {m.regen.motivo && <p className="mt-0.5 text-emerald-900/80">{m.regen.motivo}</p>}
                         {m.regen.state === 'done' || m.regen.state === 'error' ? (
                           <p className={`mt-1 ${m.regen.state === 'error' ? 'text-red-700' : ''}`}>{m.regen.info}</p>

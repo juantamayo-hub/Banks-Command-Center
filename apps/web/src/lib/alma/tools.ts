@@ -9,7 +9,7 @@ import type Anthropic from '@anthropic-ai/sdk'
 import { createAdminClient } from '@/lib/supabase/server'
 import { getClientRecords, getDealInfo, getMetrics, getOpenTickets, getTicketStats, getPendingOffers, getPendingSends, getTickets, listDriveFolder, revisarAutorizaciones, searchClients, summarizeDocs } from './data'
 import { diagnose } from './diagnose'
-import { estadoDossier } from './dossier'
+import { estadoDossier, validImporte } from './dossier'
 import { callMailbox, mailboxAllowedFor } from './mailbox'
 import { KNOWLEDGE, KNOWLEDGE_TOPICS } from './knowledge'
 import { TEAM, findMember } from './team'
@@ -184,12 +184,13 @@ export const ALMA_TOOLS: Anthropic.Tool[] = [
   },
   {
     name: 'regenerar_dossier',
-    description: 'Propone regenerar el dossier COMPLETO del cliente con el método nuevo de descifrado. NO lo lanza: muestra al usuario el botón "Regenerar dossier" y es él quien lo pulsa. Úsala solo después de estado_dossier y cuando hubo un fallo o documentos excluidos, o si el usuario lo pide.',
+    description: 'Propone regenerar el dossier COMPLETO del cliente con el método nuevo de descifrado. NO lo lanza: muestra al usuario el botón "Regenerar dossier" y es él quien lo pulsa. Úsala solo después de estado_dossier y cuando hubo un fallo o documentos excluidos, o si el usuario lo pide. Antes pregunta si lo quiere con el mismo importe de hipoteca (el de Pipedrive) o con otro: el importe va en la portada y en el nombre del fichero ("468.000€MD59506240.pdf"), que es el que buscan los envíos a bancos.',
     input_schema: {
       type: 'object',
       properties: {
         deal_id: { type: 'integer', description: 'Opportunity ID (deal general de Pipedrive)' },
         motivo: { type: 'string', description: 'Por qué se propone regenerar (breve)' },
+        importe_hipoteca: { type: 'integer', description: 'Importe de hipoteca en euros (p. ej. 468000) SOLO si la persona lo quiere con un importe distinto al de Pipedrive. Si quiere el mismo, no lo pases.' },
       },
       required: ['deal_id', 'motivo'],
       additionalProperties: false,
@@ -242,7 +243,7 @@ export interface ToolOutcome {
   ok: boolean
   technical?: { resumen: string; opportunity_id?: number; banco?: string }
   slackDraft?: { destinatario: string; nombre: string; mensaje: string }
-  dossierRegen?: { deal_id: number; motivo: string }
+  dossierRegen?: { deal_id: number; motivo: string; importe_hipoteca?: number }
 }
 
 const MAX_RESULT_CHARS = 14_000
@@ -421,10 +422,15 @@ export async function runAlmaTool(name: string, input: Record<string, unknown>, 
         const deal = intArg(input.deal_id)
         const motivo = String(input.motivo ?? '').trim().slice(0, 500)
         if (!deal) return { ok: false, content: 'deal_id no válido' }
+        // mismo criterio estricto que /api/alma/dossier (Number, no parseInt: "468.000" o "468000abc" no valen)
+        const importe = input.importe_hipoteca == null || input.importe_hipoteca === '' ? null : Number(input.importe_hipoteca)
+        if (importe !== null && !validImporte(importe)) {
+          return { ok: false, content: 'importe_hipoteca no válido: tiene que ser un importe en euros entre 10.000 y 5.000.000.' }
+        }
         return {
           ok: true,
-          content: 'Listo: el usuario verá el botón "Regenerar dossier". No está lanzado todavía; dile que lo pulse si quiere regenerarlo y que el resultado llegará a Drive, al Command Center, al ticket del Request Hub y a Slack.',
-          dossierRegen: { deal_id: deal, motivo },
+          content: `Listo: el usuario verá el botón "Regenerar dossier"${importe ? ` con importe de hipoteca ${importe.toLocaleString('es-ES')} €` : ' con el importe de hipoteca de Pipedrive'}. No está lanzado todavía; dile que lo pulse si quiere regenerarlo y que el resultado llegará a Drive, al Command Center, al ticket del Request Hub y a Slack.`,
+          dossierRegen: { deal_id: deal, motivo, ...(importe ? { importe_hipoteca: importe } : {}) },
         }
       }
       case 'buzon_buscar': {
