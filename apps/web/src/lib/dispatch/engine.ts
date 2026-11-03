@@ -27,12 +27,16 @@ export function isTestMode(): boolean {
   return process.env.VERCEL_ENV !== 'production'
 }
 
-/** URL pública de este Command Center, para que n8n informe al mismo entorno que lanzó el envío. */
+/**
+ * URL pública de este Command Center, para que n8n informe al mismo entorno que lanzó el envío.
+ * En producción devuelve null: n8n usa su $vars.COMMAND_CENTER_URL (producción). Así, aunque
+ * COMMAND_CENTER_PUBLIC_URL se configure por error también en Production, un envío real nunca informa a staging.
+ */
 export function reportBaseUrl(): string | null {
+  if (process.env.VERCEL_ENV === 'production') return null
   const explicit = process.env.COMMAND_CENTER_PUBLIC_URL
   if (explicit) return explicit.replace(/\/$/, '')
-  const host = process.env.VERCEL_ENV === 'production' ? process.env.VERCEL_PROJECT_PRODUCTION_URL : process.env.VERCEL_BRANCH_URL
-  return host ? `https://${host}` : null
+  return process.env.VERCEL_BRANCH_URL ? `https://${process.env.VERCEL_BRANCH_URL}` : null
 }
 
 export type DispatchAction = 'ENVIAR' | 'AUTORIZACION'
