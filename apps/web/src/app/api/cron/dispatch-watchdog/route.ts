@@ -87,7 +87,7 @@ export async function GET(req: NextRequest) {
     }
     for (const [dealId, list] of byDeal) {
       try {
-        const res = await fetch(`https://api.pipedrive.com/v1/deals/${dealId}?api_token=${token}`, { cache: 'no-store' })
+        const res = await fetch(`https://api.pipedrive.com/v1/deals/${dealId}`, { cache: 'no-store', headers: { 'x-api-token': token } })
         if (!res.ok) continue
         const lost = (await res.json())?.data?.status === 'lost'
         const ids = list.filter((x) => x.lost !== lost).map((x) => x.id)

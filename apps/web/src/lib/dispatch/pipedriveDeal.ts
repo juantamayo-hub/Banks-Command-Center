@@ -28,8 +28,8 @@ function token(): string {
 }
 
 async function pd<T>(path: string): Promise<T> {
-  const sep = path.includes('?') ? '&' : '?'
-  const res = await fetch(`https://api.pipedrive.com/v1${path}${sep}api_token=${token()}`, { cache: 'no-store' })
+  // Token en cabecera (no en la URL): no acaba en logs de proxies
+  const res = await fetch(`https://api.pipedrive.com/v1${path}`, { cache: 'no-store', headers: { 'x-api-token': token() } })
   if (!res.ok) throw new Error(`Pipedrive GET ${path.split('?')[0]} ${res.status}`)
   return (await res.json()) as T
 }
