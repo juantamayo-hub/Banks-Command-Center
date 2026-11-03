@@ -8,7 +8,7 @@
  *   { type: 'text', delta }                texto de la respuesta
  *   { type: 'technical', resumen }         problema técnico → mostrar "Enviar reporte a Juanjo"
  *   { type: 'slack_draft', destinatario, nombre, mensaje }  borrador de DM de Slack (lo envía el usuario)
- *   { type: 'dossier_regen', deal_id, motivo }  propuesta de regenerar el dossier (botón → POST /api/alma/dossier)
+ *   { type: 'dossier_regen', deal_id, motivo, importe_hipoteca? }  propuesta de regenerar el dossier (botón → POST /api/alma/dossier)
  *   { type: 'done', message_id }
  *   { type: 'error', message }
  *

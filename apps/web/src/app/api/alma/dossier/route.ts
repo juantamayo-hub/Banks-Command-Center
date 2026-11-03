@@ -2,16 +2,18 @@
  * POST /api/alma/dossier — regenerar el dossier completo de un cliente (lo pulsa la persona en el botón que
  * propone Alma con la herramienta regenerar_dossier).
  *
- * Body: { conversation_id?, deal_id, motivo? }
+ * Body: { conversation_id?, deal_id, motivo?, importe_hipoteca? }
  * Llama a n8n (ALMA_N8N_DOSSIER_REGEN_URL, cabecera x-alma-secret = ALMA_N8N_SECRET) con
- * { deal_id, requested_by: <email de la sesión>, origin: 'bcc' }. Respuesta: { accepted, reason }.
+ * { deal_id, requested_by: <email de la sesión>, origin: 'bcc', importe? }. Respuesta: { accepted, reason }.
+ * importe_hipoteca (euros, 10.000–5.000.000): la portada y el nombre del fichero (<importe>€<expediente>.pdf) salen con ese
+ * importe; sin él, con el de Pipedrive.
  * Límite: 10 regeneraciones por persona y día. Queda registrado en alma_reports (evidence.tipo = 'dossier_regen').
  */
 
 import { createAdminClient } from '@/lib/supabase/server'
 import { almaAuth } from '@/lib/alma/auth'
 import { almaEnv } from '@/lib/alma/config'
-import { requestDossierRegen } from '@/lib/alma/dossier'
+import { requestDossierRegen, validImporte } from '@/lib/alma/dossier'
 import { madridDayStart } from '@/lib/dossierSends'
 
 export const dynamic = 'force-dynamic'
@@ -22,7 +24,7 @@ export async function POST(req: Request) {
   const who = await almaAuth(req)
   if (!who.ok) return who.response
 
-  let body: { conversation_id?: unknown; deal_id?: unknown; motivo?: unknown }
+  let body: { conversation_id?: unknown; deal_id?: unknown; motivo?: unknown; importe_hipoteca?: unknown }
   try {
     body = await req.json()
   } catch {
@@ -31,6 +33,8 @@ export async function POST(req: Request) {
   const dealId = typeof body.deal_id === 'number' ? body.deal_id : parseInt(String(body.deal_id ?? ''), 10)
   if (!Number.isInteger(dealId) || dealId <= 0) return Response.json({ error: 'deal_id no válido' }, { status: 400 })
   const motivo = String(body.motivo ?? '').trim().slice(0, 500)
+  const importe = body.importe_hipoteca == null || body.importe_hipoteca === '' ? null : Number(body.importe_hipoteca)
+  if (importe !== null && !validImporte(importe)) return Response.json({ error: 'importe_hipoteca no válido (10.000–5.000.000 €)' }, { status: 400 })
 
   const supabase = await createAdminClient()
   const conversationId = typeof body.conversation_id === 'string' ? body.conversation_id : null
@@ -48,14 +52,14 @@ export async function POST(req: Request) {
     return Response.json({ accepted: false, reason: 'daily_limit', error: 'Has llegado al límite de regeneraciones de hoy. Pídeselo a Juanjo.' }, { status: 429 })
   }
 
-  const result = await requestDossierRegen(dealId, who.email)
+  const result = await requestDossierRegen(dealId, who.email, importe)
 
   await supabase.from('alma_reports').insert({
     conversation_id: conversationId,
     user_email: who.email,
     opportunity_id: dealId,
     summary: motivo || `Regenerar dossier del deal ${dealId}`,
-    evidence: { tipo: 'dossier_regen', deal_id: dealId, accepted: result.accepted, reason: result.reason, app: who.app },
+    evidence: { tipo: 'dossier_regen', deal_id: dealId, importe_hipoteca: importe, accepted: result.accepted, reason: result.reason, app: who.app },
     env: almaEnv(),
   })
 
