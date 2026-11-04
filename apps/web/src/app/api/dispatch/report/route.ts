@@ -14,6 +14,7 @@
 import { NextResponse } from 'next/server'
 import { hasOffersSecret } from '@/lib/auth/offersSecret'
 import { createAdminClient } from '@/lib/supabase/server'
+import { classifySheetValues, type SheetValues } from '@/lib/dispatch/classify'
 
 export const dynamic = 'force-dynamic'
 
@@ -38,11 +39,26 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'JSON inválido' }, { status: 400 })
   }
 
-  const status = STATUSES.find((s) => s === b.status) as ReportStatus | undefined
+  // Los flujos pueden mandar el estado ya decidido (status) o los mismos valores que escribían en la hoja (sheet):
+  // en ese caso el estado se deduce aquí (lib/dispatch/classify.ts)
+  let status = STATUSES.find((s) => s === b.status) as ReportStatus | undefined
+  const sheet = b.sheet && typeof b.sheet === 'object' && !Array.isArray(b.sheet) ? (b.sheet as SheetValues) : null
+  if (!status && sheet) {
+    const c = classifySheetValues(sheet)
+    if (!c) return NextResponse.json({ ok: true, ignored: 'nothing_to_report' })
+    status = c.status
+    if (!str(b.reason_text) && c.reason) b.reason_text = c.reason
+    if (!str(b.notas) && str(sheet.NOTAS)) b.notas = sheet.NOTAS
+    if (!str(b.red_flags) && str(sheet['Red Flag'])) b.red_flags = sheet['Red Flag']
+    if (!str(b.process_status) && str(sheet['Process Status'])) b.process_status = sheet['Process Status']
+    for (const [k, col] of [['dossier', 'Dossier'], ['auto_bayteca', 'Auto Bayteca'], ['auto_banco', 'Auto Banco']] as const) {
+      if (!str(b[k]) && str(sheet[col])) b[k] = sheet[col]
+    }
+  }
   const itemId = str(b.item_id, 64)
   const rowId = str(b.cc_row_id, 64)
   if (!status || (!itemId && !(rowId && UUID_RE.test(rowId)))) {
-    return NextResponse.json({ error: `status (${STATUSES.join(' | ')}) e item_id o cc_row_id obligatorios` }, { status: 400 })
+    return NextResponse.json({ error: `status (${STATUSES.join(' | ')}) o sheet, e item_id o cc_row_id obligatorios` }, { status: 400 })
   }
 
   const db = await createAdminClient()
