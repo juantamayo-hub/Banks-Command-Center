@@ -6,9 +6,10 @@
  * Orden de prioridad (primera regla que encaja):
  *   1. Enviado (Status "Enviado…" o Timestamp Sent)            → sent
  *   2. Red Flag con texto                                       → blocked_red_flag
- *   3. Dossier / Auto Bayteca / Auto Banco = NO                 → blocked_missing_docs
- *   4. Status con error ("Error", "no ha salido", "no se ha enviado") o "Lo ingresaste manualmente" → failed
- *   5. Solo Process Status de trabajo en curso (Procesando, Esperando, Comprimiendo, Enviando) → sending
+ *   3. Dossier / Auto Bayteca / Auto Banco = NO, o "Falta DNI" / código de documento (C003…) → blocked_missing_docs
+ *   4. Status o NOTAS con error ("Error", "no ha salido", "no se ha enviado") o "Lo ingresaste manualmente" → failed
+ *   5. Trabajo en curso (Process Status Procesando, Esperando, Comprimiendo, Enviando; Status vacío o
+ *      "Comprimiendo archivos")                                → sending
  *   6. Cualquier otro Status o NOTAS (p. ej. "Ver notas", motivo de bloqueo, falta email) → blocked_validation
  *   7. Nada útil (solo "Completado")                            → null (no se cambia el estado)
  */
@@ -47,11 +48,14 @@ export function classifySheetValues(s: SheetValues): { status: ClassifiedStatus;
     isNo(s['Auto Banco']) && 'la autorización del banco',
   ].filter(Boolean)
   if (missing.length) return { status: 'blocked_missing_docs', reason: `Falta ${missing.join(' y ')}` }
+  const docMsg = [t(s.Status), notas].find((x) => /falta\s+(el\s+)?dni|falta.*\b[CDF]\d{3}\b/i.test(x))
+  if (docMsg) return { status: 'blocked_missing_docs', reason: docMsg.replace(/^⚠️\s*/, '').slice(0, 500) }
 
-  if (/error|no ha salido|no se ha enviado|no salió/.test(status) || proc.includes('lo ingresaste manualmente')) {
-    return { status: 'failed', reason: t(s.Status) || 'La línea llegó incompleta a n8n' }
+  const errRe = /error|no ha salido|no se ha enviado|no salió/
+  if (errRe.test(status) || errRe.test(notas.toLowerCase()) || proc.includes('lo ingresaste manualmente')) {
+    return { status: 'failed', reason: t(s.Status) || notas || 'La línea llegó incompleta a n8n' }
   }
-  if (!status && /procesando|esperando|comprimiendo|enviando/.test(proc)) {
+  if ((!status || status.startsWith('comprimiendo')) && /procesando|esperando|comprimiendo|enviando/.test(proc)) {
     return { status: 'sending', reason: null }
   }
   if (status || notas) {
