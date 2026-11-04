@@ -68,8 +68,11 @@ export async function POST(req: Request) {
   }
   const processStatus = str(b.process_status, 300)
   if (processStatus) patch.process_status = processStatus
+  // Las notas de n8n son las del intento actual: un resultado final (enviado / bloqueado / falló) sustituye las del
+  // intento anterior (si no trae notas, se limpian: un "Faltan…" viejo no debe quedarse en una línea ya enviada)
   const notas = str(b.notas, 5000)
   if (notas) patch.notas = notas
+  else if (status !== 'sending') patch.notas = null
   for (const k of ['dossier', 'auto_bayteca', 'auto_banco'] as const) { const v = str(b[k], 50); if (v) patch[k] = v }
   const redFlags = str(b.red_flags, 5000)
   if (redFlags) {
