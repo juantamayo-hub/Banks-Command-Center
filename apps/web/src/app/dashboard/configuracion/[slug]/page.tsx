@@ -152,6 +152,7 @@ export default async function BankConfigPage({ params, searchParams }: Props) {
                   engine={(config as { dispatch_engine: 'sheets' | 'cc' }).dispatch_engine}
                   canEdit={canEdit}
                   ready={!!(config as { send_webhook_path?: string | null }).send_webhook_path && !!(config as { banks_slug?: string | null }).banks_slug}
+                  ccReady={(config as { cc_ready?: boolean }).cc_ready === true}
                 />
               </div>
             )}
