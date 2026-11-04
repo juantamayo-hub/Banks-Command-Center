@@ -9,6 +9,7 @@ import RecipientPreview from '@/components/config/RecipientPreview'
 import DocumentsEditor from '@/components/config/DocumentsEditor'
 import { CARD } from '@/components/config/ui'
 import BackLink from '@/components/config/BackLink'
+import DispatchEngineToggle from '@/components/config/DispatchEngineToggle'
 import AgentsEditor, { type AgentRow } from '@/components/config/AgentsEditor'
 import AgentAssignments, { type AssignmentRowView } from '@/components/config/AgentAssignments'
 import { canEditBankConfig } from '@/app/actions/bankConfig'
@@ -144,6 +145,16 @@ export default async function BankConfigPage({ params, searchParams }: Props) {
               )}
               {!canEdit && <span className="rounded-full bg-gray-100 px-2 py-0.5 text-gray-500">Solo lectura</span>}
             </div>
+            {applies && 'dispatch_engine' in config && (
+              <div className="mt-2">
+                <DispatchEngineToggle
+                  slug={slug}
+                  engine={(config as { dispatch_engine: 'sheets' | 'cc' }).dispatch_engine}
+                  canEdit={canEdit}
+                  ready={!!(config as { send_webhook_path?: string | null }).send_webhook_path && !!(config as { banks_slug?: string | null }).banks_slug}
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>

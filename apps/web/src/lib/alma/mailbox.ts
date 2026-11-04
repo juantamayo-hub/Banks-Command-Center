@@ -3,7 +3,7 @@
  *  - Solo para los emails de ALMA_MAILBOX_EMAILS (lista separada por comas; si no está definida → desactivado).
  *  - POST ALMA_N8N_MAILBOX_URL con cabecera x-alma-secret = ALMA_N8N_SECRET y
  *    body { action: 'search'|'read', query?, max?, message_id?, user_email }.
- *  - Cada llamada queda en alma_mailbox_audit (migración 034).
+ *  - Cada llamada queda en alma_mailbox_audit (migración 035).
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'

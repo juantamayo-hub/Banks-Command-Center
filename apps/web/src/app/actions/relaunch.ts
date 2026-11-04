@@ -16,7 +16,9 @@
  */
 
 import { createAdminClient } from '@/lib/supabase/server'
+import { sessionEmail } from '@/lib/bankConfigAuth'
 import { waitUntil } from '@vercel/functions'
+import { dispatchRow } from '@/lib/dispatch/engine'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -35,7 +37,25 @@ export async function requestRelaunch(
     return { ok: false, error: 'ID de fila inválido', code: 'INVALID_ID' }
   }
 
+  const email = await sessionEmail()
+  if (!email) return { ok: false, error: 'Sesión caducada: vuelve a entrar', code: 'UNAUTHORIZED' }
+
   const supabase = await createAdminClient()
+
+  // ── Líneas del Command Center (banco con el interruptor en "Command Center"): sin hoja ni Apps Script ──
+  const { data: rowEngine } = await supabase.from('sheet_rows').select('engine').eq('id', sheet_row_id).maybeSingle()
+  if ((rowEngine as { engine?: string } | null)?.engine === 'cc') {
+    const r = await dispatchRow(supabase, {
+      rowId: sheet_row_id,
+      action: dispatch_action,
+      force,
+      actor: `user:${email}`,
+      source: 'manual',
+    })
+    return r.ok
+      ? { ok: true, previous_status: r.previous_status }
+      : { ok: false, error: r.error, code: r.code, current_status: r.current_status }
+  }
 
   // ── Step 1: Atomic DB update ──────────────────────────────────────────────
   const actor = dispatch_action === 'AUTORIZACION' ? 'user:autorizar' : 'user:verificar'

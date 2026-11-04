@@ -25,6 +25,9 @@ interface SheetRow {
   synced_at: string | null
   owner: string | null
   sheet_row_number: number | null
+  engine?: string | null
+  block_reason?: string | null
+  last_error?: string | null
   banks: BankRef | BankRef[] | null
 }
 
@@ -201,15 +204,20 @@ export default function SubmissionsTable({
                   {formatImporte(row.importe)}
                 </td>
               )
+              // Líneas del Command Center: el motivo del bloqueo / fallo viene de n8n (antes quedaba en la hoja)
+              const reason = row.engine === 'cc' ? (row.block_reason || row.last_error) : null
               const estadoCell = (
-                <td className="whitespace-nowrap px-4 py-3">
+                <td className="px-4 py-3 max-w-[240px]">
                   <StatusBadge status={row.status ?? 'unknown'} />
+                  {reason && <p className="mt-1 text-xs text-gray-500 line-clamp-3" title={reason}>{reason}</p>}
                 </td>
               )
 
               if (mode === 'pendientes') {
                 return (
-                  <tr key={row.id} className="hover:bg-gray-50 transition-colors">
+                  <tr key={row.id} className={row.engine === 'cc' && row.status === 'sending'
+                    ? 'bg-indigo-50/60 transition-colors'
+                    : 'hover:bg-gray-50 transition-colors'}>
                     {indexCell}
                     {bankCell}
                     {clientCell}
@@ -243,6 +251,7 @@ export default function SubmissionsTable({
                             hasDispatch={hasDispatch}
                             bankSlug={bankSlug}
                             sheetRowNumber={row.sheet_row_number}
+                            engine={row.engine}
                           />
                         </div>
                         <DiscardButton rowId={row.id} />
