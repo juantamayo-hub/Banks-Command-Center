@@ -141,6 +141,7 @@ export interface DossierReadyInput {
   owner: string | null
   importe: number | null
   bank_names: string[] | null       // bancos de este dossier (si viene vacío: todos los del deal)
+  dossier_key: string               // UNICO | A | B | C
   test_mode: boolean
 }
 
@@ -165,7 +166,12 @@ export async function createRowsForDossier(
   if (!deal) throw new Error(`El deal ${input.opportunity_id} no existe en Pipedrive`)
 
   const wanted = input.bank_names?.length ? new Set(input.bank_names.map((n) => n.trim().toLowerCase())) : null
-  const slots = deal.slots.filter((s) => !wanted || wanted.has(s.bank_name.trim().toLowerCase()))
+  // Dossier por tipo (A/B/C = un dossier por importe distinto): solo los bancos con ESE importe. Así un banco no sale
+  // antes de que exista su dossier (n8n lo busca en Drive por "<importe>€<expediente>").
+  const byImporte = input.dossier_key !== 'UNICO' && input.importe ? Math.round(input.importe) : null
+  const slots = deal.slots.filter((s) =>
+    (!wanted || wanted.has(s.bank_name.trim().toLowerCase())) &&
+    (byImporte === null || (s.importe !== null && Math.round(s.importe) === byImporte)))
 
   const results: LineResult[] = []
   const toDispatch: string[] = []

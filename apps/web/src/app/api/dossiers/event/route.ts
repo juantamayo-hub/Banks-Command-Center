@@ -93,6 +93,7 @@ export async function POST(req: Request) {
       owner: (dossier.owner as string | null) ?? null,
       importe: (dossier.importe as number | null) ?? null,
       bank_names: bankNames,
+      dossier_key: dossierKey,
       test_mode: testMode,
     })
     // Envío en segundo plano: el generador recibe la respuesta enseguida
