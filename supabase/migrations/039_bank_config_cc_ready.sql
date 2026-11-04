@@ -9,9 +9,10 @@ alter table bank_config add column if not exists cc_ready_note text;   -- p. ej.
 comment on column bank_config.cc_ready is
   'true = el Send Dossier de n8n ya está adaptado al Command Center y probado; requisito para dispatch_engine = cc';
 
--- CR Teruel: adaptado (eUntnpw1FAhx5Ups) y probado de punta a punta en staging el 04-nov-2026
+-- CR Teruel (eUntnpw1FAhx5Ups) y CR del Sur (zgLT2IOJqTidzDXv): adaptados y probados de punta a punta en staging el 04-nov-2026.
+-- El resto se marca con un update de datos a medida que pasa su prueba (no requiere migración).
 update bank_config set cc_ready = true, cc_ready_note = 'n8n adaptado y probado en staging (envío completo) 04-nov-2026'
-where bank_slug = 'cr_teruel';
+where bank_slug in ('cr_teruel', 'cr_del_sur');
 
 -- Red de seguridad en la base: un banco sin flujo adaptado no puede quedar en 'cc'
 create or replace function public.enforce_cc_ready()
