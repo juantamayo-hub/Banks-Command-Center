@@ -46,10 +46,14 @@ export interface PayloadOptions {
 export function buildSendPayload(row: PayloadRow, o: PayloadOptions): Record<string, unknown> {
   const s = (v: unknown) => (v === null || v === undefined ? '' : v)
   const p = o.prefix
+  // Importe como número entero, igual que la hoja (Supabase devuelve numeric como "180000.00"; los flujos quitan
+  // los puntos como separador de miles y buscan el dossier por "180.000€<expediente>": con decimales no lo encuentran)
+  const importeNum = Number(row.importe)
+  const importe = row.importe !== null && row.importe !== undefined && Number.isFinite(importeNum) ? Math.round(importeNum) : ''
   return {
     'Opportunity ID': row.opportunity_id,
     'Nombre Cliente': s(row.nombre_cliente),
-    'Importe': s(row.importe),
+    'Importe': importe,
     'Link Dossier': s(row.link_dossier),
     'Timestamp': s(row.timestamp_entry),
     'Bank Deal ID': s(row.bank_deal_id),
