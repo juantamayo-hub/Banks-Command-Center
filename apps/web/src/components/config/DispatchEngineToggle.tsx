@@ -15,7 +15,7 @@ export default function DispatchEngineToggle({
   engine: 'sheets' | 'cc'
   canEdit: boolean
   ready: boolean   // tiene webhook n8n y banco asociado
-  ccReady: boolean // el flujo n8n ya está adaptado al Command Center (bank_config.cc_ready)
+  ccReady: boolean // su línea de prueba ya salió OK por el Command Center (bank_config.cc_ready)
 }) {
   const [pending, start] = useTransition()
   const [confirming, setConfirming] = useState(false)
@@ -31,10 +31,13 @@ export default function DispatchEngineToggle({
         Motor de envío: {label}
       </span>
       {engine === 'sheets' && ready && !ccReady && (
-        <span className="text-gray-500">Flujo de n8n pendiente de adaptar: aún no se puede pasar a Command Center</span>
+        <span className="text-gray-500">
+          Falta una prueba enviada OK: en Pendientes, busca «test» y pulsa Reenviar en la línea de prueba de este banco
+          (el correo te llega a ti, no al banco)
+        </span>
       )}
       {engine === 'sheets' && ccReady && (
-        <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700">Flujo n8n adaptado</span>
+        <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700">Prueba enviada OK</span>
       )}
       {canEdit && ((ready && ccReady) || engine === 'cc') && !confirming && (
         <button

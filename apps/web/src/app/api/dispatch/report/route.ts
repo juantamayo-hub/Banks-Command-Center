@@ -62,7 +62,7 @@ export async function POST(req: Request) {
   }
 
   const db = await createAdminClient()
-  let q = db.from('sheet_rows').select('id, status, bank_id, opportunity_id, engine, timestamp_sent').eq('engine', 'cc')
+  let q = db.from('sheet_rows').select('id, status, bank_id, opportunity_id, engine, timestamp_sent, test_mode').eq('engine', 'cc')
   q = rowId && UUID_RE.test(rowId) ? q.eq('id', rowId) : q.eq('uid', itemId!)
   const { data: row, error } = await q.maybeSingle()
   if (error) return NextResponse.json({ error: 'DB error' }, { status: 500 })
@@ -119,6 +119,18 @@ export async function POST(req: Request) {
     event_type: 'status_change', sheet_row_id: row.id, bank_id: row.bank_id, opportunity_id: row.opportunity_id,
     actor: 'n8n', payload: { from: row.status, to: status, reason, process_status: processStatus, execution_id: patch.n8n_execution_id },
   })
+  // Prueba superada: la línea de prueba de un banco llegó a "Enviado" → su flujo n8n funciona con el CC y el interruptor
+  // de Configuración se desbloquea (cc_ready). Quién lo activa y cuándo lo decide el equipo.
+  if (status === 'sent' && row.test_mode === true) {
+    const { data: bank } = await db.from('banks').select('slug').eq('id', row.bank_id).maybeSingle()
+    if (bank?.slug) {
+      await db.from('bank_config')
+        .update({ cc_ready: true, cc_ready_note: `Prueba enviada OK ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC (n8n ${patch.n8n_execution_id ?? '?'})` })
+        .eq('banks_slug', bank.slug)
+        .eq('cc_ready', false)
+    }
+  }
+
   if (status !== 'sending') {
     await db.from('dispatch_attempts').insert({
       sheet_row_id: row.id, bank_id: row.bank_id, opportunity_id: row.opportunity_id, uid: itemId,

@@ -65,8 +65,13 @@ function stagingTestBanks(): Set<string> {
   return new Set((process.env.DISPATCH_TEST_BANKS ?? 'cr_teruel').split(',').map((s) => s.trim()).filter(Boolean))
 }
 
+/** ¿El banco tiene lo necesario para que el CC lo envíe? (correo + webhook n8n + fila de banks). Basta para las líneas de prueba. */
+export function isDispatchableBank(b: DispatchBank | null | undefined): b is DispatchBank & { send_webhook_path: string; bank_id: number } {
+  return !!b && b.channel === 'email' && !!b.send_webhook_path && !!b.bank_id
+}
+
 /** ¿El CC envía este banco? (correo + interruptor en 'cc' + webhook y fila de banks configurados) */
 export function isCcBank(b: DispatchBank | null | undefined): b is DispatchBank & { send_webhook_path: string; bank_id: number } {
-  if (!b || b.channel !== 'email' || !b.send_webhook_path || !b.bank_id) return false
+  if (!isDispatchableBank(b)) return false
   return b.dispatch_engine === 'cc' || stagingTestBanks().has(b.bank_slug)
 }

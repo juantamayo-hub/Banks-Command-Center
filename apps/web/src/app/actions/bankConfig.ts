@@ -110,7 +110,7 @@ export async function setDispatchEngine(slug: string, engine: 'sheets' | 'cc'): 
     return { ok: false, error: 'Este banco no se envía por correo o le falta el webhook de n8n' }
   }
   if (engine === 'cc' && !before.cc_ready) {
-    return { ok: false, error: 'El flujo de n8n de este banco aún no está adaptado al Command Center' }
+    return { ok: false, error: 'Falta una prueba enviada OK de este banco (línea de prueba en Pendientes → Reenviar)' }
   }
 
   const { data: after, error } = await auth.db.from('bank_config')

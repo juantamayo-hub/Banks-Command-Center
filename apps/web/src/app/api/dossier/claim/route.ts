@@ -77,8 +77,9 @@ export async function POST(req: Request) {
   }
   const force = body.force === true || body.force === 'true'
   const source = str(body.source, 64)
-  // En producción se ignora: un envío real nunca puede saltarse el anti-duplicados con test_mode
-  const testMode = process.env.VERCEL_ENV !== 'production' && (body.test_mode === true || body.test_mode === 'true')
+  // Envío de prueba (también en producción, para probar un banco antes de activarlo): n8n desvía SIEMPRE su correo a
+  // una dirección interna, así que se reserva aparte y ni bloquea ni ensucia el anti-duplicado de los envíos reales
+  const testMode = body.test_mode === true || body.test_mode === 'true'
 
   const supabase = await createAdminClient()
 
@@ -104,7 +105,7 @@ export async function POST(req: Request) {
   }
 
   const row = {
-    // Las pruebas (modo prueba de staging) reservan aparte para no bloquear ni ensuciar los envíos reales
+    // Las pruebas reservan aparte para no bloquear ni ensuciar los envíos reales
     bank_slug: testMode ? `${bankSlug}__test` : bankSlug,
     opportunity_id: opportunityId,
     bank_deal_id: int(body.bank_deal_id),
