@@ -22,6 +22,8 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { recordFlowEvents } from '@/lib/flowEvents'
+import { hasOffersSecret } from '@/lib/auth/offersSecret'
+import { isTestDeal } from '@/lib/dispatch/testDeals'
 
 export const dynamic = 'force-dynamic'
 
@@ -58,10 +60,7 @@ async function isSentInPipedrive(bankDealId: number | null): Promise<boolean | n
 }
 
 export async function POST(req: Request) {
-  const secret = process.env.OFFERS_API_SECRET
-  if (!secret || req.headers.get('x-offers-secret') !== secret) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  if (!hasOffersSecret(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   let body: Record<string, unknown>
   try {
@@ -77,9 +76,10 @@ export async function POST(req: Request) {
   }
   const force = body.force === true || body.force === 'true'
   const source = str(body.source, 64)
-  // Envío de prueba (también en producción, para probar un banco antes de activarlo): n8n desvía SIEMPRE su correo a
-  // una dirección interna, así que se reserva aparte y ni bloquea ni ensucia el anti-duplicado de los envíos reales
-  const testMode = body.test_mode === true || body.test_mode === 'true'
+  // Envío de prueba de un deal de prueba (testDeals.ts; también en producción, para probar un banco antes de activarlo):
+  // se reserva aparte y no bloquea ni ensucia el anti-duplicado real. En un deal real test_mode se ignora: nadie puede
+  // saltarse el anti-duplicado llamando al webhook con test_mode = true.
+  const testMode = (body.test_mode === true || body.test_mode === 'true') && isTestDeal(opportunityId)
 
   const supabase = await createAdminClient()
 

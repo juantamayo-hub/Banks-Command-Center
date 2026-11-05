@@ -15,6 +15,7 @@ import { NextResponse } from 'next/server'
 import { hasOffersSecret } from '@/lib/auth/offersSecret'
 import { createAdminClient } from '@/lib/supabase/server'
 import { classifySheetValues, type SheetValues } from '@/lib/dispatch/classify'
+import { isTestDeal } from '@/lib/dispatch/testDeals'
 
 export const dynamic = 'force-dynamic'
 
@@ -121,7 +122,7 @@ export async function POST(req: Request) {
   })
   // Prueba superada: la línea de prueba de un banco llegó a "Enviado" → su flujo n8n funciona con el CC y el interruptor
   // de Configuración se desbloquea (cc_ready). Quién lo activa y cuándo lo decide el equipo.
-  if (status === 'sent' && row.test_mode === true) {
+  if (status === 'sent' && row.test_mode === true && isTestDeal(row.opportunity_id)) {
     const { data: bank } = await db.from('banks').select('slug').eq('id', row.bank_id).maybeSingle()
     if (bank?.slug) {
       await db.from('bank_config')

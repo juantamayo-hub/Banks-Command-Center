@@ -15,6 +15,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { buildSendPayload, type PayloadRow } from './payload'
 import { isCcBank, isDispatchableBank, loadDispatchBanks, resolveDispatchBank, type DispatchBank } from './banks'
 import { getGeneralDeal } from './pipedriveDeal'
+import { isTestDeal } from './testDeals'
 
 const N8N_WEBHOOK_BASE = 'https://huspy.app.n8n.cloud/webhook'
 const ROW_SELECT =
@@ -60,10 +61,10 @@ export async function dispatchRow(
 
   const banks = args.banks ?? (await loadDispatchBanks(db))
   const bank = banks.find((b) => b.bank_id === row.bank_id)
-  // Líneas de prueba (test_mode, creadas a mano para probar un banco): salen siempre en modo prueba —el correo va a
+  // Líneas de prueba (test_mode en un deal de prueba, ver testDeals.ts): salen siempre en modo prueba —el correo va a
   // quien pulsa, nunca al banco— aunque el banco siga en "Hoja"; así se prueba en producción antes de activarlo.
   // Fuera de producción solo se envían líneas de prueba: staging comparte base y nunca debe tocar una línea real.
-  const testRow = row.test_mode === true
+  const testRow = row.test_mode === true && isTestDeal(row.opportunity_id)
   if (!testRow && process.env.VERCEL_ENV !== 'production') {
     return { ok: false, code: 'STAGING_REAL_ROW', error: 'Desde staging solo se pueden enviar líneas de prueba' }
   }
@@ -97,7 +98,7 @@ export async function dispatchRow(
   const c = claim as { ok: boolean; code?: string; error?: string; current_status?: string; previous_status?: string | null; attempt?: number }
   if (!c.ok) return { ok: false, code: c.code ?? 'BLOCKED', error: c.error ?? 'No se pudo reservar el envío', current_status: c.current_status }
 
-  const testMode = row.test_mode || isTestMode()
+  const testMode = testRow || isTestMode()
   const base = reportBaseUrl()
   const payload = buildSendPayload(row, {
     action,
@@ -172,6 +173,8 @@ export async function createRowsForDossier(
   input: DossierReadyInput,
 ): Promise<{ results: LineResult[]; toDispatch: string[]; banks: DispatchBank[] }> {
   const banks = await loadDispatchBanks(db)
+  // Staging comparte base con producción: allí solo se crean líneas de deals de prueba
+  if (process.env.VERCEL_ENV !== 'production' && !isTestDeal(input.opportunity_id)) return { results: [], toDispatch: [], banks }
   const deal = await getGeneralDeal(input.opportunity_id)
   if (!deal) throw new Error(`El deal ${input.opportunity_id} no existe en Pipedrive`)
 
