@@ -106,8 +106,9 @@ export async function dispatchRow(
     force,
     testMode,
     reportUrl: base ? `${base}/api/dispatch/report` : null,
-    // En modo prueba el correo va a quien pulsó (n8n solo lo acepta si es @huspy.io / @bayteca.com)
-    testRecipient: testMode && args.actor.startsWith('user:') ? args.actor.slice(5) : null,
+    // Líneas de prueba: el correo va a quien pulsó (n8n solo lo acepta si es una dirección @huspy.io / @bayteca.com).
+    // Nunca en otra línea: con DISPATCH_FORCE_TEST_MODE un dossier real iría al correo de un empleado
+    testRecipient: testRow && args.actor.startsWith('user:') ? args.actor.slice(5) : null,
   })
 
   const url = `${N8N_WEBHOOK_BASE}/${bank.send_webhook_path}`

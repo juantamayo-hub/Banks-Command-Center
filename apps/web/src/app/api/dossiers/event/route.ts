@@ -14,6 +14,7 @@ import { waitUntil } from '@vercel/functions'
 import { hasOffersSecret } from '@/lib/auth/offersSecret'
 import { createAdminClient } from '@/lib/supabase/server'
 import { createRowsForDossier, dispatchRow, isTestMode } from '@/lib/dispatch/engine'
+import { isTestDeal } from '@/lib/dispatch/testDeals'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
@@ -53,7 +54,8 @@ export async function POST(req: Request) {
   if (!event || !opportunityId || !KEY_RE.test(dossierKey)) {
     return NextResponse.json({ error: 'event (created|ready|error), opportunity_id y dossier_key válidos obligatorios' }, { status: 400 })
   }
-  const testMode = b.test_mode === true || isTestMode()
+  // test_mode del generador solo cuenta en los deals de prueba (testDeals.ts); fuera de producción, siempre prueba
+  const testMode = (b.test_mode === true && isTestDeal(b.opportunity_id)) || isTestMode()
   const db = await createAdminClient()
 
   const patch: Record<string, unknown> = {
