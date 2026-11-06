@@ -28,6 +28,7 @@ interface SheetRow {
   engine?: string | null
   block_reason?: string | null
   last_error?: string | null
+  test_mode?: boolean | null
   banks: BankRef | BankRef[] | null
 }
 
@@ -209,6 +210,9 @@ export default function SubmissionsTable({
               const estadoCell = (
                 <td className="px-4 py-3 max-w-[240px]">
                   <StatusBadge status={row.status ?? 'unknown'} />
+                  {row.test_mode && (
+                    <span className="ml-1 rounded bg-amber-100 px-1 text-[10px] font-medium text-amber-800" title="Línea de prueba: el correo va a quien la envía, nunca al banco">PRUEBA</span>
+                  )}
                   {reason && <p className="mt-1 text-xs text-gray-500 line-clamp-3" title={reason}>{reason}</p>}
                 </td>
               )

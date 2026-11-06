@@ -93,7 +93,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   let query = supabase
     .from('sheet_rows')
     .select(
-      'id, opportunity_id, bank_deal_id, nombre_cliente, importe, status, status_raw, red_flags, notas, test_time, timestamp_sent, timestamp_entry, synced_at, owner, sheet_row_number, engine, block_reason, last_error, banks(name, slug, has_dispatch)',
+      'id, opportunity_id, bank_deal_id, nombre_cliente, importe, status, status_raw, red_flags, notas, test_time, timestamp_sent, timestamp_entry, synced_at, owner, sheet_row_number, engine, block_reason, last_error, test_mode, banks(name, slug, has_dispatch)',
       { count: 'exact' }
     )
 

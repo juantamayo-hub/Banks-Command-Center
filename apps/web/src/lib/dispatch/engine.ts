@@ -6,15 +6,16 @@
  *   createRowsForDossier()  → dossier listo: crea la línea por banco (solo bancos en 'cc') y la envía sola.
  *
  * El resultado final (enviado / bloqueado / falló) lo informa n8n en /api/dispatch/report.
- * Modo prueba: fuera de producción SIEMPRE (VERCEL_ENV !== 'production') o con DISPATCH_FORCE_TEST_MODE=true.
- * En modo prueba n8n desvía el correo al email de prueba y no toca Pipedrive.
+ * Modo prueba: líneas de prueba (sheet_rows.test_mode, también en producción), fuera de producción SIEMPRE o con
+ * DISPATCH_FORCE_TEST_MODE=true. En modo prueba n8n desvía el correo a quien pulsó (o al email de prueba).
  */
 
 import { randomUUID } from 'crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { buildSendPayload, type PayloadRow } from './payload'
-import { isCcBank, loadDispatchBanks, resolveDispatchBank, type DispatchBank } from './banks'
+import { isCcBank, isDispatchableBank, loadDispatchBanks, resolveDispatchBank, type DispatchBank } from './banks'
 import { getGeneralDeal } from './pipedriveDeal'
+import { isTestDeal } from './testDeals'
 
 const N8N_WEBHOOK_BASE = 'https://huspy.app.n8n.cloud/webhook'
 const ROW_SELECT =
@@ -60,7 +61,14 @@ export async function dispatchRow(
 
   const banks = args.banks ?? (await loadDispatchBanks(db))
   const bank = banks.find((b) => b.bank_id === row.bank_id)
-  if (!isCcBank(bank)) {
+  // Líneas de prueba (test_mode en un deal de prueba, ver testDeals.ts): salen siempre en modo prueba —el correo va a
+  // quien pulsa, nunca al banco— aunque el banco siga en "Hoja"; así se prueba en producción antes de activarlo.
+  // Fuera de producción solo se envían líneas de prueba: staging comparte base y nunca debe tocar una línea real.
+  const testRow = row.test_mode === true && isTestDeal(row.opportunity_id)
+  if (!testRow && process.env.VERCEL_ENV !== 'production') {
+    return { ok: false, code: 'STAGING_REAL_ROW', error: 'Desde staging solo se pueden enviar líneas de prueba' }
+  }
+  if (!isDispatchableBank(bank) || (!testRow && !isCcBank(bank))) {
     return { ok: false, code: 'NOT_CC', error: 'Este banco se envía todavía por la hoja (interruptor en "Hoja")' }
   }
 
@@ -90,7 +98,7 @@ export async function dispatchRow(
   const c = claim as { ok: boolean; code?: string; error?: string; current_status?: string; previous_status?: string | null; attempt?: number }
   if (!c.ok) return { ok: false, code: c.code ?? 'BLOCKED', error: c.error ?? 'No se pudo reservar el envío', current_status: c.current_status }
 
-  const testMode = row.test_mode || isTestMode()
+  const testMode = testRow || isTestMode()
   const base = reportBaseUrl()
   const payload = buildSendPayload(row, {
     action,
@@ -98,6 +106,9 @@ export async function dispatchRow(
     force,
     testMode,
     reportUrl: base ? `${base}/api/dispatch/report` : null,
+    // Líneas de prueba: el correo va a quien pulsó (n8n solo lo acepta si es una dirección @huspy.io / @bayteca.com).
+    // Nunca en otra línea: con DISPATCH_FORCE_TEST_MODE un dossier real iría al correo de un empleado
+    testRecipient: testRow && args.actor.startsWith('user:') ? args.actor.slice(5) : null,
   })
 
   const url = `${N8N_WEBHOOK_BASE}/${bank.send_webhook_path}`
@@ -127,7 +138,8 @@ export async function dispatchRow(
     return { ok: false, code: 'WEBHOOK_ERROR', error: failure }
   }
 
-  await db.from('sheet_rows').update({ process_status: `Enviado a n8n (${action})`, test_mode: testMode }).eq('id', row.id)
+  // test_mode no se guarda aquí: solo lo llevan las líneas de prueba creadas a mano (una línea real nunca se vuelve de prueba)
+  await db.from('sheet_rows').update({ process_status: `Enviado a n8n (${action})` }).eq('id', row.id)
   return { ok: true, previous_status: c.previous_status ?? null, attempt: c.attempt ?? 1 }
 }
 
@@ -162,6 +174,8 @@ export async function createRowsForDossier(
   input: DossierReadyInput,
 ): Promise<{ results: LineResult[]; toDispatch: string[]; banks: DispatchBank[] }> {
   const banks = await loadDispatchBanks(db)
+  // Staging comparte base con producción: allí solo se crean líneas de deals de prueba
+  if (process.env.VERCEL_ENV !== 'production' && !isTestDeal(input.opportunity_id)) return { results: [], toDispatch: [], banks }
   const deal = await getGeneralDeal(input.opportunity_id)
   if (!deal) throw new Error(`El deal ${input.opportunity_id} no existe en Pipedrive`)
 

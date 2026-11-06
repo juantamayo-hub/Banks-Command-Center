@@ -40,6 +40,7 @@ export interface PayloadOptions {
   force: boolean
   testMode: boolean
   reportUrl: string | null
+  testRecipient?: string | null
   attemptAt?: Date
 }
 
@@ -83,6 +84,7 @@ export function buildSendPayload(row: PayloadRow, o: PayloadOptions): Record<str
     force: o.force,
     test_mode: o.testMode,
     report_url: o.reportUrl,
+    test_recipient: o.testMode ? o.testRecipient ?? null : null,
     cc_row_id: row.id,
   }
 }

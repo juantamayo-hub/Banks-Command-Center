@@ -9,11 +9,13 @@ export default function DispatchEngineToggle({
   engine,
   canEdit,
   ready,
+  ccReady,
 }: {
   slug: string
   engine: 'sheets' | 'cc'
   canEdit: boolean
   ready: boolean   // tiene webhook n8n y banco asociado
+  ccReady: boolean // su línea de prueba ya salió OK por el Command Center (bank_config.cc_ready)
 }) {
   const [pending, start] = useTransition()
   const [confirming, setConfirming] = useState(false)
@@ -28,7 +30,16 @@ export default function DispatchEngineToggle({
         : 'rounded-full bg-gray-100 px-2 py-0.5 font-medium text-gray-600'}>
         Motor de envío: {label}
       </span>
-      {canEdit && (ready || engine === 'cc') && !confirming && (
+      {engine === 'sheets' && ready && !ccReady && (
+        <span className="text-gray-500">
+          Falta una prueba enviada OK: en Pendientes, busca «test» y pulsa Reenviar en la línea de prueba de este banco
+          (el correo te llega a ti, no al banco)
+        </span>
+      )}
+      {engine === 'sheets' && ccReady && (
+        <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700">Prueba enviada OK</span>
+      )}
+      {canEdit && ((ready && ccReady) || engine === 'cc') && !confirming && (
         <button
           type="button"
           onClick={() => { setError(null); setConfirming(true) }}

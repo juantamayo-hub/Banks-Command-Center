@@ -20,6 +20,7 @@ import { requireAuth } from '@/lib/auth/requireAuth'
 import { createAdminClient } from '@/lib/supabase/server'
 import { isCcBank, loadDispatchBanks } from '@/lib/dispatch/banks'
 import { dispatchRow, isTestMode } from '@/lib/dispatch/engine'
+import { isTestDeal } from '@/lib/dispatch/testDeals'
 
 const VALID_SLUGS: Set<string> = new Set(ACTIVE_BANKS.map((b) => b.slug))
 
@@ -56,6 +57,11 @@ export async function POST(req: NextRequest) {
   const banks = await loadDispatchBanks(db).catch(() => [])
   const ccBank = banks.find((b) => b.banks_slug === bank_slug)
   if (isCcBank(ccBank)) {
+    // Staging comparte base con producción: allí solo se crean líneas de deals de prueba (una línea creada en staging
+    // para un deal real ocuparía su sitio y producción ya no la enviaría)
+    if (process.env.VERCEL_ENV !== 'production' && !isTestDeal(deal_id)) {
+      return NextResponse.json({ error: 'Desde staging solo se pueden crear envíos de deals de prueba', code: 'STAGING_REAL_DEAL' }, { status: 409 })
+    }
     const { data: existing } = await db.from('sheet_rows').select('id')
       .eq('bank_id', ccBank.bank_id).eq('opportunity_id', deal_id).maybeSingle()
     let rowId = existing?.id as string | undefined
